@@ -1,125 +1,258 @@
 <template>
   <section class="roadmap-page">
-    <el-alert
-      v-if="errorMessage"
-      :title="errorMessage"
-      type="error"
-      show-icon
-      :closable="false"
-      class="page-alert"
-    />
-
-    <el-skeleton v-if="loading" :rows="8" animated />
-
-    <template v-else-if="roadmap">
-      <section class="hero-card">
-        <div class="hero-content">
-          <el-tag type="success" effect="dark">公开首页</el-tag>
-          <h1>{{ roadmap.title }}</h1>
-          <p class="hero-description">{{ roadmap.description }}</p>
-          <p class="hero-intro">{{ roadmap.platformIntro }}</p>
+    <div :class="['markdown-layout', { 'is-toc-collapsed': isTocCollapsed }]">
+      <nav
+        v-if="tocItems.length"
+        :class="['markdown-toc-card', { 'is-collapsed': isTocCollapsed }]"
+        aria-label="目录"
+      >
+        <div class="markdown-toc-header">
+          <h3 v-if="!isTocCollapsed">目录</h3>
+          <button type="button" class="markdown-toc-toggle" @click="toggleToc">
+            {{ isTocCollapsed ? '展开' : '收起' }}
+          </button>
         </div>
-        <div class="hero-panel">
-          <span>学习路线</span>
-          <strong>4 阶段</strong>
-          <small>基础 → 进阶 → 工程 → 实战</small>
+
+        <div v-show="!isTocCollapsed" class="markdown-toc-list">
+          <a
+            v-for="item in tocItems"
+            :key="item.id"
+            :href="`#${item.id}`"
+            :class="[
+              'markdown-toc-link',
+              `markdown-toc-level-${item.level}`,
+              { 'is-active': activeTocId === item.id },
+            ]"
+            @click="setActiveToc(item.id)"
+          >
+            {{ item.title }}
+          </a>
         </div>
-      </section>
+      </nav>
 
-      <el-card shadow="never" class="overview-card">
-        <template #header>
-          <div class="card-header">路线总览</div>
-        </template>
-        <p>{{ roadmap.overview }}</p>
-      </el-card>
-
-      <section class="section-grid">
-        <el-card
-          v-for="section in roadmap.sections"
-          :key="section.title"
-          shadow="hover"
-          class="stage-card"
-        >
-          <div class="stage-header">
-            <h3>{{ section.title }}</h3>
-            <span>{{ section.items.length }} 项</span>
-          </div>
-          <p>{{ section.summary }}</p>
-          <div class="stage-tags">
-            <el-tag
-              v-for="item in section.items"
-              :key="item"
-              effect="plain"
-              type="primary"
-            >
-              {{ item }}
-            </el-tag>
-          </div>
-        </el-card>
-      </section>
-
-      <section class="resource-layout">
-        <el-card shadow="never" class="resource-card">
-          <template #header>
-            <div class="card-header">资料区</div>
-          </template>
-          <div class="resource-list">
-            <a
-              v-for="resource in roadmap.resources"
-              :key="resource.title"
-              :href="resource.url"
-              target="_blank"
-              rel="noreferrer"
-              class="resource-item"
-            >
-              <strong>{{ resource.title }}</strong>
-              <span>{{ resource.description }}</span>
-            </a>
-          </div>
-        </el-card>
-
-        <el-card shadow="never" class="suggestion-card">
-          <template #header>
-            <div class="card-header">学习建议</div>
-          </template>
-          <ol>
-            <li v-for="suggestion in roadmap.suggestions" :key="suggestion">
-              {{ suggestion }}
-            </li>
-          </ol>
-        </el-card>
-      </section>
-    </template>
+      <article class="markdown-card">
+        <div class="markdown-body" v-html="roadmapHtml"></div>
+      </article>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue';
-import { getLearningRoadmap } from '../../api/learning';
-import type { LearningRoadmap } from '../../types/learning';
+import MarkdownIt from 'markdown-it';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import roadmapMarkdown from '../../content/learning-roadmap/AI应用开发学习路线和资料集.md?raw';
 
-const loading = ref(true);
-const errorMessage = ref('');
-const roadmap = ref<LearningRoadmap | null>(null);
-
-/**
- * 加载学习路线数据。
- */
-async function loadRoadmap(): Promise<void> {
-  loading.value = true;
-  errorMessage.value = '';
-
-  try {
-    roadmap.value = await getLearningRoadmap();
-  } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '网络异常，请稍后重试';
-  } finally {
-    loading.value = false;
-  }
+interface TocItem {
+  id: string;
+  level: number;
+  title: string;
 }
 
-// 页面挂载后加载公开学习路线。
-onMounted(() => {
-  void loadRoadmap();
+let tocObserver: IntersectionObserver | null = null;
+const activeTocId = ref('');
+const isTocCollapsed = ref(false);
+
+const roadmapAssetModules = import.meta.glob(
+  '../../content/learning-roadmap/AI应用开发学习路线和资料集.assets/*',
+  {
+    eager: true,
+    import: 'default',
+    query: '?url',
+  }
+) as Record<string, string>;
+
+// 将 Markdown 附带图片资源映射成 Vite 可访问地址。
+const roadmapAssetUrlMap = Object.entries(roadmapAssetModules).reduce<Record<string, string>>(
+  (assetMap, [assetPath, assetUrl]) => {
+    const assetName = assetPath.substring(assetPath.lastIndexOf('/') + 1);
+    const relativePath = `AI应用开发学习路线和资料集.assets/${assetName}`;
+
+    // 同时支持原始路径、URL 编码路径和文件名兜底匹配。
+    assetMap[relativePath] = assetUrl;
+    assetMap[encodeURI(relativePath)] = assetUrl;
+    assetMap[assetName] = assetUrl;
+    assetMap[encodeURI(assetName)] = assetUrl;
+    return assetMap;
+  },
+  {}
+);
+
+const markdown = new MarkdownIt({
+  html: true,
+  linkify: true,
+  breaks: false,
+});
+
+let headingIdGenerator = createHeadingIdGenerator();
+let imageCaptionNumber = 0;
+const defaultImageRenderer = markdown.renderer.rules.image;
+const defaultLinkOpenRenderer = markdown.renderer.rules.link_open;
+const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
+
+markdown.renderer.rules.image = (tokens, index, options, env, self) => {
+  const source = tokens[index].attrGet('src');
+  const resolvedSource = resolveAssetUrl(source);
+
+  // 本地图片交给 Vite 资源系统处理，外部图片保持原始地址。
+  if (resolvedSource) {
+    tokens[index].attrSet('src', resolvedSource);
+  }
+
+  imageCaptionNumber += 1;
+  const imageHtml = defaultImageRenderer
+    ? defaultImageRenderer(tokens, index, options, env, self)
+    : self.renderToken(tokens, index, options);
+  const imageTitle = resolveImageTitle(tokens[index].content, imageCaptionNumber);
+  return `<figure class="markdown-figure">${imageHtml}<figcaption>${imageTitle}</figcaption></figure>`;
+};
+
+markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
+  const targetIndex = tokens[index].attrIndex('target');
+  if (targetIndex < 0) {
+    tokens[index].attrPush(['target', '_blank']);
+  }
+
+  // 外部链接统一增加安全属性，页面内容仍来自原始 Markdown。
+  tokens[index].attrSet('rel', 'noreferrer');
+  return defaultLinkOpenRenderer
+    ? defaultLinkOpenRenderer(tokens, index, options, env, self)
+    : self.renderToken(tokens, index, options);
+};
+
+markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
+  const title = tokens[index + 1]?.content || '';
+  const headingId = headingIdGenerator(title);
+  tokens[index].attrSet('id', headingId);
+
+  return defaultHeadingOpenRenderer
+    ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
+    : self.renderToken(tokens, index, options);
+};
+
+/**
+ * 解析 Markdown 本地图片资源地址。
+ */
+function resolveAssetUrl(source: string | null): string | undefined {
+  if (!source || /^https?:\/\//i.test(source)) {
+    return undefined;
+  }
+
+  // 兼容浏览器编码、Markdown 原始相对路径和文件名匹配。
+  const normalizedSource = source.replace(/^\.\//, '');
+  const decodedSource = decodeURIComponent(normalizedSource);
+  const assetName = decodedSource.substring(decodedSource.lastIndexOf('/') + 1);
+  return roadmapAssetUrlMap[normalizedSource]
+    || roadmapAssetUrlMap[decodedSource]
+    || roadmapAssetUrlMap[assetName]
+    || roadmapAssetUrlMap[encodeURI(decodedSource)]
+    || roadmapAssetUrlMap[encodeURI(assetName)];
+}
+
+/**
+ * 根据图片替代文本生成图注。
+ */
+function resolveImageTitle(altText: string, imageIndex: number): string {
+  const safeTitle = markdown.utils.escapeHtml(altText.trim() || '图片');
+  return `图${imageIndex}-${safeTitle}`;
+}
+
+/**
+ * 创建标题锚点生成器，重复标题自动追加序号。
+ */
+function createHeadingIdGenerator(): (title: string) => string {
+  const headingIdCounter = new Map<string, number>();
+
+  return (title: string) => {
+    const baseId = title
+      .trim()
+      .toLowerCase()
+      .replace(/[`*_~()[\]{}]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'section';
+    const count = headingIdCounter.get(baseId) || 0;
+    headingIdCounter.set(baseId, count + 1);
+    return count === 0 ? baseId : `${baseId}-${count + 1}`;
+  };
+}
+
+/**
+ * 提取 Markdown 标题生成页面目录。
+ */
+function buildTocItems(markdownText: string): TocItem[] {
+  const tocHeadingIdGenerator = createHeadingIdGenerator();
+  return markdownText
+    .split(/\r?\n/)
+    .map((line) => /^(#{2,4})\s+(.+?)\s*#*\s*$/.exec(line))
+    .filter((match): match is RegExpExecArray => Boolean(match))
+    .map((match) => {
+      const title = match[2].replace(/[`*_~]/g, '').trim();
+      return {
+        id: tocHeadingIdGenerator(title),
+        level: match[1].length,
+        title,
+      };
+    });
+}
+
+/**
+ * 渲染 Markdown 原文为页面 HTML。
+ */
+function renderRoadmapMarkdown(): string {
+  headingIdGenerator = createHeadingIdGenerator();
+  imageCaptionNumber = 0;
+  return markdown.render(roadmapMarkdown);
+}
+
+/**
+ * 设置当前激活目录。
+ */
+function setActiveToc(tocId: string): void {
+  activeTocId.value = tocId;
+}
+
+/**
+ * 切换目录展开和收起状态。
+ */
+function toggleToc(): void {
+  isTocCollapsed.value = !isTocCollapsed.value;
+}
+
+/**
+ * 监听正文标题位置，自动高亮当前目录。
+ */
+function observeTocHeadings(): void {
+  const headings = Array.from(document.querySelectorAll<HTMLElement>('.markdown-body h2[id], .markdown-body h3[id], .markdown-body h4[id]'));
+  if (!headings.length) {
+    return;
+  }
+
+  activeTocId.value = activeTocId.value || headings[0].id;
+  tocObserver = new IntersectionObserver((entries) => {
+    const visibleEntry = entries
+      .filter((entry) => entry.isIntersecting)
+      .sort((first, second) => first.boundingClientRect.top - second.boundingClientRect.top)[0];
+    if (visibleEntry?.target.id) {
+      activeTocId.value = visibleEntry.target.id;
+    }
+  }, {
+    root: null,
+    rootMargin: '-96px 0px -62% 0px',
+    threshold: 0,
+  });
+
+  headings.forEach((heading) => tocObserver?.observe(heading));
+}
+
+// Markdown 内容由前端项目内 md 文件直接渲染，修改 md 后开发环境会热更新。
+const roadmapHtml = computed(() => renderRoadmapMarkdown());
+const tocItems = computed(() => buildTocItems(roadmapMarkdown));
+
+onMounted(async () => {
+  await nextTick();
+  observeTocHeadings();
+});
+
+onBeforeUnmount(() => {
+  tocObserver?.disconnect();
 });
 </script>

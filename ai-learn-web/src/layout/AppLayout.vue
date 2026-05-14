@@ -23,10 +23,6 @@
 
     <section class="layout-main">
       <header class="layout-header">
-        <div>
-          <span class="header-label">当前页面</span>
-          <h2>{{ pageTitle }}</h2>
-        </div>
         <el-button type="primary" plain round @click="showLoginNotice">登录 / 注册</el-button>
       </header>
 
@@ -46,9 +42,6 @@ const route = useRoute();
 
 // 当前菜单直接跟随路由路径，保证刷新后高亮正确。
 const activeMenu = computed(() => route.path);
-
-// 页面标题来自路由元信息，缺省值用于兜底展示。
-const pageTitle = computed(() => String(route.meta.title || 'AI 学习路线与资料'));
 
 /**
  * 展示登录注册占位提示。

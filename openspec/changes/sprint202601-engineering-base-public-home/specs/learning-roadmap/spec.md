@@ -1,50 +1,55 @@
 ## ADDED Requirements
 
-### Requirement: 学习路线接口返回结构化内容
-系统 SHALL 提供游客可访问的 `GET /api/v1/learning/roadmap` 接口，并返回统一响应结构中的学习路线数据。
+### Requirement: 学习路线页面静态渲染前端 Markdown
+系统 SHALL 将前端项目内的 `AI应用开发学习路线和资料集.md` 原文渲染为“AI 学习路线与资料”页面，并 SHALL NOT 调用后端接口获取学习路线页面内容。
 
-#### Scenario: 查询学习路线成功
-- **WHEN** 游客请求 `GET /api/v1/learning/roadmap`
-- **THEN** 系统 SHALL 返回 `code` 为 `SUCCESS` 的统一响应，并在 `data` 中包含标题、描述和非空的 `sections`
+#### Scenario: 打开学习路线页面
+- **WHEN** 用户访问 `/learning-roadmap`
+- **THEN** 系统 SHALL 渲染前端项目内 Markdown 文件中的标题、正文、表格、引用、列表、链接和图片
 
-#### Scenario: 学习路线内容不依赖文档目录
-- **WHEN** 后端应用在不包含仓库 `doc/` 目录的部署环境中启动
-- **THEN** 学习路线接口 SHALL 仍可返回随应用打包或代码内维护的结构化内容
+#### Scenario: 页面内容来源检查
+- **WHEN** 用户打开学习路线页面
+- **THEN** 页面 SHALL NOT 请求 `GET /api/v1/learning/roadmap` 获取内容
 
-### Requirement: 学习路线内容覆盖本期阶段
-系统 SHALL 在学习路线数据中覆盖平台说明、路线总览、基础阶段、进阶阶段、工程阶段、实战阶段、资料区和学习建议。
+### Requirement: 学习路线 Markdown 支持后续直接维护
+系统 SHALL 将 Markdown 文件和图片资源目录放在前端项目中，开发者修改该 Markdown 文件后页面内容 SHALL 可同步更新。
 
-#### Scenario: 查看学习路线分区
-- **WHEN** 用户打开“AI 学习路线与资料”页面
-- **THEN** 页面 SHALL 展示基础阶段、进阶阶段、工程阶段、实战阶段、资料区和学习建议等分区内容
+#### Scenario: 修改前端 Markdown 文件
+- **WHEN** 开发者修改 `ai-learn-web/src/content/learning-roadmap/AI应用开发学习路线和资料集.md`
+- **THEN** 开发环境页面 SHALL 在 Vite 热更新或重新构建后展示更新后的 Markdown 内容
 
-#### Scenario: 查看基础阶段内容
-- **WHEN** 用户查看基础阶段
-- **THEN** 系统 SHALL 展示 Python、数学基础、机器学习基础相关学习项
+#### Scenario: 展示 Markdown 相对路径图片
+- **WHEN** Markdown 使用同级 `.assets` 目录中的相对路径图片
+- **THEN** 页面 SHALL 正确展示该图片
 
-#### Scenario: 查看进阶阶段内容
-- **WHEN** 用户查看进阶阶段
-- **THEN** 系统 SHALL 展示深度学习、NLP、CV、大模型基础相关学习项
+### Requirement: 学习路线 Markdown 原文不得被改写
+系统 SHALL 保持复制到前端项目中的 Markdown 内容与来源文档一致，页面渲染逻辑仅处理展示样式、链接属性和图片资源地址。
 
-#### Scenario: 查看工程阶段内容
-- **WHEN** 用户查看工程阶段
-- **THEN** 系统 SHALL 展示 LangChain、LangGraph、RAG、向量数据库、模型部署相关学习项
+#### Scenario: 校验 Markdown 内容一致
+- **WHEN** 比较来源 Markdown 与前端项目内 Markdown 文件
+- **THEN** 两个文件内容 SHALL 保持一致，除非开发者明确直接维护前端项目内 Markdown 文件
 
-#### Scenario: 查看实战阶段内容
-- **WHEN** 用户查看实战阶段
-- **THEN** 系统 SHALL 展示 AI Agent、知识库问答、智能刷题、企业应用相关学习项
 
-### Requirement: 学习路线页面消费后端数据
-系统 SHALL 通过前端 HTTP 封装请求学习路线接口，并在 `code = SUCCESS` 时渲染响应中的 `data`。
+### Requirement: 学习路线页面展示文档目录
+系统 SHALL 根据 Markdown 二级到四级标题在页面内容区左侧生成“目录”，并 SHALL 允许用户点击目录跳转到对应章节，且 SHALL 高亮当前阅读章节。
 
-#### Scenario: 成功加载学习路线页面
-- **WHEN** 学习路线接口返回 `SUCCESS` 和有效学习路线数据
-- **THEN** 前端页面 SHALL 展示接口返回的标题、描述和分区内容
+#### Scenario: 查看学习文档目录
+- **WHEN** 用户打开学习路线页面
+- **THEN** 页面 SHALL 在内容区左侧展示由 Markdown 标题生成的“目录”
 
-#### Scenario: 学习路线接口业务失败
-- **WHEN** 学习路线接口返回非 `SUCCESS` 业务响应
-- **THEN** 前端 SHALL 展示响应中的中文 `message`，并避免出现空白页
+#### Scenario: 点击目录跳转章节
+- **WHEN** 用户点击文档目录中的章节
+- **THEN** 页面 SHALL 跳转到对应 Markdown 标题位置
 
-#### Scenario: 学习路线接口网络异常
-- **WHEN** 前端请求学习路线接口发生网络异常
-- **THEN** 前端 SHALL 展示“网络异常，请稍后重试”或等价中文提示
+### Requirement: 学习路线页面不展示内部维护提示
+系统 SHALL NOT 在面向用户的学习路线页面展示 Markdown 维护方式、文件路径或内部开发提示。
+
+#### Scenario: 查看学习路线页面顶部
+- **WHEN** 用户打开学习路线页面
+- **THEN** 页面 SHALL NOT 展示“本地 Markdown 静态页面”或“直接修改前端 Markdown 文件即可同步页面内容”等内部提示
+
+
+补充说明：学习路线页面左侧目录支持收起和展开，收起后正文区域会获得更大展示空间。
+
+
+补充要求：系统 SHALL 根据 Markdown 图片替代文本在图片下方展示图注，格式为“图序号-图片名称”。

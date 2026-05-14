@@ -24,3 +24,6 @@ target/
 
 # TypeScript 增量编译缓存
 *.tsbuildinfo
+
+# Vite 本地依赖预构建缓存
+ai-learn-web/.vite-cache/
