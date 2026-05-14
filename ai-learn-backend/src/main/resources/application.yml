@@ -9,6 +9,24 @@ server:
 spring:
   application:
     name: ai-learn-backend
+  datasource:
+    url: ${DATABASE_URL:jdbc:mysql://127.0.0.1:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false}
+    username: ${DATABASE_USERNAME:ai_learn_user}
+    password: ${DATABASE_PASSWORD:请在本地环境变量中填写真实密码}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    baseline-on-migrate: true
+
+mybatis:
+  configuration:
+    map-underscore-to-camel-case: true
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:请在本地环境变量中配置至少32位JWT密钥占位符}
+    expires-in-seconds: ${JWT_EXPIRES_IN_SECONDS:7200}
 
 logging:
   level:

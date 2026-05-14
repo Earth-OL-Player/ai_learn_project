@@ -5,7 +5,6 @@
         <div class="brand-logo">AI</div>
         <div>
           <h1>AI应用开发<br />学习平台</h1>
-          <p>资料，项目，刷题</p>
         </div>
       </div>
 
@@ -23,31 +22,84 @@
 
     <section class="layout-main">
       <header class="layout-header">
-        <el-button type="primary" plain round @click="showLoginNotice">登录 / 注册</el-button>
+        <div v-if="authStore.isLoggedIn" class="header-user">
+          <el-avatar :size="32" :src="authStore.user?.avatar || undefined">{{ avatarText }}</el-avatar>
+          <el-dropdown trigger="click" @command="handleUserCommand">
+            <button class="user-dropdown-button" type="button">
+              {{ displayName }}
+              <span class="user-dropdown-arrow">⌄</span>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">个人中心</el-dropdown-item>
+                <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+        <div v-else class="header-auth-actions">
+          <el-button plain round @click="showRegisterDialog = true">注册</el-button>
+          <el-button type="primary" plain round @click="showLoginDialog = true">登录</el-button>
+        </div>
       </header>
 
       <main class="layout-content">
         <RouterView />
       </main>
     </section>
+
+    <LoginDialog v-model="showLoginDialog" />
+    <RegisterDialog v-model="showRegisterDialog" />
+    <LoginGuideDialog
+      v-model="showLoginGuideDialog"
+      @open-login="showLoginDialog = true"
+      @open-register="showRegisterDialog = true"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
-import { computed } from 'vue';
-import { RouterView, useRoute } from 'vue-router';
+import { computed, ref, watch } from 'vue';
+import { RouterView, useRoute, useRouter } from 'vue-router';
+import LoginDialog from '../components/auth/LoginDialog.vue';
+import RegisterDialog from '../components/auth/RegisterDialog.vue';
+import LoginGuideDialog from '../components/common/LoginGuideDialog.vue';
+import { useAuthStore } from '../stores/auth';
 
 const route = useRoute();
+const router = useRouter();
+const authStore = useAuthStore();
+const showLoginDialog = ref(false);
+const showRegisterDialog = ref(false);
+const showLoginGuideDialog = ref(false);
 
 // 当前菜单直接跟随路由路径，保证刷新后高亮正确。
 const activeMenu = computed(() => route.path);
+const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
+const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase());
+
+watch(
+  () => route.query.loginGuide,
+  (value) => {
+    if (value === '1') {
+      showLoginGuideDialog.value = true;
+      router.replace({ path: route.path, query: { ...route.query, loginGuide: undefined } });
+    }
+  },
+  { immediate: true },
+);
 
 /**
- * 展示登录注册占位提示。
+ * 处理用户下拉菜单命令。
  */
-function showLoginNotice(): void {
-  ElMessage.info('登录能力将在 sprint202602 开放');
+async function handleUserCommand(command: string): Promise<void> {
+  if (command === 'profile') {
+    await router.push('/profile');
+    return;
+  }
+  if (command === 'logout') {
+    await authStore.logoutAccount();
+    await router.push('/learning-roadmap');
+  }
 }
 </script>
-

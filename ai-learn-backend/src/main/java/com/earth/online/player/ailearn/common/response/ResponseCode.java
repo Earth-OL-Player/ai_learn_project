@@ -11,6 +11,15 @@ public enum ResponseCode {
     /** 系统内部异常。 */
     SYSTEM_ERROR("SYSTEM_ERROR"),
 
+    /** 请求参数错误。 */
+    PARAM_INVALID("PARAM_INVALID"),
+
+    /** 认证失败或登录态无效。 */
+    AUTH_UNAUTHORIZED("AUTH_UNAUTHORIZED"),
+
+    /** 资源冲突，例如用户名已存在。 */
+    RESOURCE_CONFLICT("RESOURCE_CONFLICT"),
+
     /** 请求参数或业务处理失败。 */
     BUSINESS_ERROR("BUSINESS_ERROR");
 

@@ -2,6 +2,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from '../layout/AppLayout.vue';
 import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
 import PlaceholderPage from '../pages/placeholder/PlaceholderPage.vue';
+import ProfilePage from '../pages/profile/ProfilePage.vue';
+import { useAuthStore } from '../stores/auth';
 
 // 占位页面说明集中管理，避免页面内重复硬编码。
 const placeholderDescriptions = {
@@ -48,7 +50,7 @@ const router = createRouter({
             title: '热门面经',
             description: placeholderDescriptions.questions,
           },
-          meta: { title: '热门面经' },
+          meta: { title: '热门面经', requiresAuth: true },
         },
         {
           path: 'practice-agent',
@@ -58,12 +60,34 @@ const router = createRouter({
             title: 'AI智能刷题',
             description: placeholderDescriptions.agent,
           },
-          meta: { title: 'AI智能刷题' },
+          meta: { title: 'AI智能刷题', requiresAuth: true },
+        },
+        {
+          path: 'profile',
+          name: 'profile',
+          component: ProfilePage,
+          meta: { title: '个人中心', requiresAuth: true },
         },
       ],
     },
   ],
 });
 
-export default router;
+router.beforeEach(async (to) => {
+  const authStore = useAuthStore();
+  await authStore.initialize();
 
+  // 受保护页面统一阻止游客进入，并通过查询参数触发布局层登录引导。
+  if (to.meta.requiresAuth && !authStore.isLoggedIn) {
+    return {
+      path: '/learning-roadmap',
+      query: {
+        loginGuide: '1',
+        redirect: to.fullPath,
+      },
+    };
+  }
+  return true;
+});
+
+export default router;

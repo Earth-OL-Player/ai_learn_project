@@ -1,5 +1,9 @@
 # learning-roadmap Specification
 
+## Purpose
+
+定义学习路线页面的 Markdown 静态渲染、目录生成、目录收起展开、章节高亮、图片资源展示、图注展示和内部维护提示隐藏要求，确保学习路线内容可以由前端文档稳定维护并以清新简约方式展示。
+
 ## Requirements
 
 ### Requirement: 学习路线页面静态渲染前端 Markdown

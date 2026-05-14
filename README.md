@@ -1,6 +1,6 @@
 # AI 学习项目
 
-本项目当前迭代为 `sprint202601`，目标是交付“能打开、能导航、能看学习路线”的最小工程底座与公开首页。学习路线页面使用前端项目内 Markdown 文件静态渲染，不依赖后端接口获取内容。
+本项目当前迭代为 `sprint202602`，目标是在已有前后端工程底座上补充用户注册、登录、退出、当前用户、基础权限引导和个人中心基础展示能力。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
 
 ## 工程结构
 
@@ -18,6 +18,40 @@ ai_learn_project/
 
 - JDK 17+
 - Maven 3.9+
+- MySQL 8.4 LTS（本期用户体系依赖）
+
+### MySQL 准备
+
+推荐使用 Docker 启动本地 MySQL：
+
+```powershell
+docker run --name ai-learn-mysql `
+  -e MYSQL_ROOT_PASSWORD="本地root密码占位符" `
+  -e MYSQL_DATABASE="ai_learn" `
+  -e MYSQL_USER="ai_learn_user" `
+  -e MYSQL_PASSWORD="本地业务用户密码占位符" `
+  -p 3306:3306 `
+  -v ai-learn-mysql-data:/var/lib/mysql `
+  -d mysql:8.4 `
+  --character-set-server=utf8mb4 `
+  --collation-server=utf8mb4_0900_ai_ci
+```
+
+详细说明见：`doc/中间件/MySQL.md`。
+
+### 必要环境变量
+
+PowerShell 示例：
+
+```powershell
+$env:DATABASE_URL="jdbc:mysql://127.0.0.1:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+$env:DATABASE_USERNAME="ai_learn_user"
+$env:DATABASE_PASSWORD="本地业务用户密码占位符"
+$env:JWT_SECRET="至少32位JWT密钥占位符请替换为本地真实值"
+$env:JWT_EXPIRES_IN_SECONDS="7200"
+```
+
+注意：以上值均为本地开发占位示例，真实密码和 JWT 密钥禁止提交仓库。
 
 ### 启动命令
 
@@ -32,19 +66,11 @@ mvn spring-boot:run
 http://localhost:8080
 ```
 
-### 后端基础配置
+首次连接空数据库时，Flyway 会自动执行：
 
-后端配置文件：`ai-learn-backend/src/main/resources/application.yml`
-
-```yaml
-server:
-  port: 8080
-spring:
-  application:
-    name: ai-learn-backend
+```text
+ai-learn-backend/src/main/resources/db/migration/V1__init_user_tables.sql
 ```
-
-本期后端不配置 MySQL、Redis、Qdrant 等中间件连接，不需要真实账号、密码、Token 或生产地址。
 
 ## 前端本地启动
 
@@ -106,7 +132,8 @@ ai-learn-web/src/content/learning-roadmap/AI应用开发学习路线和资料集
 - 开发环境下保存 Markdown 后，Vite 会自动刷新页面。
 - 不要修改原始 Markdown 内容语义，页面仅负责清新简约地渲染文档。
 - 页面左侧展示“目录”，点击目录可跳转到对应标题，当前阅读章节会高亮标识。
-- 面向用户的页面不展示“本地 Markdown 静态页面”“直接修改前端 Markdown 文件即可同步页面内容”等维护提示。
+- 学习路线页面左侧目录支持收起和展开，收起后正文区域会获得更大展示空间。
+- Markdown 图片会根据图片替代文本自动展示图注，例如 `![AI应用开发学习路线](...)` 会展示为“图1-AI应用开发学习路线”。
 
 ## 接口联调验证
 
@@ -122,9 +149,40 @@ Invoke-RestMethod -Uri "http://localhost:8080/api/v1/health" -Method Get
 - `data.status` 为 `UP`
 - 响应包含 `traceId`
 
-### 学习路线接口
+### 注册
 
-当前学习路线前端页面不再依赖该接口获取内容，页面内容来自前端 Markdown 文件。后端接口可作为兼容能力保留，非本次页面验收必需项。
+```powershell
+$registerBody = @{
+  username = "demo_user"
+  password = "demo_password_123"
+  nickname = "演示用户"
+  email = "demo@example.com"
+} | ConvertTo-Json
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/register" -Method Post -ContentType "application/json" -Body $registerBody
+```
+
+### 登录
+
+```powershell
+$loginBody = @{
+  username = "demo_user"
+  password = "demo_password_123"
+} | ConvertTo-Json
+$loginResp = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/login" -Method Post -ContentType "application/json" -Body $loginBody
+$token = $loginResp.data.accessToken
+```
+
+### 当前用户
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/users/me" -Method Get -Headers @{ Authorization = "Bearer $token" }
+```
+
+### 退出登录
+
+```powershell
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/logout" -Method Post -Headers @{ Authorization = "Bearer $token" }
+```
 
 ## 构建验证
 
@@ -146,23 +204,22 @@ npm run build
 
 ## 人工验收清单
 
-- 打开前端根路径 `/` 后，默认进入 `/learning-roadmap`。
-- 左侧展示四个菜单：路线和资料、建议评论区、热门面经、AI智能刷题。
-- 当前菜单高亮正确，点击菜单可以正常切换页面，顶部不展示“当前页面 XXXXX”标题区。
-- 右上角展示“登录 / 注册”入口，点击提示登录能力将在 `sprint202602` 开放。
-- 学习路线页面按前端 Markdown 原文渲染，展示 `AI应用开发学习路线和资料集.md` 中的表格、标题、图片、引用、链接和正文内容，并在内容区左侧展示文档目录。
-- 建议评论区、热门面经、AI智能刷题均展示占位说明，不出现接口报错或空白页。
-- 仓库未新增 MySQL、Redis、Qdrant 等运行时中间件依赖。
+- 可以完成注册，数据库中保存密码哈希而不是明文。
+- 重复用户名注册失败并给出明确中文提示。
+- 正确密码可登录，错误密码登录失败。
+- 登录成功后右上角展示用户信息。
+- 刷新页面后前端能通过 `/users/me` 恢复登录态。
+- 游客访问热门面经、AI智能刷题、个人中心时看到“登录后即可使用该功能”。
+- 登录用户可以访问个人中心基础页。
+- 退出登录后 token 和用户信息被清理。
+- 学习路线和建议评论区占位页保持游客可访问。
 
 ## 中间件说明
 
-本期不引入 MySQL、Redis、Qdrant 等运行时中间件，因此未新增或更新 `doc/中间件/` 下的文档。
+本期新增 MySQL 运行时依赖，已更新：
 
-如果后续功能开始依赖中间件，必须同步更新 `doc/中间件/` 对应说明文档，说明用途、推荐版本、本地安装与启动方式、必要配置、示例占位符配置、验证方式和部署注意事项。
+```text
+doc/中间件/MySQL.md
+```
 
-
-补充说明：学习路线页面左侧目录支持收起和展开，收起后正文区域会获得更大展示空间。
-
-
-补充说明：Markdown 图片会根据图片替代文本自动展示图注，例如 `![AI应用开发学习路线](...)` 会展示为“图1-AI应用开发学习路线”。
-
+该文档覆盖 MySQL 在项目中的用途、推荐版本、本地安装方式、本地启动方式、必要配置项、示例占位符配置、验证方式，以及后续部署到服务器时的注意事项。
