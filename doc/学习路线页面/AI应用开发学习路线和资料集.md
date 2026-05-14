@@ -175,7 +175,7 @@ https://www.bilibili.com/video/BV1VeqnB3EjP
 
 all-in-rag里有提到这块的知识和选型，这里我们直接挑两个进行学习即可。
 
-我选择FAISS和Milvus，一个可以用于中小型项目，一个用于大型项目。
+我选择Qdrant 和Milvus，一个可以用于中小型项目，一个用于大型项目。
 
 ### 6.2 学习资料
 
@@ -183,9 +183,9 @@ all-in-rag里有提到这块的知识和选型，这里我们直接挑两个进�
 
 Github地址：https://github.com/milvus-io/milvus
 
-#### (2) Faiss
+#### (2) Qdrant 
 
-Github地址：https://github.com/facebookresearch/faiss
+Github地址：https://github.com/qdrant/qdrant
 
 
 
