@@ -4,8 +4,8 @@
       <div class="brand-block">
         <div class="brand-logo">AI</div>
         <div>
-          <h1>AI 学习平台</h1>
-          <p>路线 · 资料 · 实战</p>
+          <h1>AI应用开发学习平台</h1>
+          <p>资料，项目，刷题</p>
         </div>
       </div>
 
@@ -14,10 +14,10 @@
         :default-active="activeMenu"
         router
       >
-        <el-menu-item index="/learning-roadmap">AI 学习路线与资料</el-menu-item>
-        <el-menu-item index="/suggestions-comments">建议与评论</el-menu-item>
-        <el-menu-item index="/interview-questions">面试题大全</el-menu-item>
-        <el-menu-item index="/practice-agent">刷题 Agent</el-menu-item>
+        <el-menu-item index="/learning-roadmap">路线和资料</el-menu-item>
+        <el-menu-item index="/suggestions-comments">建议评论区</el-menu-item>
+        <el-menu-item index="/interview-questions">热门面经</el-menu-item>
+        <el-menu-item index="/practice-agent">AI智能刷题</el-menu-item>
       </el-menu>
     </aside>
 
@@ -50,3 +50,4 @@ function showLoginNotice(): void {
   ElMessage.info('登录能力将在 sprint202602 开放');
 }
 </script>
+
