@@ -1,45 +1,45 @@
 ## 1. 工程初始化
 
-- [ ] 1.1 创建 `ai-learn-backend` Spring Boot 后端工程，配置应用名、端口、基础日志和 UTF-8 编码
-- [ ] 1.2 创建 `ai-learn-web` Vue 3 前端工程，配置 Vite、TypeScript、Vue Router、Element Plus 和基础目录结构
-- [ ] 1.3 新增 `ai-learn-web/.env.example`，写入 `VITE_API_BASE_URL=http://localhost:8080/api/v1` 本地占位配置
-- [ ] 1.4 检查本期工程依赖，确认未新增 MySQL、Redis、Qdrant 等运行时中间件依赖
+- [x] 1.1 创建 `ai-learn-backend` Spring Boot 后端工程，配置应用名、端口、基础日志和 UTF-8 编码
+- [x] 1.2 创建 `ai-learn-web` Vue 3 前端工程，配置 Vite、TypeScript、Vue Router、Element Plus 和基础目录结构
+- [x] 1.3 新增 `ai-learn-web/.env.example`，写入 `VITE_API_BASE_URL=http://localhost:8080/api/v1` 本地占位配置
+- [x] 1.4 检查本期工程依赖，确认未新增 MySQL、Redis、Qdrant 等运行时中间件依赖
 
 ## 2. 后端基础能力
 
-- [ ] 2.1 实现统一响应模型，包含 `code`、`message`、`data`、`traceId` 字段
-- [ ] 2.2 实现 traceId 生成或传递机制，并确保业务响应携带当前请求 traceId
-- [ ] 2.3 实现全局异常处理，返回统一响应结构和中文错误提示
-- [ ] 2.4 实现游客可访问的 `/api/v1/health` 健康检查接口
+- [x] 2.1 实现统一响应模型，包含 `code`、`message`、`data`、`traceId` 字段
+- [x] 2.2 实现 traceId 生成或传递机制，并确保业务响应携带当前请求 traceId
+- [x] 2.3 实现全局异常处理，返回统一响应结构和中文错误提示
+- [x] 2.4 实现游客可访问的 `/api/v1/health` 健康检查接口
 
 ## 3. 学习路线后端接口
 
-- [ ] 3.1 定义学习路线 DTO，包含标题、描述、分区、摘要和学习项等字段
-- [ ] 3.2 使用代码内静态 DTO 或 `resources/learning/roadmap.json` 提供学习路线数据，不运行时读取 `doc/` 目录
-- [ ] 3.3 实现 `LearningRoadmapQueryService`，返回覆盖基础、进阶、工程、实战、资料和学习建议的结构化内容
-- [ ] 3.4 实现 `GET /api/v1/learning/roadmap` 接口，游客访问时返回 `SUCCESS` 和非空 `sections`
+- [x] 3.1 定义学习路线 DTO，包含标题、描述、分区、摘要和学习项等字段
+- [x] 3.2 使用代码内静态 DTO 或 `resources/learning/roadmap.json` 提供学习路线数据，不运行时读取 `doc/` 目录
+- [x] 3.3 实现 `LearningRoadmapQueryService`，返回覆盖基础、进阶、工程、实战、资料和学习建议的结构化内容
+- [x] 3.4 实现 `GET /api/v1/learning/roadmap` 接口，游客访问时返回 `SUCCESS` 和非空 `sections`
 
 ## 4. 前端基础能力
 
-- [ ] 4.1 实现前端 HTTP 封装，统一读取 `VITE_API_BASE_URL` 并处理 `SUCCESS`、业务失败和网络异常提示
-- [ ] 4.2 定义学习路线 TypeScript 类型，覆盖标题、描述、分区、摘要和学习项
-- [ ] 4.3 配置前端路由：`/`、`/learning-roadmap`、`/suggestions-comments`、`/interview-questions`、`/practice-agent`
-- [ ] 4.4 实现根路由 `/` 自动重定向到 `/learning-roadmap`
+- [x] 4.1 实现前端 HTTP 封装，统一读取 `VITE_API_BASE_URL` 并处理 `SUCCESS`、业务失败和网络异常提示
+- [x] 4.2 定义学习路线 TypeScript 类型，覆盖标题、描述、分区、摘要和学习项
+- [x] 4.3 配置前端路由：`/`、`/learning-roadmap`、`/suggestions-comments`、`/interview-questions`、`/practice-agent`
+- [x] 4.4 实现根路由 `/` 自动重定向到 `/learning-roadmap`
 
 ## 5. 前端页面与交互
 
-- [ ] 5.1 实现 `AppLayout.vue`，包含左侧四个规划菜单、顶部用户区和主内容区
-- [ ] 5.2 实现菜单跳转和当前菜单高亮逻辑
-- [ ] 5.3 实现顶部“登录 / 注册”入口占位，点击后提示登录能力将在 sprint202602 开放
-- [ ] 5.4 实现 `LearningRoadmapPage.vue`，通过后端接口展示学习路线标题、描述、阶段分区、资料区和学习建议
-- [ ] 5.5 实现 `PlaceholderPage.vue`，为建议与评论、面试题大全、刷题 Agent 展示标题和后续迭代说明
-- [ ] 5.6 调整全局样式，确保页面风格清新、简约、大气，并避免空白页和接口报错外泄
+- [x] 5.1 实现 `AppLayout.vue`，包含左侧四个规划菜单、顶部用户区和主内容区
+- [x] 5.2 实现菜单跳转和当前菜单高亮逻辑
+- [x] 5.3 实现顶部“登录 / 注册”入口占位，点击后提示登录能力将在 sprint202602 开放
+- [x] 5.4 实现 `LearningRoadmapPage.vue`，通过后端接口展示学习路线标题、描述、阶段分区、资料区和学习建议
+- [x] 5.5 实现 `PlaceholderPage.vue`，为建议与评论、面试题大全、刷题 Agent 展示标题和后续迭代说明
+- [x] 5.6 调整全局样式，确保页面风格清新、简约、大气，并避免空白页和接口报错外泄
 
 ## 6. 文档与人工验证
 
-- [ ] 6.1 更新 README 或启动说明，补充前端本地启动、后端本地启动和环境变量示例说明
-- [ ] 6.2 补充接口联调说明，包含健康检查和学习路线接口验证方式
-- [ ] 6.3 补充人工验收清单，覆盖默认首页、四个菜单、高亮状态、学习路线分区和占位页
-- [ ] 6.4 执行后端本地启动验证，确认健康检查和学习路线接口可访问
-- [ ] 6.5 执行前端本地启动或构建验证，确认默认页面、菜单切换和占位提示正常
-- [ ] 6.6 确认本期未引入中间件连接配置；如后续实现意外新增中间件依赖，必须同步补充 `doc/中间件/` 说明文档
+- [x] 6.1 更新 README 或启动说明，补充前端本地启动、后端本地启动和环境变量示例说明
+- [x] 6.2 补充接口联调说明，包含健康检查和学习路线接口验证方式
+- [x] 6.3 补充人工验收清单，覆盖默认首页、四个菜单、高亮状态、学习路线分区和占位页
+- [x] 6.4 执行后端本地启动验证，确认健康检查和学习路线接口可访问
+- [x] 6.5 执行前端本地启动或构建验证，确认默认页面、菜单切换和占位提示正常
+- [x] 6.6 确认本期未引入中间件连接配置；如后续实现意外新增中间件依赖，必须同步补充 `doc/中间件/` 说明文档

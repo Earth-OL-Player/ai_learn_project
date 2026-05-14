@@ -1,0 +1,16 @@
+server:
+  port: 8080
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+
+spring:
+  application:
+    name: ai-learn-backend
+
+logging:
+  level:
+    root: INFO
+    com.earth.online.player.ailearn: INFO

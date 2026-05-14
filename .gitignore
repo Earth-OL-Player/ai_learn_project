@@ -10,3 +10,17 @@
 /httpRequests/
 
 .idea
+
+# 前端依赖与构建产物
+node_modules/
+dist/
+.env
+.env.local
+.env.*.local
+
+# 后端构建产物
+target/
+*.log
+
+# TypeScript 增量编译缓存
+*.tsbuildinfo
