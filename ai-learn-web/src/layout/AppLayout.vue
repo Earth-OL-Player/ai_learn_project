@@ -4,7 +4,7 @@
       <div class="brand-block">
         <div class="brand-logo">AI</div>
         <div>
-          <h1>AI应用开发学习平台</h1>
+          <h1>AI应用开发<br />学习平台</h1>
           <p>资料，项目，刷题</p>
         </div>
       </div>
