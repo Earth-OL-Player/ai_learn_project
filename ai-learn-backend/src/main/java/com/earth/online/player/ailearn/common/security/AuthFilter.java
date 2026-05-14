@@ -30,7 +30,13 @@ public class AuthFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
     private final ObjectMapper objectMapper;
-    private final List<String> protectedPaths = List.of("/api/v1/users/me", "/api/v1/auth/logout");
+    private final List<String> alwaysProtectedPaths = List.of(
+            "/api/v1/users/me",
+            "/api/v1/auth/logout",
+            "/api/v1/knowledge-points"
+    );
+    private final List<String> alwaysProtectedPrefixes = List.of("/api/v1/questions");
+    private final List<String> postProtectedPaths = List.of("/api/v1/suggestions", "/api/v1/comments");
 
     /**
      * 创建认证过滤器。
@@ -62,7 +68,7 @@ public class AuthFilter extends OncePerRequestFilter {
             }
 
             // 受保护接口必须认证，公开接口携带有效 token 时也顺便续期。
-            if (isProtectedPath(request.getRequestURI())) {
+            if (isProtectedPath(request)) {
                 JwtParseResult parseResult = jwtTokenService.parseTokenDetail(resolveToken(request));
                 AuthContext.setUser(parseResult.user());
                 refreshToken(response, parseResult.user());
@@ -127,11 +133,32 @@ public class AuthFilter extends OncePerRequestFilter {
     /**
      * 判断是否是受保护接口。
      *
-     * @param requestUri 请求路径
+     * @param request HTTP 请求
      * @return 是否受保护
      */
-    private boolean isProtectedPath(String requestUri) {
-        return protectedPaths.stream().anyMatch(requestUri::equals);
+    private boolean isProtectedPath(HttpServletRequest request) {
+        String requestUri = request.getRequestURI();
+        if (alwaysProtectedPaths.stream().anyMatch(requestUri::equals)) {
+            return true;
+        }
+        if (alwaysProtectedPrefixes.stream().anyMatch(prefix -> hasPathPrefix(requestUri, prefix))) {
+            return true;
+        }
+
+        // 建议和评论列表公开可读，仅发布动作要求登录。
+        return HttpMethod.POST.matches(request.getMethod())
+                && postProtectedPaths.stream().anyMatch(requestUri::equals);
+    }
+
+    /**
+     * 判断请求路径是否命中受保护前缀。
+     *
+     * @param requestUri 请求路径
+     * @param prefix 受保护前缀
+     * @return 是否命中
+     */
+    private boolean hasPathPrefix(String requestUri, String prefix) {
+        return requestUri.equals(prefix) || requestUri.startsWith(prefix + "/");
     }
 
     /**

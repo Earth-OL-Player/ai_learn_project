@@ -1,20 +1,22 @@
 # MySQL 中间件说明
 
-版本：v1.2  
+版本：v1.4  
 日期：2026-05-14  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，本迭代用于保存用户注册登录相关数据，包括用户名、昵称、邮箱、密码哈希、头像占位、经验值、等级、段位和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据和默认题库数据，包括用户、建议、评论、题目、知识点、题目知识点关系和审计字段。
 
 当前边界说明：
 
 - `ai-learn-backend` 负责读写 MySQL。
-- Flyway 负责自动执行用户表 migration。
+- Flyway 负责自动执行用户、建议、评论、题目和知识点相关表 migration。
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
-- Redis、Qdrant 等中间件本期不接入。
+- 建议状态创建时默认为 `PENDING`，评论点赞和回复字段本期只预留。
+- 默认题库通过 migration 初始化少量 AI/RAG/Agent 示例题，供热门面经页面浏览筛选。
+- Redis、Qdrant 等中间件不参与建议评论区最小闭环。
 
 ## 2. 推荐版本
 
@@ -139,18 +141,33 @@ SELECT VERSION();
 USE ai_learn;
 SHOW TABLES;
 DESC users;
+DESC suggestions;
+DESC comments;
+DESC questions;
+DESC knowledge_points;
+DESC question_knowledge_points;
 SHOW INDEX FROM users;
+SHOW INDEX FROM suggestions;
+SHOW INDEX FROM comments;
+SHOW INDEX FROM questions;
+SHOW INDEX FROM knowledge_points;
 ```
 
 后端验证：
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 执行 `V1__init_user_tables.sql` 并创建 `users` 表。
+3. 确认 Flyway 执行 `V1__init_user_tables.sql`、`V2__require_nickname_email.sql`、`V3__init_interaction_tables.sql`、`V4__init_question_tables.sql`。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
 7. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `/api/v1/users/me`。
+8. 以游客身份调用 `GET /api/v1/suggestions?pageNo=1&pageSize=10` 和 `GET /api/v1/comments?pageNo=1&pageSize=10`，确认可公开分页查询。
+9. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `POST /api/v1/suggestions` 和 `POST /api/v1/comments`，确认登录用户可发布。
+10. 查询 `suggestions.status` 默认为 `PENDING`，查询 `comments.like_count` 默认为 `0`。
+11. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `GET /api/v1/questions?pageNo=1&pageSize=10`，确认可分页查询默认题库。
+12. 调用 `GET /api/v1/knowledge-points`，确认可查询知识点筛选数据。
+13. 调用 `GET /api/v1/questions/<题目ID占位符>`，确认可查看题目内容、参考答案、解析和知识点。
 
 ## 8. 后续部署到服务器注意事项
 

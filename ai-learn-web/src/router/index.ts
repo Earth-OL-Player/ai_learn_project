@@ -1,14 +1,14 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from '../layout/AppLayout.vue';
+import InterviewQuestionsPage from '../pages/interview-questions/InterviewQuestionsPage.vue';
 import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
 import PlaceholderPage from '../pages/placeholder/PlaceholderPage.vue';
 import ProfilePage from '../pages/profile/ProfilePage.vue';
+import SuggestionsCommentsPage from '../pages/suggestions-comments/SuggestionsCommentsPage.vue';
 import { useAuthStore } from '../stores/auth';
 
 // 占位页面说明集中管理，避免页面内重复硬编码。
 const placeholderDescriptions = {
-  suggestions: '建议评论区能力将在 sprint202603 开放，后续将支持用户反馈、建议收集和评论互动。',
-  questions: '热门面经能力将在 sprint202604 开放，后续将提供 AI 方向面试题分类浏览。',
   agent: 'AI智能刷题能力将在 sprint202605 开放，后续将支持智能出题、答题和讲解。',
 };
 
@@ -35,21 +35,13 @@ const router = createRouter({
         {
           path: 'suggestions-comments',
           name: 'suggestions-comments',
-          component: PlaceholderPage,
-          props: {
-            title: '建议评论区',
-            description: placeholderDescriptions.suggestions,
-          },
+          component: SuggestionsCommentsPage,
           meta: { title: '建议评论区' },
         },
         {
           path: 'interview-questions',
           name: 'interview-questions',
-          component: PlaceholderPage,
-          props: {
-            title: '热门面经',
-            description: placeholderDescriptions.questions,
-          },
+          component: InterviewQuestionsPage,
           meta: { title: '热门面经', requiresAuth: true },
         },
         {

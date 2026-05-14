@@ -20,6 +20,9 @@ public enum ResponseCode {
     /** 资源冲突，例如用户名已存在。 */
     RESOURCE_CONFLICT("RESOURCE_CONFLICT"),
 
+    /** 资源不存在。 */
+    RESOURCE_NOT_FOUND("RESOURCE_NOT_FOUND"),
+
     /** 请求参数或业务处理失败。 */
     BUSINESS_ERROR("BUSINESS_ERROR");
 

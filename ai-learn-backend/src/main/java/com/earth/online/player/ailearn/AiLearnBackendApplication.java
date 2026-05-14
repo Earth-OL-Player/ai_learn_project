@@ -7,7 +7,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * AI 学习平台后端启动类。
  */
-@MapperScan("com.earth.online.player.ailearn.user.infrastructure")
+@MapperScan("com.earth.online.player.ailearn")
 @SpringBootApplication
 public class AiLearnBackendApplication {
 
