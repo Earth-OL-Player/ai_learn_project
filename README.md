@@ -1,102 +1,146 @@
 # AI 学习项目
 
-本项目当前迭代为 `sprint202602`，目标是在已有前后端工程底座上补充用户注册、登录、退出、当前用户、基础权限引导和个人中心基础展示能力。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
+本项目当前迭代为 `sprint202610`，目标是在已有前后端工程底座上持续完善用户体系、互动反馈、题库刷题、AI 评分、RAG 知识入库和成长徽章能力。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
 
-## 工程结构
+## 项目结构
+
+| 目录 | 说明 |
+| --- | --- |
+| `ai-learn-backend` | Spring Boot 后端服务，提供用户、题库、答题、RAG 任务和成长体系接口。 |
+| `ai-learn-web` | Vue 3 + Vite 前端项目，提供学习平台页面。 |
+| `ai-service` | FastAPI AI 服务，提供 AI 评分和 RAG 入库相关能力。 |
+
+
+## 项目启动步骤
+
+### 1. 本地环境准备
+
+建议本地准备以下运行环境：
+
+| 环境 | 推荐版本 | 用途 |
+| --- | --- | --- |
+| JDK | 17 | 运行 `ai-learn-backend`。 |
+| Maven | 3.9.x 或兼容版本 | 构建和启动 Spring Boot 后端。 |
+| Node.js | 20 LTS 或 22 LTS | 运行 `ai-learn-web`。 |
+| Python | 3.11+ | 运行 `ai-service`。 |
+| MySQL | 8.4 LTS | 保存用户、题库、答题、RAG 任务和成长徽章数据。 |
+| Qdrant | 1.x | 必选；支撑 RAG 知识入库和向量检索能力。 |
+
+中间件安装、启动和部署注意事项请优先查看：
+
+- [MySQL 本地与部署说明](doc/中间件/MySQL.md)
+- [Qdrant 本地与部署说明](doc/中间件/Qdrant.md)
+- [Redis 本地与部署说明](doc/中间件/Redis.md)
+
+说明：当前完整本地启动流程依赖 MySQL、Qdrant 和 AI 服务；Redis 文档仅作为后续能力预留参考。所有真实密码、Token、密钥和生产连接地址都只能保存在本地私有配置中，禁止提交到仓库。
+
+### 2. 准备后端配置
+
+后端读取系统环境变量，建议本地维护 `ai-learn-backend/.env` 作为占位配置来源；使用 IDE 启动时可将这些键值导入运行配置，使用 PowerShell 启动时可先将 `.env` 加载到当前进程环境变量。
+
+`ai-learn-backend/.env` 示例：
+
+```env
+DATABASE_URL="jdbc:mysql://127.0.0.1:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
+DATABASE_USERNAME="本地MySQL用户名占位符"
+DATABASE_PASSWORD="本地MySQL密码占位符"
+SPRING_FLYWAY_ENABLED="true"
+JWT_SECRET="至少32位本地JWT密钥占位符"
+JWT_EXPIRES_IN_SECONDS="7200"
+
+# AI 服务为必选项，请保持 token 与 ai-service/.env 一致。
+AI_SERVICE_ENABLED="true"
+AI_SERVICE_BASE_URL="http://127.0.0.1:8000"
+AI_SERVICE_TOKEN="AI_SERVICE_TOKEN本地占位符"
+AI_SERVICE_TIMEOUT_SECONDS="15"
+```
+
+PowerShell 临时加载 `.env` 示例：
+
+```powershell
+cd ai-learn-backend
+Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Object {
+    $name, $value = $_ -split '=', 2
+    [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim().Trim('"'), 'Process')
+}
+```
+
+说明：Flyway 默认启用，后端启动后会自动执行 `V1` 到 `V9` 数据库迁移，初始化用户、互动、题库、刷题、RAG 任务和成长徽章相关表。
+
+### 3. 准备前端配置
+
+`ai-learn-web/.env` 示例：
+
+```env
+VITE_API_BASE_URL=http://localhost:8080/api/v1
+```
+
+### 4. 准备 AI 服务配置
+
+启动项目前必须配置 `ai-service/.env`：
+
+```env
+AI_SERVICE_TOKEN=AI_SERVICE_TOKEN本地占位符
+MODEL_PROVIDER=LOCAL_RULE
+OPENAI_API_KEY=OPENAI_API_KEY本地占位符
+QDRANT_URL=http://127.0.0.1:6333
+QDRANT_COLLECTION=ai_learn_knowledge
+```
+
+说明：`MODEL_PROVIDER=LOCAL_RULE` 表示使用本地规则兜底能力；如果后续接入真实模型，`OPENAI_API_KEY` 必须替换为本地私有值，禁止提交真实密钥。
+
+### 5. 启动顺序
+
+#### 5.1 启动 MySQL
+
+按 [MySQL 本地与部署说明](doc/中间件/MySQL.md) 创建本地数据库和业务账号，确保 `DATABASE_URL`、`DATABASE_USERNAME`、`DATABASE_PASSWORD` 与本地配置一致。
+
+#### 5.2 启动 Qdrant
+
+Qdrant 为本地完整启动必选中间件，启动方式见 [Qdrant 本地与部署说明](doc/中间件/Qdrant.md)。
+
+#### 5.3 启动 AI 服务
+
+```powershell
+cd ai-service
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+
+健康检查地址：
 
 ```text
-ai_learn_project/
-├── ai-learn-backend/   # Spring Boot 后端工程
-├── ai-learn-web/       # Vue 3 前端工程
-├── doc/                # 需求、设计、迭代和中间件文档
-└── openspec/           # OpenSpec 变更说明
+http://localhost:8000/health
 ```
 
-## 后端本地启动
+预期结果：返回 `status=UP`。
 
-### 环境要求
+#### 5.4 启动后端
 
-- JDK 17+
-- Maven 3.9+
-- MySQL 8.4 LTS（本期用户体系依赖）
-
-### MySQL 准备
-
-推荐使用 Docker 启动本地 MySQL：
-
-```powershell
-docker run --name ai-learn-mysql `
-  -e MYSQL_ROOT_PASSWORD="本地root密码占位符" `
-  -e MYSQL_DATABASE="ai_learn" `
-  -e MYSQL_USER="ai_learn_user" `
-  -e MYSQL_PASSWORD="本地业务用户密码占位符" `
-  -p 3306:3306 `
-  -v ai-learn-mysql-data:/var/lib/mysql `
-  -d mysql:8.4 `
-  --character-set-server=utf8mb4 `
-  --collation-server=utf8mb4_0900_ai_ci
-```
-
-详细说明见：`doc/中间件/MySQL.md`。
-
-### 必要环境变量
-
-PowerShell 示例：
-
-```powershell
-$env:DATABASE_URL="jdbc:mysql://127.0.0.1:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
-$env:DATABASE_USERNAME="ai_learn_user"
-$env:DATABASE_PASSWORD="本地业务用户密码占位符"
-$env:JWT_SECRET="至少32位JWT密钥占位符请替换为本地真实值"
-$env:JWT_EXPIRES_IN_SECONDS="7200"
-```
-
-注意：以上值均为本地开发占位示例，真实密码和 JWT 密钥禁止提交仓库。
-
-### 启动命令
+如果使用 PowerShell 启动，请先按“准备后端配置”章节加载环境变量，然后执行：
 
 ```powershell
 cd ai-learn-backend
 mvn spring-boot:run
 ```
 
-后端默认启动地址：
+后端访问地址：
 
 ```text
 http://localhost:8080
 ```
 
-首次连接空数据库时，Flyway 会自动执行：
-
-```text
-ai-learn-backend/src/main/resources/db/migration/V1__init_user_tables.sql
-```
-
-## 前端本地启动
-
-### 环境要求
-
-- Node.js 20+
-- npm 10+
-
-### 环境变量
-
-复制示例配置：
+健康检查：
 
 ```powershell
-cd ai-learn-web
-Copy-Item .env.example .env
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/health" -Method Get
 ```
 
-`.env.example` 内容如下：
+预期结果：后端启动成功，健康检查正常返回；首次连接 MySQL 时 Flyway 自动完成数据库表结构初始化。
 
-```text
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-```
-
-该地址仅为本地开发占位值。部署到其他环境时，请通过环境变量替换为实际后端 API 地址，禁止提交真实生产连接地址或密钥。
-
-### 启动命令
+#### 5.5 启动前端
 
 ```powershell
 cd ai-learn-web
@@ -104,122 +148,18 @@ npm install
 npm run dev
 ```
 
-前端默认启动地址：
+前端访问地址：
 
 ```text
 http://localhost:5173
 ```
 
-## 学习路线 Markdown 维护方式
+### 6. 常用验收检查
 
-学习路线页面直接渲染前端项目内的 Markdown 文件：
+1. 访问 `http://localhost:5173`，确认前端页面可以正常打开。
+2. 调用 `http://localhost:8080/api/v1/health`，确认后端健康检查正常。
+3. 访问 `http://localhost:8000/health`，确认 AI 服务健康检查正常。
+4. 确认 Qdrant 已启动，且 `QDRANT_COLLECTION` 与 `ai-service/.env` 保持一致。
+5. 在 MySQL 中执行 `SHOW TABLES;`，确认 Flyway 已初始化当前迭代所需业务表。
 
-```text
-ai-learn-web/src/content/learning-roadmap/AI应用开发学习路线和资料集.md
-```
-
-图片资源目录：
-
-```text
-ai-learn-web/src/content/learning-roadmap/AI应用开发学习路线和资料集.assets/
-```
-
-维护规则：
-
-- 页面不调用后端学习路线接口获取内容。
-- 需要调整页面文案时，直接修改上述 Markdown 文件。
-- 如果 Markdown 中新增相对路径图片，需要放到同级 `.assets` 目录中。
-- 开发环境下保存 Markdown 后，Vite 会自动刷新页面。
-- 不要修改原始 Markdown 内容语义，页面仅负责清新简约地渲染文档。
-- 页面左侧展示“目录”，点击目录可跳转到对应标题，当前阅读章节会高亮标识。
-- 学习路线页面左侧目录支持收起和展开，收起后正文区域会获得更大展示空间。
-- Markdown 图片会根据图片替代文本自动展示图注，例如 `![AI应用开发学习路线](...)` 会展示为“图1-AI应用开发学习路线”。
-
-## 接口联调验证
-
-### 健康检查
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/health" -Method Get
-```
-
-预期结果：
-
-- `code` 为 `SUCCESS`
-- `data.status` 为 `UP`
-- 响应包含 `traceId`
-
-### 注册
-
-```powershell
-$registerBody = @{
-  username = "demo_user"
-  password = "demo_password_123"
-  nickname = "演示用户"
-  email = "demo@example.com"
-} | ConvertTo-Json
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/register" -Method Post -ContentType "application/json" -Body $registerBody
-```
-
-### 登录
-
-```powershell
-$loginBody = @{
-  username = "demo_user"
-  password = "demo_password_123"
-} | ConvertTo-Json
-$loginResp = Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/login" -Method Post -ContentType "application/json" -Body $loginBody
-$token = $loginResp.data.accessToken
-```
-
-### 当前用户
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/users/me" -Method Get -Headers @{ Authorization = "Bearer $token" }
-```
-
-### 退出登录
-
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/auth/logout" -Method Post -Headers @{ Authorization = "Bearer $token" }
-```
-
-## 构建验证
-
-### 后端构建
-
-```powershell
-cd ai-learn-backend
-mvn -DskipTests package
-```
-
-### 前端构建
-
-```powershell
-cd ai-learn-web
-npm run build
-```
-
-本项目当前要求禁止新增单元测试代码，因此本期只执行构建、接口联调和人工验收。
-
-## 人工验收清单
-
-- 可以完成注册，数据库中保存密码哈希而不是明文。
-- 重复用户名注册失败并给出明确中文提示。
-- 正确密码可登录，错误密码登录失败。
-- 登录成功后右上角展示用户信息。
-- 刷新页面后前端能通过 `/users/me` 恢复登录态。
-- 游客访问热门面经、AI智能刷题、个人中心时看到“登录后即可使用该功能”。
-- 登录用户可以访问个人中心基础页。
-- 退出登录后 token 和用户信息被清理。
-- 学习路线和建议评论区占位页保持游客可访问。
-
-## 中间件说明
-
-本期新增 MySQL 运行时依赖，已更新：
-
-```text
-doc/中间件/MySQL.md
-```
-
-该文档覆盖 MySQL 在项目中的用途、推荐版本、本地安装方式、本地启动方式、必要配置项、示例占位符配置、验证方式，以及后续部署到服务器时的注意事项。
+说明：本项目当前要求禁止新增单元测试代码，验收过程只记录构建、接口联调和人工验收步骤。

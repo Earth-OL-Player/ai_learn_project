@@ -1,12 +1,12 @@
 # Qdrant 中间件说明
 
-版本：v1.1  
-日期：2026-05-14  
+版本：v1.3  
+日期：2026-05-15  
 适用工程：`ai-service`
 
 ## 1. 用途
 
-Qdrant 是项目的向量数据库，用于保存学习资料、题目、标准答案、解析和知识点说明的向量索引，支撑 RAG 检索、智能出题、答案评分参考和学习建议生成。
+Qdrant 是项目必选的向量数据库，用于保存学习资料、题目、标准答案、解析和知识点说明的向量索引，支撑 RAG 检索、智能出题、答案评分参考和学习建议生成。
 
 边界说明：
 
@@ -81,35 +81,50 @@ docker logs -f ai-learn-qdrant
 
 ## 5. 必要配置项
 
-`ai-service` 需要以下配置：
+当前项目代码以 `ai-service/app/config/settings.py` 为准，`ai-service` 只读取以下 Qdrant 相关配置：
 
 | 配置项 | 示例占位符 | 说明 |
 | --- | --- | --- |
 | `QDRANT_URL` | `http://127.0.0.1:6333` | Qdrant HTTP 地址 |
-| `QDRANT_API_KEY` | `${QDRANT_API_KEY}` | Qdrant API Key，本地未开启鉴权时可为空 |
-| `QDRANT_COLLECTION_LEARNING` | `ai_learn_learning_chunks` | 学习资料向量集合 |
-| `QDRANT_COLLECTION_QUESTION` | `ai_learn_question_chunks` | 题目、答案和解析向量集合 |
-| `EMBEDDING_MODEL_NAME` | `${EMBEDDING_MODEL_NAME}` | Embedding 模型名称 |
-| `EMBEDDING_DIMENSION` | `${EMBEDDING_DIMENSION}` | 向量维度，必须与模型输出一致 |
+| `QDRANT_COLLECTION` | `ai_learn_knowledge` | RAG 知识片段向量集合 |
+
+由于 AI 服务为项目必选服务，本地启动时还需要配置内部鉴权 Token：
+
+| 配置项 | 示例占位符 | 说明 |
+| --- | --- | --- |
+| `AI_SERVICE_TOKEN` | `AI_SERVICE_TOKEN本地占位符` | 后端调用 AI 服务的内部鉴权 Token，必须与 `ai-learn-backend/.env` 保持一致 |
+
+当前版本未读取以下环境变量，请不要作为本地启动必填项配置：
+
+- `QDRANT_API_KEY`
+- `QDRANT_COLLECTION_LEARNING`
+- `QDRANT_COLLECTION_QUESTION`
+- `EMBEDDING_MODEL_NAME`
+- `EMBEDDING_DIMENSION`
+
+说明：
+
+- 当前 `QdrantClient` 只通过 `QDRANT_URL` 连接 Qdrant，暂未传入 API Key。
+- 当前 RAG 入库和检索共用 `QDRANT_COLLECTION`，暂未拆分学习资料集合和题目集合。
+- 当前向量集合维度由代码中的本地 Embedding 占位实现决定，后续接入真实 Embedding 模型时，需要同步修改代码和本文档。
 
 ## 6. 示例配置
 
-`.env.example`：
+本地运行时，实际生效配置文件为 `ai-service/.env`：
 
 ```dotenv
+AI_SERVICE_TOKEN=AI_SERVICE_TOKEN本地占位符
 QDRANT_URL=http://127.0.0.1:6333
-QDRANT_API_KEY=${QDRANT_API_KEY_LOCAL_OPTIONAL}
-QDRANT_COLLECTION_LEARNING=ai_learn_learning_chunks
-QDRANT_COLLECTION_QUESTION=ai_learn_question_chunks
-EMBEDDING_MODEL_NAME=${EMBEDDING_MODEL_NAME}
-EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION}
+QDRANT_COLLECTION=ai_learn_knowledge
 ```
+
+`ai-service/.env.example` 仅作为提交到仓库的模板文件，内容应与上述配置项保持一致，但不得填写真实 Token、生产连接地址等敏感信息。
 
 占位符说明：
 
-- `${QDRANT_API_KEY_LOCAL_OPTIONAL}`：本地未开启鉴权时可为空；生产环境建议配置真实 API Key 或内网访问控制。
-- `${EMBEDDING_MODEL_NAME}`：真实 Embedding 模型名称，由开发者或部署环境配置。
-- `${EMBEDDING_DIMENSION}`：真实向量维度，必须与 Embedding 模型一致。
+- `AI_SERVICE_TOKEN本地占位符`：本地可替换为自定义随机字符串，但不得提交真实生产 Token；如果联调 `ai-learn-backend`，两边配置值必须一致。
+- `http://127.0.0.1:6333`：本地 Qdrant HTTP 地址；服务器部署时应改为内网地址或通过私有配置注入。
+- `ai_learn_knowledge`：当前 RAG 入库和检索使用的统一集合名称。
 
 ## 7. 验证方式
 
@@ -143,7 +158,19 @@ AI 服务验证：
 - RAG 入库采用异步任务，避免大量切分和向量化导致接口超时。
 - 生产镜像标签必须固定明确版本，不使用浮动 `latest`。
 
-## sprint202608 RAG 检索补充说明
+## 9. 后续扩展配置说明
+
+如果后续需要开启 Qdrant API Key、按业务类型拆分集合或接入真实 Embedding 模型，应先完成代码改造，再同步更新本文档和 `.env.example`。可考虑增加的配置包括：
+
+- `QDRANT_API_KEY`：Qdrant API Key，本地未开启鉴权时可为空，生产环境可结合内网访问控制使用。
+- `QDRANT_COLLECTION_LEARNING`：学习资料向量集合。
+- `QDRANT_COLLECTION_QUESTION`：题目、答案和解析向量集合。
+- `EMBEDDING_MODEL_NAME`：真实 Embedding 模型名称。
+- `EMBEDDING_DIMENSION`：真实向量维度，必须与 Embedding 模型输出一致。
+
+以上配置当前不是本项目本地启动必填项，避免与现有代码不一致导致误配。
+
+## 10. sprint202608 RAG 检索说明
 
 从 sprint202608 开始，`ai-service` 会通过 `QDRANT_URL` 连接本地 Qdrant，并使用 `QDRANT_COLLECTION` 指定集合，默认占位值如下：
 
