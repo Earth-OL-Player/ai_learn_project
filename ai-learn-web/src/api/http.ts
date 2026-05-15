@@ -104,3 +104,10 @@ export async function post<T, B = unknown>(path: string, body?: B): Promise<T> {
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 }
+
+/**
+ * 发起 DELETE 请求。
+ */
+export async function del<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'DELETE' });
+}

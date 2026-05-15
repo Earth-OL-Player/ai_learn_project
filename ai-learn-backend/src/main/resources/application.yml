@@ -27,6 +27,11 @@ app:
   jwt:
     secret: ${JWT_SECRET:请在本地环境变量中配置至少32位JWT密钥占位符}
     expires-in-seconds: ${JWT_EXPIRES_IN_SECONDS:7200}
+  ai-service:
+    enabled: ${AI_SERVICE_ENABLED:false}
+    base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:8000}
+    token: ${AI_SERVICE_TOKEN:AI_SERVICE_TOKEN占位符}
+    timeout-seconds: ${AI_SERVICE_TIMEOUT_SECONDS:5}
 
 logging:
   level:

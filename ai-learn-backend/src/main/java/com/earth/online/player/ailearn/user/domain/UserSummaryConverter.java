@@ -1,13 +1,12 @@
 package com.earth.online.player.ailearn.user.domain;
 
+import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
+import com.earth.online.player.ailearn.growth.domain.GrowthRank;
+
 /**
  * 用户展示转换器。
  */
 public final class UserSummaryConverter {
-
-    private static final String DEFAULT_LEVEL = "Lv1";
-    private static final String DEFAULT_LEVEL_NAME = "AI 入门者";
-    private static final String DEFAULT_RANK = "青铜";
 
     /**
      * 工具类不允许实例化。
@@ -22,16 +21,21 @@ public final class UserSummaryConverter {
      * @return 用户摘要
      */
     public static UserSummary toSummary(User user) {
+        int experience = user.getExperience() == null ? 0 : user.getExperience();
+        GrowthLevel level = GrowthLevel.resolveByExperience(experience);
+        GrowthRank rank = GrowthRank.resolveByExperience(experience);
+
+        // 用户摘要只返回安全展示字段，不暴露密码哈希等内部信息。
         return new UserSummary(
                 String.valueOf(user.getId()),
                 user.getUsername(),
                 user.getNickname(),
                 user.getAvatar(),
                 user.getEmail(),
-                user.getExperience(),
-                DEFAULT_LEVEL,
-                DEFAULT_LEVEL_NAME,
-                DEFAULT_RANK,
+                experience,
+                level.displayCode(),
+                level.displayName(),
+                rank.displayName(),
                 user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
         );
     }

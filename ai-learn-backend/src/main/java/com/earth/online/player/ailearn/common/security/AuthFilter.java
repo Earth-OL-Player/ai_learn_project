@@ -33,9 +33,17 @@ public class AuthFilter extends OncePerRequestFilter {
     private final List<String> alwaysProtectedPaths = List.of(
             "/api/v1/users/me",
             "/api/v1/auth/logout",
-            "/api/v1/knowledge-points"
+            "/api/v1/knowledge-points",
+            "/api/v1/growth/me",
+            "/api/v1/answer-records/me",
+            "/api/v1/learning-analysis/me"
     );
-    private final List<String> alwaysProtectedPrefixes = List.of("/api/v1/questions");
+    private final List<String> alwaysProtectedPrefixes = List.of(
+            "/api/v1/questions",
+            "/api/v1/agent/practice",
+            "/api/v1/my-questions",
+            "/api/v1/rag"
+    );
     private final List<String> postProtectedPaths = List.of("/api/v1/suggestions", "/api/v1/comments");
 
     /**

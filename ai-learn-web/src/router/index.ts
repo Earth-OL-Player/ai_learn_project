@@ -2,15 +2,11 @@ import { createRouter, createWebHistory } from 'vue-router';
 import AppLayout from '../layout/AppLayout.vue';
 import InterviewQuestionsPage from '../pages/interview-questions/InterviewQuestionsPage.vue';
 import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
-import PlaceholderPage from '../pages/placeholder/PlaceholderPage.vue';
+import MyQuestionsPage from '../pages/my-questions/MyQuestionsPage.vue';
+import PracticeAgentPage from '../pages/practice-agent/PracticeAgentPage.vue';
 import ProfilePage from '../pages/profile/ProfilePage.vue';
 import SuggestionsCommentsPage from '../pages/suggestions-comments/SuggestionsCommentsPage.vue';
 import { useAuthStore } from '../stores/auth';
-
-// 占位页面说明集中管理，避免页面内重复硬编码。
-const placeholderDescriptions = {
-  agent: 'AI智能刷题能力将在 sprint202605 开放，后续将支持智能出题、答题和讲解。',
-};
 
 /**
  * 创建前端路由实例。
@@ -47,12 +43,14 @@ const router = createRouter({
         {
           path: 'practice-agent',
           name: 'practice-agent',
-          component: PlaceholderPage,
-          props: {
-            title: 'AI智能刷题',
-            description: placeholderDescriptions.agent,
-          },
+          component: PracticeAgentPage,
           meta: { title: 'AI智能刷题', requiresAuth: true },
+        },
+        {
+          path: 'my-questions',
+          name: 'my-questions',
+          component: MyQuestionsPage,
+          meta: { title: '我的题库', requiresAuth: true },
         },
         {
           path: 'profile',

@@ -6,6 +6,7 @@ import org.apache.ibatis.annotations.Mapper;
 import org.apache.ibatis.annotations.Options;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
+import org.apache.ibatis.annotations.Update;
 
 /**
  * 用户 MyBatis 仓储。
@@ -81,4 +82,25 @@ public interface UserMapper {
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insert(User user);
+
+    /**
+     * 更新用户成长字段。
+     *
+     * @param id 用户ID
+     * @param experience 经验值
+     * @param levelCode 等级编码
+     * @param rankCode 段位编码
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE users
+            SET experience = #{experience}, level_code = #{levelCode}, rank_code = #{rankCode}
+            WHERE id = #{id} AND deleted = 0
+            """)
+    int updateGrowth(
+            @Param("id") Long id,
+            @Param("experience") int experience,
+            @Param("levelCode") String levelCode,
+            @Param("rankCode") String rankCode
+    );
 }

@@ -26,14 +26,21 @@
         type="info"
         show-icon
         :closable="false"
-        title="资料编辑、头像上传和账号安全设置将在后续迭代开放。"
+        title="资料编辑、头像上传、徽章墙和账号安全设置将在后续迭代开放。"
       />
     </el-card>
+
+    <GrowthOverviewPanel />
+    <LearningAnalysisPanel />
+    <AnswerRecordsPanel />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
+import AnswerRecordsPanel from './components/AnswerRecordsPanel.vue';
+import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
+import LearningAnalysisPanel from './components/LearningAnalysisPanel.vue';
 import { useAuthStore } from '../../stores/auth';
 
 const authStore = useAuthStore();
@@ -50,3 +57,37 @@ const formattedCreatedAt = computed(() => {
   return new Date(authStore.user.createdAt).toLocaleString('zh-CN', { hour12: false });
 });
 </script>
+
+<style scoped lang="scss">
+.profile-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.profile-card {
+  border: 1px solid #edf2f7;
+  border-radius: 18px;
+}
+
+.profile-header {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 22px;
+}
+
+.profile-header h2 {
+  margin: 0;
+  color: #1f2a44;
+}
+
+.profile-header p {
+  margin: 6px 0 0;
+  color: #667085;
+}
+
+.profile-tip {
+  margin-top: 18px;
+}
+</style>

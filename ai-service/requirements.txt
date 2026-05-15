@@ -1,0 +1,4 @@
+fastapi==0.115.6
+uvicorn[standard]==0.32.1
+pydantic-settings==2.7.1
+qdrant-client==1.12.1

@@ -142,3 +142,25 @@ AI 服务验证：
 - 不在 payload 中保存密码、Token、API Key、用户隐私等敏感信息。
 - RAG 入库采用异步任务，避免大量切分和向量化导致接口超时。
 - 生产镜像标签必须固定明确版本，不使用浮动 `latest`。
+
+## sprint202608 RAG 检索补充说明
+
+从 sprint202608 开始，`ai-service` 会通过 `QDRANT_URL` 连接本地 Qdrant，并使用 `QDRANT_COLLECTION` 指定集合，默认占位值如下：
+
+```text
+QDRANT_URL=http://127.0.0.1:6333
+QDRANT_COLLECTION=ai_learn_knowledge
+```
+
+本地验证步骤：
+
+1. 先按本文档启动 Qdrant。
+2. 启动 `ai-service`，并配置 `AI_SERVICE_TOKEN`、`QDRANT_URL`、`QDRANT_COLLECTION`。
+3. 调用 `POST /internal/v1/rag/index-tasks` 提交包含 `documents` 的入库请求。
+4. 调用 `POST /internal/v1/rag/search` 输入 `RAG`、`Embedding` 等关键词，验证能返回知识片段。
+
+部署注意事项：
+
+- 生产环境 `QDRANT_URL` 必须使用服务器私有配置或环境变量注入，不得提交真实生产地址。
+- Qdrant collection 中保存学习资料和题库片段的向量及元数据，需要纳入持久化和备份策略。
+- 当前本地 Embedding 适配器是占位实现，后续接入真实模型时应同步更新模型 Key、超时、限流和成本控制说明。
