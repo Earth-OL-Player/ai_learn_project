@@ -5,20 +5,35 @@ package com.earth.online.player.ailearn.growth.domain;
  */
 public enum GrowthLevel {
 
-    /** AI 入门者。 */
-    LV1("Lv1", "AI 入门者", 0),
+    /** Lv1 初识 AI。 */
+    LV1("Lv1", "AI 初识者", 0),
 
-    /** AI 探索者。 */
-    LV2("Lv2", "AI 探索者", 100),
+    /** Lv2 基础筑基。 */
+    LV2("Lv2", "AI 筑基者", 3000),
 
-    /** AI 实践者。 */
-    LV3("Lv3", "AI 实践者", 300),
+    /** Lv3 持续练习。 */
+    LV3("Lv3", "AI 练习生", 6000),
 
-    /** AI 进阶者。 */
-    LV4("Lv4", "AI 进阶者", 700),
+    /** Lv4 能力进阶。 */
+    LV4("Lv4", "AI 进阶者", 9000),
 
-    /** AI 工程师。 */
-    LV5("Lv5", "AI 工程师", 1500);
+    /** Lv5 项目实践。 */
+    LV5("Lv5", "AI 实践者", 12000),
+
+    /** Lv6 工程熟手。 */
+    LV6("Lv6", "AI 工程师", 15000),
+
+    /** Lv7 架构视角。 */
+    LV7("Lv7", "AI 架构师", 18000),
+
+    /** Lv8 深度掌握。 */
+    LV8("Lv8", "AI 高阶专家", 21000),
+
+    /** Lv9 全栈融会。 */
+    LV9("Lv9", "AI 全栈专家", 24000),
+
+    /** Lv10 满级大师。 */
+    LV10("Lv10", "AI 闯关大师", 27000);
 
     private final String displayCode;
     private final String displayName;
@@ -57,7 +72,7 @@ public enum GrowthLevel {
      * 计算下一级所需经验。
      *
      * @param experience 当前经验
-     * @return 下一级经验，满级时返回当前等级最低经验
+     * @return 下一级经验，满级时返回当前经验
      */
     public static int nextLevelExperience(int experience) {
         GrowthLevel current = resolveByExperience(experience);
@@ -67,7 +82,7 @@ public enum GrowthLevel {
                 return levels[index + 1].minExperience;
             }
         }
-        return current.minExperience;
+        return Math.max(experience, current.minExperience);
     }
 
     /** 获取数据库编码。 */
@@ -83,5 +98,10 @@ public enum GrowthLevel {
     /** 获取展示名称。 */
     public String displayName() {
         return displayName;
+    }
+
+    /** 获取等级最低经验。 */
+    public int minExperience() {
+        return minExperience;
     }
 }

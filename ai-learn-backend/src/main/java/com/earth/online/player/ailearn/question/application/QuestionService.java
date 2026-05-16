@@ -3,16 +3,11 @@ package com.earth.online.player.ailearn.question.application;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.question.domain.QuestionDifficulty;
-import com.earth.online.player.ailearn.question.domain.QuestionType;
 import com.earth.online.player.ailearn.question.infrastructure.QuestionDetailRecord;
 import com.earth.online.player.ailearn.question.infrastructure.QuestionListRecord;
 import com.earth.online.player.ailearn.question.infrastructure.QuestionMapper;
 import com.earth.online.player.ailearn.question.interfaces.QuestionDetailResponse;
 import com.earth.online.player.ailearn.question.interfaces.QuestionListResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.ZoneId;
 import java.util.Arrays;
 import java.util.Collections;
@@ -31,27 +26,23 @@ public class QuestionService {
     private static final int DEFAULT_PAGE_SIZE = 10;
 
     private final QuestionMapper questionMapper;
-    private final ObjectMapper objectMapper;
 
     /**
      * 创建题库查询服务。
      *
      * @param questionMapper 题库仓储
-     * @param objectMapper JSON 解析器
      */
-    public QuestionService(QuestionMapper questionMapper, ObjectMapper objectMapper) {
+    public QuestionService(QuestionMapper questionMapper) {
         this.questionMapper = questionMapper;
-        this.objectMapper = objectMapper;
     }
 
     /**
-     * 分页查询默认题库。
+     * 分页查询系统题库。
      *
      * @param pageNo 页码
      * @param pageSize 每页数量
      * @param keyword 关键词
-     * @param difficulty 难度
-     * @param questionType 题型
+     * @param questionType 题目分类
      * @param knowledgePointId 知识点ID
      * @return 分页题目
      */
@@ -59,23 +50,21 @@ public class QuestionService {
             Integer pageNo,
             Integer pageSize,
             String keyword,
-            String difficulty,
             String questionType,
             Long knowledgePointId) {
         int safePageNo = normalizePageNo(pageNo);
         int safePageSize = normalizePageSize(pageSize);
         String safeKeyword = normalizeKeyword(keyword);
-        String safeDifficulty = normalizeDifficulty(difficulty);
         String safeQuestionType = normalizeQuestionType(questionType);
         int offset = calculateOffset(safePageNo, safePageSize);
 
-        // 默认题库只展示未删除且来源为 DEFAULT 的题目。
+        // 系统题库列表只展示未删除题目，避免引入额外来源维度。
         List<QuestionListResponse> records = questionMapper.findPage(
-                        safeKeyword, safeDifficulty, safeQuestionType, knowledgePointId, offset, safePageSize)
+                        safeKeyword, safeQuestionType, knowledgePointId, offset, safePageSize)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
-        long total = questionMapper.countPage(safeKeyword, safeDifficulty, safeQuestionType, knowledgePointId);
+        long total = questionMapper.countPage(safeKeyword, safeQuestionType, knowledgePointId);
         return new PageResponse<>(records, safePageNo, safePageSize, total);
     }
 
@@ -136,37 +125,16 @@ public class QuestionService {
     }
 
     /**
-     * 规整难度筛选。
+     * 规整题目分类。
      *
-     * @param difficulty 原始难度
-     * @return 安全难度
-     */
-    private String normalizeDifficulty(String difficulty) {
-        if (!StringUtils.hasText(difficulty)) {
-            return null;
-        }
-        try {
-            return QuestionDifficulty.valueOf(difficulty.trim()).name();
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目难度不合法");
-        }
-    }
-
-    /**
-     * 规整题型筛选。
-     *
-     * @param questionType 原始题型
-     * @return 安全题型
+     * @param questionType 原始分类
+     * @return 安全分类
      */
     private String normalizeQuestionType(String questionType) {
         if (!StringUtils.hasText(questionType)) {
             return null;
         }
-        try {
-            return QuestionType.valueOf(questionType.trim()).name();
-        } catch (IllegalArgumentException exception) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题型不合法");
-        }
+        return questionType.trim();
     }
 
     /**
@@ -188,17 +156,15 @@ public class QuestionService {
      * @return 列表响应
      */
     private QuestionListResponse toListResponse(QuestionListRecord record) {
-        QuestionType questionType = QuestionType.valueOf(record.getQuestionType());
-        QuestionDifficulty difficulty = QuestionDifficulty.valueOf(record.getDifficulty());
         return new QuestionListResponse(
                 String.valueOf(record.getId()),
-                record.getTitle(),
-                questionType.name(),
-                questionType.text(),
-                difficulty.name(),
-                difficulty.text(),
-                parseTags(record.getTags()),
+                record.getCode(),
+                record.getQuestion(),
+                record.getQuestionType(),
+                record.getQuestionType(),
                 splitNames(record.getKnowledgePointNames()),
+                record.getImportanceScore(),
+                record.getOccurrenceCount(),
                 record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
         );
     }
@@ -210,39 +176,18 @@ public class QuestionService {
      * @return 详情响应
      */
     private QuestionDetailResponse toDetailResponse(QuestionDetailRecord record) {
-        QuestionType questionType = QuestionType.valueOf(record.getQuestionType());
-        QuestionDifficulty difficulty = QuestionDifficulty.valueOf(record.getDifficulty());
         return new QuestionDetailResponse(
                 String.valueOf(record.getId()),
-                record.getTitle(),
-                record.getContent(),
-                questionType.name(),
-                questionType.text(),
-                difficulty.name(),
-                difficulty.text(),
-                parseTags(record.getTags()),
+                record.getCode(),
+                record.getQuestion(),
+                record.getQuestionType(),
+                record.getQuestionType(),
                 splitNames(record.getKnowledgePointNames()),
                 record.getStandardAnswer(),
-                record.getAnalysis(),
+                record.getImportanceScore(),
+                record.getOccurrenceCount(),
                 record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
         );
-    }
-
-    /**
-     * 解析标签 JSON 数组。
-     *
-     * @param tags 标签 JSON
-     * @return 标签列表
-     */
-    private List<String> parseTags(String tags) {
-        if (!StringUtils.hasText(tags)) {
-            return Collections.emptyList();
-        }
-        try {
-            return objectMapper.readValue(tags, new TypeReference<>() { });
-        } catch (JsonProcessingException exception) {
-            throw new BusinessException(ResponseCode.SYSTEM_ERROR.code(), "题目标签解析失败");
-        }
     }
 
     /**
@@ -259,4 +204,5 @@ public class QuestionService {
                 .filter(StringUtils::hasText)
                 .toList();
     }
+
 }

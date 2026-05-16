@@ -1,13 +1,11 @@
 package com.earth.online.player.ailearn;
 
-import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
  * AI 学习平台后端启动类。
  */
-@MapperScan("com.earth.online.player.ailearn")
 @SpringBootApplication
 public class AiLearnBackendApplication {
 

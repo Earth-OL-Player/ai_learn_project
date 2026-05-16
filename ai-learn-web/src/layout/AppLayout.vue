@@ -35,7 +35,6 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="profile">个人中心</el-dropdown-item>
                 <el-dropdown-item v-if="authStore.isSuperAdmin" command="admin">管理者中心</el-dropdown-item>
-                <el-dropdown-item command="my-questions">我的题库</el-dropdown-item>
                 <el-dropdown-item divided command="logout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>
@@ -105,10 +104,6 @@ async function handleUserCommand(command: string): Promise<void> {
   }
   if (command === 'admin') {
     await router.push('/admin/system-question-bank');
-    return;
-  }
-  if (command === 'my-questions') {
-    await router.push('/my-questions');
     return;
   }
   if (command === 'logout') {

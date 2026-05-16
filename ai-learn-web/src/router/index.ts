@@ -4,7 +4,6 @@ import SystemQuestionBankManagePage from '../pages/admin/SystemQuestionBankManag
 import AppLayout from '../layout/AppLayout.vue';
 import InterviewQuestionsPage from '../pages/interview-questions/InterviewQuestionsPage.vue';
 import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
-import MyQuestionsPage from '../pages/my-questions/MyQuestionsPage.vue';
 import PracticeAgentPage from '../pages/practice-agent/PracticeAgentPage.vue';
 import ProfilePage from '../pages/profile/ProfilePage.vue';
 import SuggestionsCommentsPage from '../pages/suggestions-comments/SuggestionsCommentsPage.vue';
@@ -47,12 +46,6 @@ const router = createRouter({
           name: 'practice-agent',
           component: PracticeAgentPage,
           meta: { title: 'AI智能刷题', requiresAuth: true },
-        },
-        {
-          path: 'my-questions',
-          name: 'my-questions',
-          component: MyQuestionsPage,
-          meta: { title: '我的题库', requiresAuth: true },
         },
         {
           path: 'profile',

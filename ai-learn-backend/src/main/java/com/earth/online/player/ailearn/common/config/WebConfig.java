@@ -1,5 +1,6 @@
 package com.earth.online.player.ailearn.common.config;
 
+import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.common.security.JwtProperties;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
@@ -13,7 +14,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
  * Web 基础配置。
  */
 @Configuration
-@EnableConfigurationProperties(JwtProperties.class)
+@EnableConfigurationProperties({JwtProperties.class, AiServiceProperties.class})
 public class WebConfig {
 
     /**

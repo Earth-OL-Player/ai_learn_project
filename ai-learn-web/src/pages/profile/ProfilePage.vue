@@ -26,21 +26,17 @@
         type="info"
         show-icon
         :closable="false"
-        title="资料编辑、头像上传、徽章墙和账号安全设置将在后续迭代开放。"
+        title="AI智能刷题仅保留题目答题次数和历史最高分，用更轻量的方式沉淀学习成果。"
       />
     </el-card>
 
     <GrowthOverviewPanel />
-    <LearningAnalysisPanel />
-    <AnswerRecordsPanel />
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import AnswerRecordsPanel from './components/AnswerRecordsPanel.vue';
 import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
-import LearningAnalysisPanel from './components/LearningAnalysisPanel.vue';
 import { useAuthStore } from '../../stores/auth';
 
 const authStore = useAuthStore();

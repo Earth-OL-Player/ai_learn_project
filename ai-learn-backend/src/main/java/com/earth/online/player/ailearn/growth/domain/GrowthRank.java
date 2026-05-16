@@ -9,16 +9,19 @@ public enum GrowthRank {
     BRONZE("青铜", 0),
 
     /** 白银段位。 */
-    SILVER("白银", 300),
+    SILVER("白银", 5000),
 
     /** 黄金段位。 */
-    GOLD("黄金", 700),
+    GOLD("黄金", 10000),
 
     /** 铂金段位。 */
-    PLATINUM("铂金", 1500),
+    PLATINUM("铂金", 15000),
 
     /** 钻石段位。 */
-    DIAMOND("钻石", 3000);
+    DIAMOND("钻石", 20000),
+
+    /** 王者段位。 */
+    KING("王者", 25000);
 
     private final String displayName;
     private final int minExperience;

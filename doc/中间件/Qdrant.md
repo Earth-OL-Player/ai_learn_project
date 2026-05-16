@@ -1,6 +1,6 @@
 # Qdrant 中间件说明
 
-版本：v1.3  
+版本：v1.4
 日期：2026-05-15  
 适用工程：`ai-service`
 
@@ -11,7 +11,7 @@ Qdrant 是项目必选的向量数据库，用于保存学习资料、题目、�
 边界说明：
 
 - Qdrant 只保存向量、文本片段和必要 metadata。
-- 用户、题库、答题记录等业务主数据仍保存在 MySQL。
+- 用户、系统题库、刷题汇总等业务主数据仍保存在 MySQL。
 - 不在 Qdrant payload 中保存真实密码、Token、API Key、用户隐私等敏感信息。
 
 ## 2. 推荐版本
@@ -92,7 +92,7 @@ docker logs -f ai-learn-qdrant
 
 | 配置项 | 示例占位符 | 说明 |
 | --- | --- | --- |
-| `AI_SERVICE_TOKEN` | `AI_SERVICE_TOKEN本地占位符` | 调用 `ai-service` 内部 RAG 接口时使用的鉴权 Token；当前后端已移除 AI智能刷题调用，不再读取该配置 |
+| `AI_SERVICE_TOKEN` | `AI_SERVICE_TOKEN本地占位符` | 调用 `ai-service` 内部 RAG 和 AI 刷题接口时使用的鉴权 Token；后端启用 `AI_SERVICE_ENABLED=true` 时会读取同名配置 |
 
 当前版本未读取以下环境变量，请不要作为本地启动必填项配置：
 
@@ -182,7 +182,7 @@ QDRANT_COLLECTION=ai_learn_knowledge
 本地验证步骤：
 
 1. 先按本文档启动 Qdrant。
-2. 启动 `ai-service`，并配置 `AI_SERVICE_TOKEN`、`QDRANT_URL`、`QDRANT_COLLECTION`。当前后端已移除 AI智能刷题调用，联调 RAG 内部接口时由调用方携带同名 Token。
+2. 启动 `ai-service`，并配置 `AI_SERVICE_TOKEN`、`QDRANT_URL`、`QDRANT_COLLECTION`。后端启用 AI 服务调用时会携带同名 Token；直接联调 RAG 内部接口时也需要携带该 Token。
 3. 调用 `POST /internal/v1/rag/index-tasks` 提交包含 `documents` 的入库请求。
 4. 调用 `POST /internal/v1/rag/search` 输入 `RAG`、`Embedding` 等关键词，验证能返回知识片段。
 
@@ -192,3 +192,29 @@ QDRANT_COLLECTION=ai_learn_knowledge
 - Qdrant collection 中保存学习资料和题库片段的向量及元数据，需要纳入持久化和备份策略。
 - 当前本地 Embedding 适配器是占位实现，后续接入真实模型时应同步更新模型 Key、超时、限流和成本控制说明。
 
+
+## 11. sprint202612 AI刷题评分检索说明
+
+从 `sprint202612` 开始，`ai-service` 新增 `/internal/v1/practice/answer/grade` 和 `/internal/v1/practice/discuss` 内部接口。评分与讨论会优先尝试从 Qdrant 检索相关片段，再使用本地规则生成结构化评分和学习讨论回复。
+
+新增 AI 服务占位配置：
+
+| 配置项 | 示例占位符 | 说明 |
+| --- | --- | --- |
+| `AI_GRADING_BASE_URL` | `https://模型服务地址占位符/v1/chat/completions` | 可选模型服务地址；当前本地规则可不配置真实地址 |
+| `AI_GRADING_API_KEY` | `AI_GRADING_API_KEY占位符` | 可选模型服务 Key；真实 Key 禁止提交仓库 |
+| `AI_GRADING_MODEL` | `LOCAL_RULE` | 本地默认规则评分模型标识；接入真实模型时配置模型名 |
+| `AI_GRADING_TIMEOUT_SECONDS` | `20` | 模型服务调用超时秒数 |
+
+本地验证步骤：
+
+1. 启动 Qdrant，并确认 `QDRANT_URL` 和 `QDRANT_COLLECTION` 指向本地实例。
+2. 启动 `ai-service`，并保证 `AI_SERVICE_TOKEN` 与后端 `AI_SERVICE_TOKEN` 一致。
+3. 通过后端 AI 智能刷题页面提交答案，确认评分接口可返回分数、参考答案、命中点和优化建议。
+4. 如 Qdrant 未启动，AI 服务会退回本地规则评分；完整联调时仍建议启动 Qdrant 验证 RAG 检索链路。
+
+部署注意事项：
+
+- 生产环境 `AI_GRADING_BASE_URL` 和 `AI_GRADING_API_KEY` 必须通过服务器私有环境变量或密钥系统注入。
+- 不得在 Qdrant payload 中保存用户答案原文、聊天记录、Token 或模型 Key。
+- 模型服务不可用时，后端会使用本地规则兜底，避免刷题主流程中断。

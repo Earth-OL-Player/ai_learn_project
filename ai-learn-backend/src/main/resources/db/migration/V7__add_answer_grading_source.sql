@@ -1,2 +1,1 @@
-ALTER TABLE answer_records
-    ADD COLUMN grading_source VARCHAR(32) NOT NULL DEFAULT 'LOCAL_RULE' COMMENT '评分来源' AFTER ai_feedback;
+-- V7 保留版本号：answer_records 已移除，评分来源改由 AI 智能刷题汇总流程处理。

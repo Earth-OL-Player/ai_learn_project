@@ -1,12 +1,12 @@
 # AI 学习项目
 
-本项目当前迭代为 `sprint202611`，目标是在已有前后端工程底座上持续完善用户体系、互动反馈、题库刷题、AI 评分、RAG 知识入库、成长徽章和超级管理员管理者中心能力。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
+本项目当前迭代为 `sprint202612`，目标是在已有前后端工程底座上持续完善系统题库管理、CSV导入、AI聊天式刷题、AI评分、RAG 检索和轻量成长汇总能力。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
 
 ## 项目结构
 
 | 目录 | 说明 |
 | --- | --- |
-| `ai-learn-backend` | Spring Boot 后端服务，提供用户、题库、答题、RAG 任务和成长体系接口。 |
+| `ai-learn-backend` | Spring Boot 后端服务，提供用户、系统题库、AI刷题、RAG 任务和成长体系接口。 |
 | `ai-learn-web` | Vue 3 + Vite 前端项目，提供学习平台页面。 |
 | `ai-service` | FastAPI AI 服务，提供 AI 评分和 RAG 入库相关能力。 |
 
@@ -23,13 +23,14 @@
 | Maven | 3.9.x 或兼容版本 | 构建和启动 Spring Boot 后端。 |
 | Node.js | 20 LTS 或 22 LTS | 运行 `ai-learn-web`。 |
 | Python | 3.11+ | 运行 `ai-service`。 |
-| MySQL | 8.4 LTS | 保存用户、题库、答题、RAG 任务和成长徽章数据。 |
+| MySQL | 8.4 LTS | 保存用户、系统题库、刷题汇总、RAG 任务和成长数据。 |
 | Qdrant | 1.x | 必选；支撑 RAG 知识入库和向量检索能力。 |
 
 中间件安装、启动和部署注意事项请优先查看：
 
 - [MySQL 本地与部署说明](doc/中间件/MySQL.md)
 - [Qdrant 本地与部署说明](doc/中间件/Qdrant.md)
+- [AI模型服务配置说明](doc/中间件/AI模型服务.md)
 - [Redis 本地与部署说明](doc/中间件/Redis.md)
 
 说明：当前完整本地启动流程依赖 MySQL、Qdrant 和 AI 服务；Redis 文档仅作为后续能力预留参考。所有真实密码、Token、密钥和生产连接地址都只能保存在本地私有配置中，禁止提交到仓库。
@@ -65,7 +66,7 @@ Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Obj
 }
 ```
 
-说明：Flyway 默认启用，后端启动后会自动执行 `V1` 到 `V10` 数据库迁移，初始化用户、互动、题库、刷题、RAG 任务、成长徽章和超级管理员标识相关表结构。
+说明：Flyway 默认启用，后端启动后会自动执行 `V1` 到 `V11` 数据库迁移，初始化用户、互动、题库、刷题、RAG 任务、成长徽章和超级管理员标识相关表结构。
 
 ### 3. 准备前端配置
 
@@ -81,13 +82,15 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 
 ```env
 AI_SERVICE_TOKEN=AI_SERVICE_TOKEN本地占位符
-MODEL_PROVIDER=LOCAL_RULE
-OPENAI_API_KEY=OPENAI_API_KEY本地占位符
 QDRANT_URL=http://127.0.0.1:6333
 QDRANT_COLLECTION=ai_learn_knowledge
+AI_GRADING_BASE_URL=https://模型服务地址占位符/v1/chat/completions
+AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
+AI_GRADING_MODEL=LOCAL_RULE
+AI_GRADING_TIMEOUT_SECONDS=20
 ```
 
-说明：`MODEL_PROVIDER=LOCAL_RULE` 表示使用本地规则兜底能力；如果后续接入真实模型，`OPENAI_API_KEY` 必须替换为本地私有值，禁止提交真实密钥。
+说明：`AI_GRADING_MODEL=LOCAL_RULE` 表示使用本地规则兜底能力；如果后续接入真实模型，`AI_GRADING_API_KEY` 必须替换为本地私有值，禁止提交真实密钥。
 
 ### 5. 启动顺序
 

@@ -33,8 +33,7 @@ public class QuestionController {
      * @param pageNo 页码
      * @param pageSize 每页数量
      * @param keyword 关键词
-     * @param difficulty 难度
-     * @param questionType 题型
+     * @param questionType 题目分类
      * @param knowledgePointId 知识点ID
      * @return 题目分页响应
      */
@@ -43,11 +42,10 @@ public class QuestionController {
             @RequestParam(required = false) Integer pageNo,
             @RequestParam(required = false) Integer pageSize,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String difficulty,
             @RequestParam(required = false) String questionType,
             @RequestParam(required = false) Long knowledgePointId) {
         return ApiResponse.success(questionService.findPage(
-                pageNo, pageSize, keyword, difficulty, questionType, knowledgePointId));
+                pageNo, pageSize, keyword, questionType, knowledgePointId));
     }
 
     /**

@@ -7,30 +7,26 @@ import java.util.List;
  * 题目详情响应对象。
  *
  * @param id 题目ID
- * @param title 题目标题
- * @param content 题目内容
- * @param questionType 题型
- * @param questionTypeText 题型文案
- * @param difficulty 难度
- * @param difficultyText 难度文案
- * @param tags 标签列表
+ * @param code 题目编码
+ * @param question 题目内容
+ * @param questionType 题目分类
+ * @param questionTypeText 分类文案
  * @param knowledgePoints 知识点名称列表
  * @param standardAnswer 参考答案
- * @param analysis 解析
+ * @param importanceScore 重要性评分
+ * @param occurrenceCount 真实面试出现次数
  * @param createdAt 创建时间
  */
 public record QuestionDetailResponse(
         String id,
-        String title,
-        String content,
+        String code,
+        String question,
         String questionType,
         String questionTypeText,
-        String difficulty,
-        String difficultyText,
-        List<String> tags,
         List<String> knowledgePoints,
         String standardAnswer,
-        String analysis,
+        Integer importanceScore,
+        Integer occurrenceCount,
         OffsetDateTime createdAt
 ) {
 }

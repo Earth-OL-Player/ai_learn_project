@@ -2,9 +2,9 @@
   <section class="question-page">
     <div class="question-hero">
       <div>
-        <p class="eyebrow">默认题库基础</p>
+        <p class="eyebrow">系统题库基础</p>
         <h2>热门面经</h2>
-        <p class="hero-desc">浏览 AI、RAG、Agent 等方向的精选题目，为后续智能刷题打好基础。</p>
+        <p class="hero-desc">浏览 AI、RAG、Agent 等方向的精选题目，重点关注真实面试高频题。</p>
       </div>
       <el-tag type="success" effect="light">登录后可浏览</el-tag>
     </div>
@@ -12,22 +12,10 @@
     <el-card shadow="never" class="filter-card">
       <el-form :model="filters" label-position="top" class="filter-form">
         <el-form-item label="关键词">
-          <el-input v-model="filters.keyword" clearable placeholder="搜索标题或内容" @keyup.enter="searchQuestions" />
+          <el-input v-model="filters.keyword" clearable placeholder="搜索编码、题目或答案" @keyup.enter="searchQuestions" />
         </el-form-item>
-        <el-form-item label="难度">
-          <el-select v-model="filters.difficulty" clearable placeholder="全部难度">
-            <el-option label="简单" value="EASY" />
-            <el-option label="中等" value="MEDIUM" />
-            <el-option label="困难" value="HARD" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="题型">
-          <el-select v-model="filters.questionType" clearable placeholder="全部题型">
-            <el-option label="简答题" value="SHORT_ANSWER" />
-            <el-option label="选择题" value="CHOICE" />
-            <el-option label="编程题" value="CODE" />
-            <el-option label="场景题" value="SCENARIO" />
-          </el-select>
+        <el-form-item label="分类">
+          <el-input v-model="filters.questionType" clearable placeholder="例如 RAG、Agent" @keyup.enter="searchQuestions" />
         </el-form-item>
         <el-form-item label="知识点">
           <el-select v-model="filters.knowledgePointId" clearable filterable placeholder="全部知识点">
@@ -54,17 +42,18 @@
         <div v-else class="question-list">
           <article v-for="item in questions" :key="item.id" class="question-card" @click="openDetail(item.id)">
             <div class="question-title-row">
-              <h3>{{ item.title }}</h3>
+              <h3>{{ item.question }}</h3>
               <div class="tag-row">
-                <el-tag :type="resolveDifficultyType(item.difficulty)" effect="light">{{ item.difficultyText }}</el-tag>
                 <el-tag effect="plain">{{ item.questionTypeText }}</el-tag>
+                <el-tag :type="resolveImportanceType(item.importanceScore)" effect="light">重要性 {{ item.importanceScore }}</el-tag>
               </div>
             </div>
-            <div class="tag-row muted-tags">
-              <el-tag v-for="tag in item.tags" :key="tag" size="small" effect="plain">{{ tag }}</el-tag>
+            <div class="meta-grid">
+              <span>题目编码：{{ item.code }}</span>
+              <span>真实面试出现次数：{{ item.occurrenceCount }}</span>
+              <span>知识点：{{ item.knowledgePoints.join('、') || '暂未关联' }}</span>
+              <span>创建时间：{{ formatTime(item.createdAt) }}</span>
             </div>
-            <p class="knowledge-line">知识点：{{ item.knowledgePoints.join('、') || '暂未关联' }}</p>
-            <p class="time-line">创建时间：{{ formatTime(item.createdAt) }}</p>
           </article>
         </div>
       </el-skeleton>
@@ -81,23 +70,19 @@
     <el-dialog v-model="detailVisible" title="题目详情" width="760px" class="question-detail-dialog">
       <el-skeleton :loading="detailLoading" animated :rows="8">
         <div v-if="detail" class="detail-content">
-          <h3>{{ detail.title }}</h3>
-          <div class="tag-row">
-            <el-tag :type="resolveDifficultyType(detail.difficulty)" effect="light">{{ detail.difficultyText }}</el-tag>
+          <h3>{{ detail.question }}</h3>
+          <div class="tag-row detail-tags">
             <el-tag effect="plain">{{ detail.questionTypeText }}</el-tag>
-            <el-tag v-for="tag in detail.tags" :key="tag" size="small" effect="plain">{{ tag }}</el-tag>
+            <el-tag :type="resolveImportanceType(detail.importanceScore)" effect="light">重要性 {{ detail.importanceScore }}</el-tag>
+            <el-tag type="success" effect="light">真实面试出现次数 {{ detail.occurrenceCount }}</el-tag>
           </div>
           <section>
-            <h4>题目内容</h4>
-            <p>{{ detail.content }}</p>
+            <h4>题目编码</h4>
+            <p>{{ detail.code }}</p>
           </section>
           <section>
             <h4>参考答案</h4>
             <p>{{ detail.standardAnswer }}</p>
-          </section>
-          <section>
-            <h4>解析</h4>
-            <p>{{ detail.analysis || '暂无解析' }}</p>
           </section>
           <section>
             <h4>知识点</h4>
@@ -124,10 +109,10 @@ const knowledgePoints = ref<KnowledgePointItem[]>([]);
 const detail = ref<QuestionDetail | null>(null);
 
 const page = reactive({ pageNo: 1, pageSize: PAGE_SIZE, total: 0 });
-const filters = reactive({ keyword: '', difficulty: '', questionType: '', knowledgePointId: '' });
+const filters = reactive({ keyword: '', questionType: '', knowledgePointId: '' });
 
 watch(
-  () => [filters.difficulty, filters.questionType, filters.knowledgePointId],
+  () => filters.knowledgePointId,
   () => searchQuestions(),
 );
 
@@ -148,8 +133,7 @@ async function loadQuestions(): Promise<void> {
       pageNo: page.pageNo,
       pageSize: page.pageSize,
       keyword: filters.keyword.trim(),
-      difficulty: filters.difficulty,
-      questionType: filters.questionType,
+      questionType: filters.questionType.trim(),
       knowledgePointId: filters.knowledgePointId,
     });
     questions.value = result.records;
@@ -172,7 +156,6 @@ async function searchQuestions(): Promise<void> {
  */
 async function resetFilters(): Promise<void> {
   filters.keyword = '';
-  filters.difficulty = '';
   filters.questionType = '';
   filters.knowledgePointId = '';
   await searchQuestions();
@@ -196,17 +179,17 @@ async function openDetail(id: string): Promise<void> {
 }
 
 /**
- * 解析难度标签样式。
+ * 解析重要性标签样式。
  */
-function resolveDifficultyType(difficulty: string): 'success' | 'warning' | 'danger' | 'info' {
-  if (difficulty === 'EASY') {
-    return 'success';
+function resolveImportanceType(score: number): 'success' | 'warning' | 'danger' | 'info' {
+  if (score >= 85) {
+    return 'danger';
   }
-  if (difficulty === 'MEDIUM') {
+  if (score >= 60) {
     return 'warning';
   }
-  if (difficulty === 'HARD') {
-    return 'danger';
+  if (score > 0) {
+    return 'success';
   }
   return 'info';
 }
@@ -265,7 +248,7 @@ onMounted(async () => {
 
 .filter-form {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1fr auto;
+  grid-template-columns: 1.4fr 1fr 1fr auto;
   gap: 14px;
   align-items: end;
 }
@@ -307,6 +290,7 @@ onMounted(async () => {
 .question-card h3 {
   margin: 0;
   color: #1f2a44;
+  line-height: 1.6;
 }
 
 .tag-row {
@@ -314,13 +298,11 @@ onMounted(async () => {
   justify-content: flex-start;
 }
 
-.muted-tags {
-  margin-top: 12px;
-}
-
-.knowledge-line,
-.time-line {
-  margin: 10px 0 0;
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 18px;
+  margin-top: 14px;
   color: #667085;
   font-size: 14px;
 }
@@ -329,6 +311,11 @@ onMounted(async () => {
   margin: 0 0 14px;
   color: #1f2a44;
   font-size: 22px;
+  line-height: 1.6;
+}
+
+.detail-tags {
+  margin-bottom: 12px;
 }
 
 .detail-content section {
@@ -351,13 +338,15 @@ onMounted(async () => {
 }
 
 @media (max-width: 1080px) {
-  .filter-form {
+  .filter-form,
+  .meta-grid {
     grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 720px) {
-  .filter-form {
+  .filter-form,
+  .meta-grid {
     grid-template-columns: 1fr;
   }
 

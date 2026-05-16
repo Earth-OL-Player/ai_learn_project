@@ -35,7 +35,7 @@ function buildHeaders(extraHeaders?: HeadersInit): HeadersInit {
   const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
   // 登录后统一通过 Bearer token 访问受保护接口。
-  headers.set('Accept', 'application/json');
+  headers.set('Accept', headers.get('Accept') || 'application/json');
   if (token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
@@ -88,6 +88,21 @@ async function request<T>(path: string, init: RequestInit): Promise<T> {
 }
 
 /**
+ * 发起文件下载请求。
+ */
+async function requestBlob(path: string): Promise<Blob> {
+  const response = await fetch(buildRequestUrl(path), {
+    method: 'GET',
+    headers: buildHeaders({ Accept: 'text/csv' }),
+  });
+  if (!response.ok) {
+    throw new Error('文件下载失败，请稍后重试');
+  }
+  saveRefreshedToken(response);
+  return response.blob();
+}
+
+/**
  * 发起 GET 请求。
  */
 export async function get<T>(path: string): Promise<T> {
@@ -106,8 +121,33 @@ export async function post<T, B = unknown>(path: string, body?: B): Promise<T> {
 }
 
 /**
+ * 发起 PUT 请求。
+ */
+export async function put<T, B = unknown>(path: string, body?: B): Promise<T> {
+  return request<T>(path, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+}
+
+/**
+ * 发起表单 POST 请求。
+ */
+export async function postForm<T>(path: string, body: FormData): Promise<T> {
+  return request<T>(path, { method: 'POST', body });
+}
+
+/**
  * 发起 DELETE 请求。
  */
 export async function del<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' });
+}
+
+/**
+ * 发起下载请求。
+ */
+export async function getBlob(path: string): Promise<Blob> {
+  return requestBlob(path);
 }

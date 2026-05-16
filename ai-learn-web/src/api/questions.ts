@@ -10,7 +10,6 @@ export function fetchQuestions(query: QuestionQuery): Promise<PageResponse<Quest
   params.set('pageNo', String(query.pageNo));
   params.set('pageSize', String(query.pageSize));
   appendOptionalParam(params, 'keyword', query.keyword);
-  appendOptionalParam(params, 'difficulty', query.difficulty);
   appendOptionalParam(params, 'questionType', query.questionType);
   appendOptionalParam(params, 'knowledgePointId', query.knowledgePointId);
   return get<PageResponse<QuestionListItem>>(`/questions?${params.toString()}`);

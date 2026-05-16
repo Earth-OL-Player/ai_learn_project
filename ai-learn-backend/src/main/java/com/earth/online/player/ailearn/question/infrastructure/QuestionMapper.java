@@ -12,11 +12,10 @@ import org.apache.ibatis.annotations.Select;
 public interface QuestionMapper {
 
     /**
-     * 分页查询默认题库。
+     * 分页查询系统题库。
      *
      * @param keyword 关键词
-     * @param difficulty 难度
-     * @param questionType 题型
+     * @param questionType 题目分类
      * @param knowledgePointId 知识点ID
      * @param offset 偏移量
      * @param pageSize 每页数量
@@ -24,17 +23,17 @@ public interface QuestionMapper {
      */
     @Select("""
             <script>
-            SELECT q.id, q.title, q.question_type, q.difficulty, q.tags, q.created_at,
+            SELECT q.id, q.code, q.question, q.question_type, q.created_at,
+                   q.importance_score, q.occurrence_count,
                    GROUP_CONCAT(kp.name ORDER BY kp.id SEPARATOR ',') AS knowledge_point_names
             FROM questions q
             LEFT JOIN question_knowledge_points qkp ON qkp.question_id = q.id
             LEFT JOIN knowledge_points kp ON kp.id = qkp.knowledge_point_id AND kp.deleted = 0
-            WHERE q.deleted = 0 AND q.source_type = 'DEFAULT'
+            WHERE q.deleted = 0
             <if test='keyword != null and keyword != ""'>
-              AND (q.title LIKE CONCAT('%', #{keyword}, '%') OR q.content LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='difficulty != null and difficulty != ""'>
-              AND q.difficulty = #{difficulty}
+              AND (q.code LIKE CONCAT('%', #{keyword}, '%')
+                   OR q.question LIKE CONCAT('%', #{keyword}, '%')
+                   OR q.standard_answer LIKE CONCAT('%', #{keyword}, '%'))
             </if>
             <if test='questionType != null and questionType != ""'>
               AND q.question_type = #{questionType}
@@ -45,14 +44,14 @@ public interface QuestionMapper {
                   WHERE filter_qkp.question_id = q.id AND filter_qkp.knowledge_point_id = #{knowledgePointId}
               )
             </if>
-            GROUP BY q.id, q.title, q.question_type, q.difficulty, q.tags, q.created_at
+            GROUP BY q.id, q.code, q.question, q.question_type, q.created_at,
+                     q.importance_score, q.occurrence_count
             ORDER BY q.created_at DESC, q.id DESC
             LIMIT #{pageSize} OFFSET #{offset}
             </script>
             """)
     List<QuestionListRecord> findPage(
             @Param("keyword") String keyword,
-            @Param("difficulty") String difficulty,
             @Param("questionType") String questionType,
             @Param("knowledgePointId") Long knowledgePointId,
             @Param("offset") int offset,
@@ -60,11 +59,10 @@ public interface QuestionMapper {
     );
 
     /**
-     * 统计默认题库数量。
+     * 统计系统题库数量。
      *
      * @param keyword 关键词
-     * @param difficulty 难度
-     * @param questionType 题型
+     * @param questionType 题目分类
      * @param knowledgePointId 知识点ID
      * @return 题目数量
      */
@@ -72,12 +70,11 @@ public interface QuestionMapper {
             <script>
             SELECT COUNT(1)
             FROM questions q
-            WHERE q.deleted = 0 AND q.source_type = 'DEFAULT'
+            WHERE q.deleted = 0
             <if test='keyword != null and keyword != ""'>
-              AND (q.title LIKE CONCAT('%', #{keyword}, '%') OR q.content LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='difficulty != null and difficulty != ""'>
-              AND q.difficulty = #{difficulty}
+              AND (q.code LIKE CONCAT('%', #{keyword}, '%')
+                   OR q.question LIKE CONCAT('%', #{keyword}, '%')
+                   OR q.standard_answer LIKE CONCAT('%', #{keyword}, '%'))
             </if>
             <if test='questionType != null and questionType != ""'>
               AND q.question_type = #{questionType}
@@ -92,27 +89,26 @@ public interface QuestionMapper {
             """)
     long countPage(
             @Param("keyword") String keyword,
-            @Param("difficulty") String difficulty,
             @Param("questionType") String questionType,
             @Param("knowledgePointId") Long knowledgePointId
     );
 
     /**
-     * 查询默认题目详情。
+     * 查询系统题目详情。
      *
      * @param id 题目ID
      * @return 题目详情
      */
     @Select("""
-            SELECT q.id, q.title, q.content, q.question_type, q.difficulty, q.tags,
-                   q.standard_answer, q.analysis, q.source_type, q.created_at, q.updated_at,
+            SELECT q.id, q.code, q.question, q.question_type, q.standard_answer,
+                   q.importance_score, q.occurrence_count, q.created_at, q.updated_at,
                    GROUP_CONCAT(kp.name ORDER BY kp.id SEPARATOR ',') AS knowledge_point_names
             FROM questions q
             LEFT JOIN question_knowledge_points qkp ON qkp.question_id = q.id
             LEFT JOIN knowledge_points kp ON kp.id = qkp.knowledge_point_id AND kp.deleted = 0
-            WHERE q.id = #{id} AND q.deleted = 0 AND q.source_type = 'DEFAULT'
-            GROUP BY q.id, q.title, q.content, q.question_type, q.difficulty, q.tags,
-                     q.standard_answer, q.analysis, q.source_type, q.created_at, q.updated_at
+            WHERE q.id = #{id} AND q.deleted = 0
+            GROUP BY q.id, q.code, q.question, q.question_type, q.standard_answer,
+                     q.importance_score, q.occurrence_count, q.created_at, q.updated_at
             """)
     QuestionDetailRecord findDetailById(@Param("id") Long id);
 }

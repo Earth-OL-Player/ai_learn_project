@@ -54,13 +54,12 @@ const progressPercent = computed(() => {
   if (!growth.value) {
     return 0;
   }
-  if (growth.value.experienceToNextLevel === 0) {
+  if (growth.value.experienceToNextLevel === 0 || growth.value.nextLevelExperience <= growth.value.currentExperience) {
     return 100;
   }
-  const previousLevelExperience = Math.max(0, growth.value.nextLevelExperience - 300);
-  const gained = growth.value.currentExperience - previousLevelExperience;
-  const total = growth.value.nextLevelExperience - previousLevelExperience;
-  return Math.max(0, Math.min(100, Math.round((gained / total) * 100)));
+
+  // 当前接口不额外返回上一等级阈值，这里按总进度做轻量展示。
+  return Math.max(0, Math.min(100, Math.round((growth.value.currentExperience / growth.value.nextLevelExperience) * 100)));
 });
 
 /**

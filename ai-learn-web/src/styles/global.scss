@@ -812,3 +812,76 @@ a {
   border-radius: 24px;
   box-shadow: 0 12px 32px rgba(61, 91, 132, 0.08);
 }
+
+/* sprint202612 管理者中心布局收窄侧栏，让主功能区域占据更多空间。 */
+.admin-center-page {
+  grid-template-columns: 220px minmax(0, 1fr);
+  max-width: 1440px;
+  padding: 0 8px;
+}
+
+.admin-sidebar {
+  padding: 18px;
+}
+
+.system-question-hero {
+  align-items: center;
+}
+
+.system-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.admin-filter-card,
+.admin-table-card {
+  margin-top: 18px;
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 12px 32px rgba(61, 91, 132, 0.08);
+}
+
+.admin-filter-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(180px, 0.8fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-filter-actions {
+  margin-bottom: 18px;
+}
+
+.system-question-table .el-table__cell {
+  vertical-align: top;
+}
+
+.question-cell {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #344054;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.system-question-dialog .el-dialog {
+  border-radius: 24px;
+}
+
+.dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+@media (max-width: 980px) {
+  .admin-center-page,
+  .admin-filter-form,
+  .dialog-grid {
+    grid-template-columns: 1fr;
+  }
+}

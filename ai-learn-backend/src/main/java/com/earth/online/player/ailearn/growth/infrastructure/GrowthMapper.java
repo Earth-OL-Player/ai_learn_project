@@ -98,33 +98,59 @@ public interface GrowthMapper {
     List<GrowthEventRecord> findRecentEvents(@Param("userId") Long userId, @Param("limit") int limit);
 
     /**
-     * 查询最近答题日期。
+     * 查询最近刷题日期。
      *
      * @param userId 用户ID
      * @return 日期列表
      */
     @Select("""
-            SELECT DISTINCT DATE(created_at)
-            FROM answer_records
-            WHERE user_id = #{userId}
-            ORDER BY DATE(created_at) DESC
+            SELECT DISTINCT DATE(last_answered_at)
+            FROM user_question_stats
+            WHERE user_id = #{userId} AND last_answered_at IS NOT NULL
+            ORDER BY DATE(last_answered_at) DESC
             LIMIT 30
             """)
     List<LocalDate> findRecentAnswerDates(@Param("userId") Long userId);
 
     /**
-     * 按知识点统计完成题数。
+     * 按题目分类统计完成题数。
      *
      * @param userId 用户ID
-     * @param keyword 知识点关键词
+     * @param keyword 分类关键词
      * @return 完成题数
      */
     @Select("""
             SELECT COUNT(1)
-            FROM answer_records ar
-            JOIN question_knowledge_points qkp ON qkp.question_id = ar.question_id
-            JOIN knowledge_points kp ON kp.id = qkp.knowledge_point_id
-            WHERE ar.user_id = #{userId} AND kp.name LIKE CONCAT('%', #{keyword}, '%')
+            FROM user_question_stats stats
+            JOIN questions q ON q.code = stats.question_code
+            WHERE stats.user_id = #{userId} AND q.question_type LIKE CONCAT('%', #{keyword}, '%')
             """)
     long countAnsweredByKnowledgeKeyword(@Param("userId") Long userId, @Param("keyword") String keyword);
+
+    /**
+     * 统计已答题目数量。
+     *
+     * @param userId 用户ID
+     * @return 已答题目数量
+     */
+    @Select("SELECT COUNT(1) FROM user_question_stats WHERE user_id = #{userId} AND answer_count > 0")
+    long countAnsweredQuestions(@Param("userId") Long userId);
+
+    /**
+     * 查询最高分平均值。
+     *
+     * @param userId 用户ID
+     * @return 平均最高分
+     */
+    @Select("SELECT COALESCE(AVG(best_score), 0) FROM user_question_stats WHERE user_id = #{userId} AND answer_count > 0")
+    double averageBestScore(@Param("userId") Long userId);
+
+    /**
+     * 查询最高分总和。
+     *
+     * @param userId 用户ID
+     * @return 总经验值
+     */
+    @Select("SELECT COALESCE(SUM(best_score), 0) FROM user_question_stats WHERE user_id = #{userId}")
+    int sumBestScores(@Param("userId") Long userId);
 }

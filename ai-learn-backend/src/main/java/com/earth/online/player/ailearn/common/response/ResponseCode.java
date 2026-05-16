@@ -17,6 +17,9 @@ public enum ResponseCode {
     /** 认证失败或登录态无效。 */
     AUTH_UNAUTHORIZED("AUTH_UNAUTHORIZED"),
 
+    /** 权限不足。 */
+    AUTH_FORBIDDEN("AUTH_FORBIDDEN"),
+
     /** 资源冲突，例如用户名已存在。 */
     RESOURCE_CONFLICT("RESOURCE_CONFLICT"),
 

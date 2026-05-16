@@ -6,27 +6,25 @@ export interface KnowledgePointItem {
 
 export interface QuestionListItem {
   id: string;
-  title: string;
+  code: string;
+  question: string;
   questionType: string;
   questionTypeText: string;
-  difficulty: string;
-  difficultyText: string;
-  tags: string[];
   knowledgePoints: string[];
+  importanceScore: number;
+  /** 真实面试出现次数。 */
+  occurrenceCount: number;
   createdAt: string;
 }
 
 export interface QuestionDetail extends QuestionListItem {
-  content: string;
   standardAnswer: string;
-  analysis: string | null;
 }
 
 export interface QuestionQuery {
   pageNo: number;
   pageSize: number;
   keyword?: string;
-  difficulty?: string;
   questionType?: string;
   knowledgePointId?: string;
 }
