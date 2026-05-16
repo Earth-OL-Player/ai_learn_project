@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from app.api.dependencies import verify_internal_token
-from app.schemas.grading import ApiResponse
+from app.schemas.common import ApiResponse
 from app.schemas.rag import RagIndexTaskRequest, RagIndexTaskResponse, RagSearchRequest, RagSearchSnippet
 from app.rag.index_task_service import rag_service
 

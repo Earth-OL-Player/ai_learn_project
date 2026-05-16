@@ -1,13 +1,13 @@
 # MySQL 中间件说明
 
-版本：v1.4  
-日期：2026-05-14  
+版本：v1.5  
+日期：2026-05-16  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据和默认题库数据，包括用户、建议、评论、题目、知识点、题目知识点关系和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据、默认题库数据和超级管理员标识，包括用户、建议、评论、题目、知识点、题目知识点关系和审计字段。
 
 当前边界说明：
 
@@ -16,6 +16,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、建议�
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
 - 建议状态创建时默认为 `PENDING`，评论点赞和回复字段本期只预留。
 - 默认题库通过 migration 初始化少量 AI/RAG/Agent 示例题，供热门面经页面浏览筛选。
+- `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。
 - Redis、Qdrant 等中间件不参与建议评论区最小闭环。
 
 ## 2. 推荐版本
@@ -151,13 +152,14 @@ SHOW INDEX FROM suggestions;
 SHOW INDEX FROM comments;
 SHOW INDEX FROM questions;
 SHOW INDEX FROM knowledge_points;
+SELECT id, username, super_admin FROM users WHERE username = '本地用户名占位符';
 ```
 
 后端验证：
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 执行 `V1__init_user_tables.sql`、`V2__require_nickname_email.sql`、`V3__init_interaction_tables.sql`、`V4__init_question_tables.sql`。
+3. 确认 Flyway 已执行 `V1` 到 `V10` migration，包含用户、互动、题库、刷题、RAG、成长徽章和超级管理员标识相关表结构。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -168,6 +170,8 @@ SHOW INDEX FROM knowledge_points;
 11. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `GET /api/v1/questions?pageNo=1&pageSize=10`，确认可分页查询默认题库。
 12. 调用 `GET /api/v1/knowledge-points`，确认可查询知识点筛选数据。
 13. 调用 `GET /api/v1/questions/<题目ID占位符>`，确认可查看题目内容、参考答案、解析和知识点。
+14. 注册一个本地普通用户，确认 `users.super_admin` 默认等于 `0`。
+15. 如需验收超级管理员入口，可在本地测试库执行 `UPDATE users SET super_admin = 1 WHERE username = '本地用户名占位符';`，重新登录后确认前端展示“管理者中心”。
 
 ## 8. 后续部署到服务器注意事项
 
@@ -177,4 +181,5 @@ SHOW INDEX FROM knowledge_points;
 - 数据目录必须持久化，并制定备份策略，至少包含定期全量备份和恢复演练。
 - 上线前确认字符集、时区、排序规则与本地环境一致。
 - 表结构变更必须通过 Flyway migration 发布，不允许只在生产库手工改表。
+- 生产环境调整超级管理员必须走审批流程，执行 SQL 时只能更新明确账号，禁止批量无条件更新 `users.super_admin`。
 - 日志和监控中不得输出完整连接串、用户名密码、JWT token 或敏感业务数据。

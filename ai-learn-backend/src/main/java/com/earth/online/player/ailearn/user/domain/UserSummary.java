@@ -14,6 +14,7 @@ import java.time.OffsetDateTime;
  * @param level 等级展示编码
  * @param levelName 等级名称
  * @param rank 段位名称
+ * @param superAdmin 是否超级管理员
  * @param createdAt 创建时间
  */
 public record UserSummary(
@@ -26,6 +27,7 @@ public record UserSummary(
         String level,
         String levelName,
         String rank,
+        Boolean superAdmin,
         OffsetDateTime createdAt
 ) {
 }

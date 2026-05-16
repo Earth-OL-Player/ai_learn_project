@@ -24,6 +24,7 @@ public final class UserSummaryConverter {
         int experience = user.getExperience() == null ? 0 : user.getExperience();
         GrowthLevel level = GrowthLevel.resolveByExperience(experience);
         GrowthRank rank = GrowthRank.resolveByExperience(experience);
+        boolean superAdmin = Boolean.TRUE.equals(user.getSuperAdmin());
 
         // 用户摘要只返回安全展示字段，不暴露密码哈希等内部信息。
         return new UserSummary(
@@ -36,6 +37,7 @@ public final class UserSummaryConverter {
                 level.displayCode(),
                 level.displayName(),
                 rank.displayName(),
+                superAdmin,
                 user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
         );
     }

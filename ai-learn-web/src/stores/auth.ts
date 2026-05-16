@@ -15,6 +15,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 是否已登录由 token 和用户信息共同确认。
   const isLoggedIn = computed(() => Boolean(token.value && user.value));
+  const isSuperAdmin = computed(() => Boolean(isLoggedIn.value && user.value?.superAdmin));
 
   /**
    * 保存登录成功后的令牌和用户信息。
@@ -90,6 +91,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     initialized,
     isLoggedIn,
+    isSuperAdmin,
     setAuth,
     clearAuth,
     loginByPassword,

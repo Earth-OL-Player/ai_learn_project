@@ -1,4 +1,6 @@
 import { createRouter, createWebHistory } from 'vue-router';
+import AdminCenterPage from '../pages/admin/AdminCenterPage.vue';
+import SystemQuestionBankManagePage from '../pages/admin/SystemQuestionBankManagePage.vue';
 import AppLayout from '../layout/AppLayout.vue';
 import InterviewQuestionsPage from '../pages/interview-questions/InterviewQuestionsPage.vue';
 import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
@@ -58,6 +60,23 @@ const router = createRouter({
           component: ProfilePage,
           meta: { title: '个人中心', requiresAuth: true },
         },
+        {
+          path: 'admin',
+          component: AdminCenterPage,
+          meta: { title: '管理者中心', requiresAuth: true, requiresSuperAdmin: true },
+          children: [
+            {
+              path: '',
+              redirect: '/admin/system-question-bank',
+            },
+            {
+              path: 'system-question-bank',
+              name: 'admin-system-question-bank',
+              component: SystemQuestionBankManagePage,
+              meta: { title: '系统题库管理', requiresAuth: true, requiresSuperAdmin: true },
+            },
+          ],
+        },
       ],
     },
   ],
@@ -76,6 +95,9 @@ router.beforeEach(async (to) => {
         redirect: to.fullPath,
       },
     };
+  }
+  if (to.meta.requiresSuperAdmin && !authStore.isSuperAdmin) {
+    return '/learning-roadmap';
   }
   return true;
 });

@@ -10,6 +10,7 @@ export interface CurrentUser {
   level: string;
   levelName: string;
   rank: string;
+  superAdmin: boolean;
   createdAt: string;
 }
 

@@ -25,6 +25,7 @@ public class AuthService {
     private static final int DEFAULT_EXPERIENCE = 0;
     private static final String DEFAULT_LEVEL_CODE = "LV1";
     private static final String DEFAULT_RANK_CODE = "BRONZE";
+    private static final boolean DEFAULT_SUPER_ADMIN = false;
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
@@ -73,6 +74,7 @@ public class AuthService {
         user.setExperience(DEFAULT_EXPERIENCE);
         user.setLevelCode(DEFAULT_LEVEL_CODE);
         user.setRankCode(DEFAULT_RANK_CODE);
+        user.setSuperAdmin(DEFAULT_SUPER_ADMIN);
         userMapper.insert(user);
 
         User savedUser = userMapper.findById(user.getId());

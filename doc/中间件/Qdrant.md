@@ -88,11 +88,11 @@ docker logs -f ai-learn-qdrant
 | `QDRANT_URL` | `http://127.0.0.1:6333` | Qdrant HTTP 地址 |
 | `QDRANT_COLLECTION` | `ai_learn_knowledge` | RAG 知识片段向量集合 |
 
-由于 AI 服务为项目必选服务，本地启动时还需要配置内部鉴权 Token：
+由于 `ai-service` 的 RAG 内部接口仍需要服务间鉴权，本地启动时还需要配置内部鉴权 Token：
 
 | 配置项 | 示例占位符 | 说明 |
 | --- | --- | --- |
-| `AI_SERVICE_TOKEN` | `AI_SERVICE_TOKEN本地占位符` | 后端调用 AI 服务的内部鉴权 Token，必须与 `ai-learn-backend/.env` 保持一致 |
+| `AI_SERVICE_TOKEN` | `AI_SERVICE_TOKEN本地占位符` | 调用 `ai-service` 内部 RAG 接口时使用的鉴权 Token；当前后端已移除 AI智能刷题调用，不再读取该配置 |
 
 当前版本未读取以下环境变量，请不要作为本地启动必填项配置：
 
@@ -122,7 +122,7 @@ QDRANT_COLLECTION=ai_learn_knowledge
 
 占位符说明：
 
-- `AI_SERVICE_TOKEN本地占位符`：本地可替换为自定义随机字符串，但不得提交真实生产 Token；如果联调 `ai-learn-backend`，两边配置值必须一致。
+- `AI_SERVICE_TOKEN本地占位符`：本地可替换为自定义随机字符串，但不得提交真实生产 Token；当前仅用于 `ai-service` 内部 RAG 接口鉴权。
 - `http://127.0.0.1:6333`：本地 Qdrant HTTP 地址；服务器部署时应改为内网地址或通过私有配置注入。
 - `ai_learn_knowledge`：当前 RAG 入库和检索使用的统一集合名称。
 
@@ -182,7 +182,7 @@ QDRANT_COLLECTION=ai_learn_knowledge
 本地验证步骤：
 
 1. 先按本文档启动 Qdrant。
-2. 启动 `ai-service`，并配置 `AI_SERVICE_TOKEN`、`QDRANT_URL`、`QDRANT_COLLECTION`。
+2. 启动 `ai-service`，并配置 `AI_SERVICE_TOKEN`、`QDRANT_URL`、`QDRANT_COLLECTION`。当前后端已移除 AI智能刷题调用，联调 RAG 内部接口时由调用方携带同名 Token。
 3. 调用 `POST /internal/v1/rag/index-tasks` 提交包含 `documents` 的入库请求。
 4. 调用 `POST /internal/v1/rag/search` 输入 `RAG`、`Embedding` 等关键词，验证能返回知识片段。
 
@@ -191,3 +191,4 @@ QDRANT_COLLECTION=ai_learn_knowledge
 - 生产环境 `QDRANT_URL` 必须使用服务器私有配置或环境变量注入，不得提交真实生产地址。
 - Qdrant collection 中保存学习资料和题库片段的向量及元数据，需要纳入持久化和备份策略。
 - 当前本地 Embedding 适配器是占位实现，后续接入真实模型时应同步更新模型 Key、超时、限流和成本控制说明。
+

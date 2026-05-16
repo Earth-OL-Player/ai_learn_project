@@ -16,6 +16,7 @@ public class User {
     private Integer experience;
     private String levelCode;
     private String rankCode;
+    private Boolean superAdmin;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
     private Boolean deleted;
@@ -180,6 +181,24 @@ public class User {
      */
     public void setRankCode(String rankCode) {
         this.rankCode = rankCode;
+    }
+
+    /**
+     * 获取超级管理员标识。
+     *
+     * @return 是否超级管理员
+     */
+    public Boolean getSuperAdmin() {
+        return superAdmin;
+    }
+
+    /**
+     * 设置超级管理员标识。
+     *
+     * @param superAdmin 是否超级管理员
+     */
+    public void setSuperAdmin(Boolean superAdmin) {
+        this.superAdmin = superAdmin;
     }
 
     /**

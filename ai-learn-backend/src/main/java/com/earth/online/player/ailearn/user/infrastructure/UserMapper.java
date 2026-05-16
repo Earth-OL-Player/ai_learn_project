@@ -21,7 +21,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code,
+            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE id = #{id} AND deleted = 0
@@ -35,7 +35,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code,
+            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE username = #{username} AND deleted = 0
@@ -49,7 +49,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code,
+            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE nickname = #{nickname} AND deleted = 0
@@ -63,7 +63,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code,
+            SELECT id, username, nickname, avatar, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE email = #{email} AND deleted = 0
@@ -77,8 +77,8 @@ public interface UserMapper {
      * @return 影响行数
      */
     @Insert("""
-            INSERT INTO users(username, nickname, avatar, email, password_hash, experience, level_code, rank_code)
-            VALUES(#{username}, #{nickname}, #{avatar}, #{email}, #{passwordHash}, #{experience}, #{levelCode}, #{rankCode})
+            INSERT INTO users(username, nickname, avatar, email, password_hash, experience, level_code, rank_code, super_admin)
+            VALUES(#{username}, #{nickname}, #{avatar}, #{email}, #{passwordHash}, #{experience}, #{levelCode}, #{rankCode}, #{superAdmin})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insert(User user);
