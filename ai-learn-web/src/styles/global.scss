@@ -24,25 +24,16 @@ a {
 
 .app-layout {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
-}
-
-.layout-sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: 272px;
-  padding: 28px 18px;
-  background: rgba(255, 255, 255, 0.88);
-  border-right: 1px solid rgba(83, 116, 170, 0.12);
-  box-shadow: 12px 0 32px rgba(42, 84, 139, 0.06);
-  backdrop-filter: blur(16px);
 }
 
 .brand-block {
   display: flex;
   gap: 14px;
   align-items: center;
-  padding: 8px 10px 28px;
+  flex: 0 0 auto;
+  padding: 0;
 }
 
 .brand-logo {
@@ -58,8 +49,9 @@ a {
 
 .brand-block h1 {
   margin: 0;
-  font-size: 20px;
+  font-size: 19px;
   color: #17233d;
+  white-space: nowrap;
 }
 
 .brand-block p {
@@ -69,14 +61,20 @@ a {
 }
 
 .layout-menu {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+  max-width: 640px;
   border-right: 0;
+  border-bottom: 0;
   background: transparent;
 }
 
 .layout-menu .el-menu-item {
-  height: 48px;
-  margin: 6px 0;
-  border-radius: 14px;
+  height: 44px;
+  margin: 0 4px;
+  border-bottom: 0;
+  border-radius: 999px;
   color: #4b5870;
   font-weight: 600;
 }
@@ -84,12 +82,12 @@ a {
 .layout-menu .el-menu-item.is-active {
   color: #1f6feb;
   background: #eaf3ff;
+  border-bottom: 0;
 }
 
 .layout-main {
   flex: 1;
   min-width: 0;
-  margin-left: 272px;
 }
 
 .layout-header {
@@ -98,12 +96,22 @@ a {
   z-index: 10;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  height: 64px;
-  padding: 0 32px;
-  background: rgba(245, 247, 251, 0.82);
+  justify-content: space-between;
+  gap: 28px;
+  height: 72px;
+  padding: 0 36px;
+  // 顶部导航使用轻量玻璃质感，保持清新简约的页面风格。
+  background: rgba(255, 255, 255, 0.88);
   border-bottom: 1px solid rgba(83, 116, 170, 0.1);
+  box-shadow: 0 12px 32px rgba(42, 84, 139, 0.06);
   backdrop-filter: blur(14px);
+}
+
+.header-action-area {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  min-width: 168px;
 }
 
 .header-label {
@@ -119,7 +127,7 @@ a {
 
 .layout-content {
   width: 100%;
-  padding: 24px 32px 40px;
+  padding: 32px 36px 40px;
 }
 
 .roadmap-page {

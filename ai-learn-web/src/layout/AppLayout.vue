@@ -1,27 +1,29 @@
 <template>
   <div class="app-layout">
-    <aside class="layout-sidebar">
+    <header class="layout-header">
+      <!-- 顶部左侧保留平台品牌信息，替代原来的侧边栏品牌区。 -->
       <div class="brand-block">
         <div class="brand-logo">AI</div>
         <div>
-          <h1>AI应用开发<br />学习平台</h1>
+          <h1>AI应用开发学习平台</h1>
         </div>
       </div>
 
+      <!-- 主导航改为顶部横向菜单，方便用户在页面顶部快速切换模块。 -->
       <el-menu
         class="layout-menu"
         :default-active="activeMenu"
+        mode="horizontal"
         router
       >
         <el-menu-item index="/learning-roadmap">路线和资料</el-menu-item>
-        <el-menu-item index="/suggestions-comments">建议评论区</el-menu-item>
-        <el-menu-item index="/interview-questions">热门面经</el-menu-item>
         <el-menu-item index="/practice-agent">AI智能刷题</el-menu-item>
+        <el-menu-item index="/interview-questions">热门面经</el-menu-item>
+        <el-menu-item index="/suggestions-comments">建议评论区</el-menu-item>
       </el-menu>
-    </aside>
 
-    <section class="layout-main">
-      <header class="layout-header">
+      <!-- 顶部右侧继续承载登录注册和用户操作入口。 -->
+      <div class="header-action-area">
         <div v-if="authStore.isLoggedIn" class="header-user">
           <el-avatar :size="32" :src="authStore.user?.avatar || undefined">{{ avatarText }}</el-avatar>
           <el-dropdown trigger="click" @command="handleUserCommand">
@@ -42,8 +44,10 @@
           <el-button plain round @click="showRegisterDialog = true">注册</el-button>
           <el-button type="primary" plain round @click="showLoginDialog = true">登录</el-button>
         </div>
-      </header>
+      </div>
+    </header>
 
+    <section class="layout-main">
       <main class="layout-content">
         <RouterView />
       </main>
