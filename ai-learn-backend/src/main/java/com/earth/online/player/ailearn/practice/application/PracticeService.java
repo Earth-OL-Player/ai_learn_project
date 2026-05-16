@@ -23,6 +23,7 @@ import com.earth.online.player.ailearn.practice.interfaces.PracticeMessageRespon
 import com.earth.online.player.ailearn.practice.interfaces.PracticeQuestionResponse;
 import com.earth.online.player.ailearn.practice.interfaces.PracticeStateResponse;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -320,7 +321,7 @@ public class PracticeService {
     private double calculateWeight(PracticeQuestionRecord question) {
         int answeredCount = safeInt(question.getAnsweredCount());
         int bestScore = safeInt(question.getBestScore());
-        int importanceScore = safeInt(question.getImportanceScore());
+        double importanceScore = safeDouble(question.getImportanceScore());
         int occurrenceCount = safeInt(question.getOccurrenceCount());
 
         // 次数越少、重要性越高、历史得分越低，权重越高。
@@ -550,5 +551,15 @@ public class PracticeService {
      */
     private int safeInt(Integer value) {
         return value == null ? 0 : value;
+    }
+
+    /**
+     * 将可空小数转换为安全值。
+     *
+     * @param value 原始值
+     * @return 安全值
+     */
+    private double safeDouble(BigDecimal value) {
+        return value == null ? 0.0D : value.doubleValue();
     }
 }

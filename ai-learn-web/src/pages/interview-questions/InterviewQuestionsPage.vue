@@ -15,11 +15,8 @@
           <el-input v-model="filters.keyword" clearable placeholder="搜索编码、题目或答案" @keyup.enter="searchQuestions" />
         </el-form-item>
         <el-form-item label="分类">
-          <el-input v-model="filters.questionType" clearable placeholder="例如 RAG、Agent" @keyup.enter="searchQuestions" />
-        </el-form-item>
-        <el-form-item label="知识点">
-          <el-select v-model="filters.knowledgePointId" clearable filterable placeholder="全部知识点">
-            <el-option v-for="item in knowledgePoints" :key="item.id" :label="item.name" :value="item.id" />
+          <el-select v-model="filters.questionType" clearable filterable placeholder="全部分类" @change="searchQuestions">
+            <el-option v-for="item in questionTypes" :key="item" :label="item" :value="item" />
           </el-select>
         </el-form-item>
         <el-form-item class="filter-actions">
@@ -51,7 +48,6 @@
             <div class="meta-grid">
               <span>题目编码：{{ item.code }}</span>
               <span>真实面试出现次数：{{ item.occurrenceCount }}</span>
-              <span>知识点：{{ item.knowledgePoints.join('、') || '暂未关联' }}</span>
               <span>创建时间：{{ formatTime(item.createdAt) }}</span>
             </div>
           </article>
@@ -84,10 +80,6 @@
             <h4>参考答案</h4>
             <p>{{ detail.standardAnswer }}</p>
           </section>
-          <section>
-            <h4>知识点</h4>
-            <p>{{ detail.knowledgePoints.join('、') || '暂未关联' }}</p>
-          </section>
         </div>
       </el-skeleton>
     </el-dialog>
@@ -96,31 +88,26 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
-import { onMounted, reactive, ref, watch } from 'vue';
-import { fetchKnowledgePoints, fetchQuestionDetail, fetchQuestions } from '../../api/questions';
-import type { KnowledgePointItem, QuestionDetail, QuestionListItem } from '../../types/question';
+import { onMounted, reactive, ref } from 'vue';
+import { fetchQuestionDetail, fetchQuestions, fetchQuestionTypes } from '../../api/questions';
+import type { QuestionDetail, QuestionListItem } from '../../types/question';
 
 const PAGE_SIZE = 10;
 const loading = ref(false);
 const detailLoading = ref(false);
 const detailVisible = ref(false);
 const questions = ref<QuestionListItem[]>([]);
-const knowledgePoints = ref<KnowledgePointItem[]>([]);
+const questionTypes = ref<string[]>([]);
 const detail = ref<QuestionDetail | null>(null);
 
 const page = reactive({ pageNo: 1, pageSize: PAGE_SIZE, total: 0 });
-const filters = reactive({ keyword: '', questionType: '', knowledgePointId: '' });
-
-watch(
-  () => filters.knowledgePointId,
-  () => searchQuestions(),
-);
+const filters = reactive({ keyword: '', questionType: '' });
 
 /**
- * 加载知识点筛选数据。
+ * 加载分类筛选数据。
  */
-async function loadKnowledgePoints(): Promise<void> {
-  knowledgePoints.value = await fetchKnowledgePoints();
+async function loadQuestionTypes(): Promise<void> {
+  questionTypes.value = await fetchQuestionTypes();
 }
 
 /**
@@ -134,7 +121,6 @@ async function loadQuestions(): Promise<void> {
       pageSize: page.pageSize,
       keyword: filters.keyword.trim(),
       questionType: filters.questionType.trim(),
-      knowledgePointId: filters.knowledgePointId,
     });
     questions.value = result.records;
     page.total = result.total;
@@ -157,7 +143,6 @@ async function searchQuestions(): Promise<void> {
 async function resetFilters(): Promise<void> {
   filters.keyword = '';
   filters.questionType = '';
-  filters.knowledgePointId = '';
   await searchQuestions();
 }
 
@@ -202,7 +187,7 @@ function formatTime(value: string): string {
 }
 
 onMounted(async () => {
-  await Promise.all([loadKnowledgePoints(), loadQuestions()]);
+  await Promise.all([loadQuestionTypes(), loadQuestions()]);
 });
 </script>
 
@@ -248,7 +233,7 @@ onMounted(async () => {
 
 .filter-form {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr auto;
+  grid-template-columns: 1.4fr 1fr auto;
   gap: 14px;
   align-items: end;
 }

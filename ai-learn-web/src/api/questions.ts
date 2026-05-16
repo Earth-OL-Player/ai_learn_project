@@ -1,6 +1,6 @@
 import { get } from './http';
 import type { PageResponse } from '../types/page';
-import type { KnowledgePointItem, QuestionDetail, QuestionListItem, QuestionQuery } from '../types/question';
+import type { QuestionDetail, QuestionListItem, QuestionQuery } from '../types/question';
 
 /**
  * 分页查询题目列表。
@@ -11,7 +11,6 @@ export function fetchQuestions(query: QuestionQuery): Promise<PageResponse<Quest
   params.set('pageSize', String(query.pageSize));
   appendOptionalParam(params, 'keyword', query.keyword);
   appendOptionalParam(params, 'questionType', query.questionType);
-  appendOptionalParam(params, 'knowledgePointId', query.knowledgePointId);
   return get<PageResponse<QuestionListItem>>(`/questions?${params.toString()}`);
 }
 
@@ -23,10 +22,10 @@ export function fetchQuestionDetail(id: string): Promise<QuestionDetail> {
 }
 
 /**
- * 查询知识点列表。
+ * 查询题目分类列表。
  */
-export function fetchKnowledgePoints(): Promise<KnowledgePointItem[]> {
-  return get<KnowledgePointItem[]>('/knowledge-points');
+export function fetchQuestionTypes(): Promise<string[]> {
+  return get<string[]>('/questions/types');
 }
 
 /**

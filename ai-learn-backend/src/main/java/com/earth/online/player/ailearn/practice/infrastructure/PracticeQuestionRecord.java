@@ -1,5 +1,7 @@
 package com.earth.online.player.ailearn.practice.infrastructure;
 
+import java.math.BigDecimal;
+
 /**
  * 刷题候选题目记录。
  */
@@ -10,7 +12,7 @@ public class PracticeQuestionRecord {
     private String question;
     private String questionType;
     private String standardAnswer;
-    private Integer importanceScore;
+    private BigDecimal importanceScore;
     private Integer occurrenceCount;
     private Integer answeredCount;
     private Integer bestScore;
@@ -46,10 +48,10 @@ public class PracticeQuestionRecord {
     public void setStandardAnswer(String standardAnswer) { this.standardAnswer = standardAnswer; }
 
     /** 获取重要性评分。 */
-    public Integer getImportanceScore() { return importanceScore; }
+    public BigDecimal getImportanceScore() { return importanceScore; }
 
     /** 设置重要性评分。 */
-    public void setImportanceScore(Integer importanceScore) { this.importanceScore = importanceScore; }
+    public void setImportanceScore(BigDecimal importanceScore) { this.importanceScore = importanceScore; }
 
     /** 获取真实面试出现次数。 */
     public Integer getOccurrenceCount() { return occurrenceCount; }

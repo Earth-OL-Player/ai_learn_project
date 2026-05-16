@@ -1,7 +1,7 @@
 package com.earth.online.player.ailearn.question.interfaces;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
-import java.util.List;
 
 /**
  * 题目详情响应对象。
@@ -11,7 +11,6 @@ import java.util.List;
  * @param question 题目内容
  * @param questionType 题目分类
  * @param questionTypeText 分类文案
- * @param knowledgePoints 知识点名称列表
  * @param standardAnswer 参考答案
  * @param importanceScore 重要性评分
  * @param occurrenceCount 真实面试出现次数
@@ -23,9 +22,8 @@ public record QuestionDetailResponse(
         String question,
         String questionType,
         String questionTypeText,
-        List<String> knowledgePoints,
         String standardAnswer,
-        Integer importanceScore,
+        BigDecimal importanceScore,
         Integer occurrenceCount,
         OffsetDateTime createdAt
 ) {

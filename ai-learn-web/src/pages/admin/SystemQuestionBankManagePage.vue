@@ -2,9 +2,7 @@
   <section class="system-question-bank-page">
     <div class="admin-page-hero system-question-hero">
       <div>
-        <p class="eyebrow">系统题库</p>
         <h2>系统题库管理</h2>
-        <p>统一维护 AI 智能刷题使用的系统题库，题目编码会作为用户刷题汇总的稳定关联字段。</p>
       </div>
       <div class="system-question-actions">
         <el-button round @click="downloadTemplate">下载CSV模板</el-button>
@@ -48,8 +46,10 @@
         </el-table-column>
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
-            <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
-            <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+            <div class="table-action-row">
+              <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
+              <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -83,7 +83,7 @@
         </el-form-item>
         <div class="dialog-grid">
           <el-form-item label="重要性评分（0-100）">
-            <el-input-number v-model="form.importanceScore" :min="0" :max="100" />
+            <el-input-number v-model="form.importanceScore" :min="0" :max="100" :step="0.1" :precision="1" />
           </el-form-item>
           <el-form-item label="真实面试出现次数">
             <el-input-number v-model="form.occurrenceCount" :min="0" />
@@ -272,3 +272,4 @@ onMounted(async () => {
   await Promise.all([loadQuestionTypes(), loadQuestions()]);
 });
 </script>
+

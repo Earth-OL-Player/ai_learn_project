@@ -3,6 +3,7 @@ package com.earth.online.player.ailearn.question.interfaces;
 import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.question.application.QuestionService;
+import java.util.List;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,7 +35,6 @@ public class QuestionController {
      * @param pageSize 每页数量
      * @param keyword 关键词
      * @param questionType 题目分类
-     * @param knowledgePointId 知识点ID
      * @return 题目分页响应
      */
     @GetMapping
@@ -42,10 +42,19 @@ public class QuestionController {
             @RequestParam(required = false) Integer pageNo,
             @RequestParam(required = false) Integer pageSize,
             @RequestParam(required = false) String keyword,
-            @RequestParam(required = false) String questionType,
-            @RequestParam(required = false) Long knowledgePointId) {
+            @RequestParam(required = false) String questionType) {
         return ApiResponse.success(questionService.findPage(
-                pageNo, pageSize, keyword, questionType, knowledgePointId));
+                pageNo, pageSize, keyword, questionType));
+    }
+
+    /**
+     * 查询题目分类下拉数据。
+     *
+     * @return 题目分类列表
+     */
+    @GetMapping("/types")
+    public ApiResponse<List<String>> findQuestionTypes() {
+        return ApiResponse.success(questionService.findQuestionTypes());
     }
 
     /**

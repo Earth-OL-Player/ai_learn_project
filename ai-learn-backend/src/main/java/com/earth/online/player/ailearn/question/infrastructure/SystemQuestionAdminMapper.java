@@ -37,7 +37,7 @@ public interface SystemQuestionAdminMapper {
             <if test='questionType != null and questionType != ""'>
               AND question_type = #{questionType}
             </if>
-            ORDER BY updated_at DESC, id DESC
+            ORDER BY id ASC
             LIMIT #{pageSize} OFFSET #{offset}
             </script>
             """)

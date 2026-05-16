@@ -828,6 +828,11 @@ a {
   align-items: center;
 }
 
+.system-question-hero h2 {
+  // 管理页头部只保留核心标题，避免重复说明干扰操作。
+  margin: 0;
+}
+
 .system-question-actions {
   display: flex;
   flex-wrap: wrap;
@@ -856,6 +861,18 @@ a {
 
 .system-question-table .el-table__cell {
   vertical-align: top;
+}
+
+.table-action-row {
+  // 操作按钮保持同一行，避免编辑和删除在固定列中上下错位。
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.table-action-row .el-button {
+  margin-left: 0;
 }
 
 .question-cell {

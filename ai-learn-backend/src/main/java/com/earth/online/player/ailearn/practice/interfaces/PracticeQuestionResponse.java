@@ -1,5 +1,7 @@
 package com.earth.online.player.ailearn.practice.interfaces;
 
+import java.math.BigDecimal;
+
 /**
  * 刷题题目响应。
  *
@@ -15,7 +17,7 @@ public record PracticeQuestionResponse(
         String code,
         String question,
         String questionType,
-        Integer importanceScore,
+        BigDecimal importanceScore,
         Integer occurrenceCount,
         Integer answeredCount,
         Integer bestScore

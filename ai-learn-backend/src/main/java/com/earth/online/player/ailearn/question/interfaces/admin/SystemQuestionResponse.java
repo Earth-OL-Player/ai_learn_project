@@ -1,5 +1,6 @@
 package com.earth.online.player.ailearn.question.interfaces.admin;
 
+import java.math.BigDecimal;
 import java.time.OffsetDateTime;
 
 /**
@@ -21,7 +22,7 @@ public record SystemQuestionResponse(
         String question,
         String questionType,
         String standardAnswer,
-        Integer importanceScore,
+        BigDecimal importanceScore,
         Integer occurrenceCount,
         OffsetDateTime createdAt,
         OffsetDateTime updatedAt

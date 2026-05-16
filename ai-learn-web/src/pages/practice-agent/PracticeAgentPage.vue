@@ -1,53 +1,41 @@
 <template>
   <section class="practice-chat-page">
     <aside class="practice-side-card">
-      <!-- 侧栏只保留用户需要操作的信息。 -->
-      <div class="practice-side-hero">
-        <p class="eyebrow">AI 智能刷题</p>
-        <h2>专注练习，轻松提升</h2>
-        <p class="practice-side-desc">选择练习方向后开始对话，像聊天一样完成出题、作答与复盘。</p>
+      <div class="filter-card-title">
+        <strong>一起学习成长吧！</strong>
       </div>
 
-      <el-form label-position="top" class="practice-filter-form">
-        <el-form-item label="题目分类">
-          <el-select v-model="selectedCategories" multiple collapse-tags collapse-tags-tooltip filterable placeholder="默认全部分类">
-            <el-option v-for="item in categories" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <div class="category-summary-row">
-          <span>{{ categorySummary }}</span>
-          <el-button text type="primary" @click="selectedCategories = []">全部分类</el-button>
-        </div>
-      </el-form>
-
       <div v-if="growth" class="practice-growth-card">
-        <span class="growth-label">学习成长</span>
+        <span>当前经验</span>
         <strong>{{ growth.currentExperience }}</strong>
         <small>{{ growth.level }} · {{ growth.levelName }} · {{ growth.rank }}</small>
       </div>
+
     </aside>
 
     <main class="practice-chat-card">
       <div class="practice-chat-header">
-        <div class="practice-title-block">
-          <span class="chat-badge">实时练习</span>
-          <h2>开始你的 AI 刷题</h2>
-          <p>出题、作答、评分和追问都在同一个对话窗口完成。</p>
+        <div class="practice-category-picker">
+          <span>请选择题目分类</span>
+          <el-select v-model="selectedCategories" multiple collapse-tags collapse-tags-tooltip filterable placeholder="全部分类">
+            <el-option v-for="item in categories" :key="item" :label="item" :value="item" />
+          </el-select>
         </div>
-        <div class="practice-actions">
-          <el-button type="primary" round :loading="loading" @click="handleNextQuestion">{{ nextButtonText }}</el-button>
-          <el-button round :disabled="!currentQuestion" :loading="loading" @click="handleRetry">重新回答</el-button>
-        </div>
+        <el-button class="main-action-button" type="primary" round :loading="loading" @click="handleNextQuestion">{{ nextButtonText }}</el-button>
+        <el-button class="sub-action-button" round :disabled="!currentQuestion" :loading="loading" @click="handleRetry">重答本题</el-button>
       </div>
 
       <section ref="messagePanelRef" class="practice-message-panel">
-        <el-empty v-if="messages.length === 0" description="选择分类后点击开始刷题，也可以直接输入想练习的方向。" />
+        <el-empty v-if="messages.length === 0" description="选择分类后点击开始，或直接输入想练习的题型" />
         <article v-for="item in messages" :key="item.id" class="practice-message" :class="item.role">
           <div class="message-bubble">
             <p v-if="item.text" class="message-text">{{ item.text }}</p>
             <div v-if="item.question" class="question-bubble-card">
               <div class="question-meta-row">
                 <el-tag effect="plain">{{ item.question.questionType }}</el-tag>
+                <el-tag type="warning" effect="light">重要性 {{ item.question.importanceScore }}</el-tag>
+                <el-tag type="success" effect="light">真实面试 {{ item.question.occurrenceCount }} 次</el-tag>
+                <el-tag type="info" effect="plain">您的历史最高分 {{ item.question.bestScore }}</el-tag>
               </div>
               <h3>{{ item.question.question }}</h3>
             </div>
@@ -92,7 +80,7 @@
           type="textarea"
           :rows="3"
           resize="none"
-          placeholder="输入想练习的方向，或直接提交你的答案。"
+          :placeholder="inputPlaceholder"
           @keydown.enter.exact.prevent="sendMessage"
         />
         <el-button type="primary" round :loading="loading" @click="sendMessage">发送</el-button>
@@ -137,15 +125,18 @@ const messagePanelRef = ref<HTMLElement | null>(null);
 const authStore = useAuthStore();
 let messageId = 1;
 
-// 按阶段展示按钮文案，首次进入是开始刷题，后续是下一题。
-const nextButtonText = computed(() => (phase.value === 'QUESTIONING' ? '开始刷题' : '下一题'));
+// 按阶段展示主按钮文案，首次进入是开始，后续是下一题。
+const nextButtonText = computed(() => (phase.value === 'QUESTIONING' ? '开始' : '下一题'));
 
-// 选择摘要用于替代冗长规则说明，保持侧栏信息轻量。
-const categorySummary = computed(() => {
-  if (selectedCategories.value.length === 0) {
-    return '当前：全部分类';
+// 输入框提示根据当前阶段变化，引导用户输入最合适的内容。
+const inputPlaceholder = computed(() => {
+  if (phase.value === 'ANSWERING') {
+    return '请输入你的答案';
   }
-  return `已选择 ${selectedCategories.value.length} 个分类`;
+  if (phase.value === 'DISCUSSING') {
+    return '请输入你的疑惑';
+  }
+  return '请告诉AI你想练的题';
 });
 
 /**
@@ -283,85 +274,66 @@ onMounted(initializePage);
 
 <style scoped lang="scss">
 .practice-chat-page {
+  // 页面采用左侧筛选、右侧练习的清爽双栏布局。
   display: grid;
-  grid-template-columns: 320px minmax(0, 1fr);
-  gap: 24px;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 22px;
   min-height: calc(100vh - 150px);
 }
 
 .practice-side-card,
 .practice-chat-card {
-  border: 1px solid rgba(96, 129, 178, 0.12);
-  border-radius: 30px;
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: 0 18px 48px rgba(61, 91, 132, 0.1);
+  border: 1px solid rgba(83, 116, 170, 0.1);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 16px 42px rgba(61, 91, 132, 0.08);
 }
 
 .practice-side-card {
+  align-self: start;
+  padding: 20px;
+}
+
+.filter-card-title {
+  // 顶部使用轻量鼓励语，强化学习陪伴感。
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 22px;
-  background:
-    radial-gradient(circle at 16% 12%, rgba(64, 158, 255, 0.16), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 255, 0.92) 100%);
-}
-
-.practice-side-card h2,
-.practice-chat-header h2 {
-  margin: 0;
-  color: #17233d;
-}
-
-.practice-side-hero {
-  padding: 22px;
+  justify-content: center;
+  min-height: 108px;
+  padding: 20px;
+  border: 1px solid rgba(47, 125, 246, 0.08);
   border-radius: 24px;
-  background: linear-gradient(135deg, rgba(47, 125, 246, 0.1), rgba(53, 187, 168, 0.1));
+  background:
+    radial-gradient(circle at 90% 14%, rgba(255, 200, 87, 0.22), transparent 28%),
+    linear-gradient(135deg, #eef7ff 0%, #f2fff8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.72);
 }
 
-.practice-side-desc,
-.practice-chat-header p {
-  color: #667085;
-  line-height: 1.8;
-}
-
-.practice-filter-form {
-  padding: 18px;
-  border: 1px solid #edf2f7;
-  border-radius: 22px;
-  background: #ffffff;
-}
-
-.category-summary-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  color: #667085;
-  font-size: 14px;
+.filter-card-title strong {
+  color: #17233d;
+  font-size: 23px;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
 }
 
 .practice-growth-card {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-top: auto;
-  padding: 20px;
-  border-radius: 24px;
-  background:
-    linear-gradient(135deg, rgba(47, 125, 246, 0.1), rgba(53, 187, 168, 0.12)),
-    #ffffff;
+  margin-top: 16px;
+  padding: 16px;
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f7fbff 0%, #f6fff9 100%);
 }
 
-.growth-label,
+.practice-growth-card span,
 .practice-growth-card small {
   color: #667085;
 }
 
 .practice-growth-card strong {
   color: #1f6feb;
-  font-size: 34px;
-  line-height: 1;
+  font-size: 24px;
 }
 
 .practice-chat-card {
@@ -372,49 +344,59 @@ onMounted(initializePage);
 }
 
 .practice-chat-header {
+  // 头部集中放置分类选择和高频操作，缩短用户操作路径。
   display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
-  padding: 28px 32px;
-  border-bottom: 1px solid #edf2f7;
-  background:
-    radial-gradient(circle at 88% 8%, rgba(47, 125, 246, 0.13), transparent 24%),
-    linear-gradient(135deg, #ffffff 0%, #f8fbff 100%);
-}
-
-.practice-title-block {
-  max-width: 620px;
-}
-
-.chat-badge {
-  display: inline-flex;
-  align-items: center;
-  margin-bottom: 10px;
-  padding: 5px 12px;
-  border-radius: 999px;
-  color: #1f6feb;
-  font-size: 13px;
-  font-weight: 700;
-  background: rgba(47, 125, 246, 0.1);
-}
-
-.practice-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
   justify-content: flex-end;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 24px;
+  border-bottom: 1px solid #edf2f7;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.practice-category-picker {
+  display: grid;
+  grid-template-columns: auto minmax(220px, 320px);
+  gap: 12px;
+  align-items: center;
+  margin-right: auto;
+  padding: 8px 12px 8px 16px;
+  border: 1px solid rgba(83, 116, 170, 0.12);
+  border-radius: 999px;
+  background: rgba(248, 251, 255, 0.86);
+}
+
+.practice-category-picker span {
+  color: #344054;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.practice-category-picker :deep(.el-select) {
+  width: 100%;
+}
+
+.practice-category-picker :deep(.el-select__wrapper) {
+  min-height: 34px;
+  border-radius: 999px;
+  box-shadow: none;
+}
+
+.main-action-button,
+.sub-action-button {
+  min-width: 108px;
+  font-weight: 700;
 }
 
 .practice-message-panel {
+  // 对话区留出更大空白，突出刷题内容本身。
   flex: 1;
-  min-height: 420px;
-  max-height: calc(100vh - 330px);
+  min-height: 500px;
+  max-height: calc(100vh - 300px);
   overflow-y: auto;
-  padding: 30px;
-  background:
-    radial-gradient(circle at center 36%, rgba(47, 125, 246, 0.05), transparent 24%),
-    linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 24px;
+  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
 }
 
 .practice-message {
@@ -428,11 +410,10 @@ onMounted(initializePage);
 
 .message-bubble {
   max-width: min(760px, 88%);
-  padding: 18px;
-  border: 1px solid rgba(96, 129, 178, 0.08);
-  border-radius: 22px;
+  padding: 16px;
+  border-radius: 20px;
   background: #ffffff;
-  box-shadow: 0 12px 30px rgba(61, 91, 132, 0.08);
+  box-shadow: 0 10px 28px rgba(61, 91, 132, 0.08);
 }
 
 .practice-message.user .message-bubble {
@@ -452,9 +433,9 @@ onMounted(initializePage);
 .question-bubble-card,
 .grading-bubble-card {
   margin-top: 12px;
-  padding: 18px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+  padding: 16px;
+  border-radius: 18px;
+  background: #f8fafc;
 }
 
 .question-meta-row,
@@ -497,9 +478,8 @@ onMounted(initializePage);
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 12px;
   align-items: end;
-  padding: 18px 28px 26px;
+  padding: 18px 24px 24px;
   border-top: 1px solid #edf2f7;
-  background: #ffffff;
 }
 
 @media (max-width: 980px) {
@@ -507,10 +487,25 @@ onMounted(initializePage);
     grid-template-columns: 1fr;
   }
 
-  .practice-chat-header,
+  .practice-chat-header {
+    align-items: stretch;
+    flex-direction: column;
+    justify-content: stretch;
+  }
+
+  .practice-category-picker {
+    grid-template-columns: 1fr;
+    margin-right: 0;
+    border-radius: 18px;
+  }
+
+  .main-action-button,
+  .sub-action-button {
+    flex: 1;
+  }
+
   .practice-input-bar {
     grid-template-columns: 1fr;
-    flex-direction: column;
   }
 
   .grading-detail-grid {

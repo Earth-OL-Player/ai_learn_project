@@ -1,5 +1,7 @@
 package com.earth.online.player.ailearn.question.infrastructure;
 
+import java.math.BigDecimal;
+
 /**
  * 系统题目写入记录。
  */
@@ -10,7 +12,7 @@ public class SystemQuestionWriteRecord {
     private String question;
     private String questionType;
     private String standardAnswer;
-    private Integer importanceScore;
+    private BigDecimal importanceScore;
     private Integer occurrenceCount;
 
     /** 获取题目ID。 */
@@ -44,10 +46,10 @@ public class SystemQuestionWriteRecord {
     public void setStandardAnswer(String standardAnswer) { this.standardAnswer = standardAnswer; }
 
     /** 获取重要性评分。 */
-    public Integer getImportanceScore() { return importanceScore; }
+    public BigDecimal getImportanceScore() { return importanceScore; }
 
     /** 设置重要性评分。 */
-    public void setImportanceScore(Integer importanceScore) { this.importanceScore = importanceScore; }
+    public void setImportanceScore(BigDecimal importanceScore) { this.importanceScore = importanceScore; }
 
     /** 获取真实面试出现次数。 */
     public Integer getOccurrenceCount() { return occurrenceCount; }

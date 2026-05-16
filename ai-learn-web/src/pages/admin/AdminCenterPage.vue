@@ -5,7 +5,6 @@
         <span class="admin-sidebar-icon">管</span>
         <div>
           <h2>管理者中心</h2>
-          <p>仅超级管理员可见</p>
         </div>
       </div>
 

@@ -9,8 +9,6 @@ import com.earth.online.player.ailearn.question.infrastructure.QuestionMapper;
 import com.earth.online.player.ailearn.question.interfaces.QuestionDetailResponse;
 import com.earth.online.player.ailearn.question.interfaces.QuestionListResponse;
 import java.time.ZoneId;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -43,15 +41,13 @@ public class QuestionService {
      * @param pageSize 每页数量
      * @param keyword 关键词
      * @param questionType 题目分类
-     * @param knowledgePointId 知识点ID
      * @return 分页题目
      */
     public PageResponse<QuestionListResponse> findPage(
             Integer pageNo,
             Integer pageSize,
             String keyword,
-            String questionType,
-            Long knowledgePointId) {
+            String questionType) {
         int safePageNo = normalizePageNo(pageNo);
         int safePageSize = normalizePageSize(pageSize);
         String safeKeyword = normalizeKeyword(keyword);
@@ -60,12 +56,21 @@ public class QuestionService {
 
         // 系统题库列表只展示未删除题目，避免引入额外来源维度。
         List<QuestionListResponse> records = questionMapper.findPage(
-                        safeKeyword, safeQuestionType, knowledgePointId, offset, safePageSize)
+                        safeKeyword, safeQuestionType, offset, safePageSize)
                 .stream()
                 .map(this::toListResponse)
                 .toList();
-        long total = questionMapper.countPage(safeKeyword, safeQuestionType, knowledgePointId);
+        long total = questionMapper.countPage(safeKeyword, safeQuestionType);
         return new PageResponse<>(records, safePageNo, safePageSize, total);
+    }
+
+    /**
+     * 查询题目表中实际存在的分类。
+     *
+     * @return 题目分类列表
+     */
+    public List<String> findQuestionTypes() {
+        return questionMapper.findQuestionTypes();
     }
 
     /**
@@ -162,7 +167,6 @@ public class QuestionService {
                 record.getQuestion(),
                 record.getQuestionType(),
                 record.getQuestionType(),
-                splitNames(record.getKnowledgePointNames()),
                 record.getImportanceScore(),
                 record.getOccurrenceCount(),
                 record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
@@ -182,27 +186,11 @@ public class QuestionService {
                 record.getQuestion(),
                 record.getQuestionType(),
                 record.getQuestionType(),
-                splitNames(record.getKnowledgePointNames()),
                 record.getStandardAnswer(),
                 record.getImportanceScore(),
                 record.getOccurrenceCount(),
                 record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
         );
-    }
-
-    /**
-     * 拆分知识点名称。
-     *
-     * @param names 聚合名称
-     * @return 名称列表
-     */
-    private List<String> splitNames(String names) {
-        if (!StringUtils.hasText(names)) {
-            return Collections.emptyList();
-        }
-        return Arrays.stream(names.split(","))
-                .filter(StringUtils::hasText)
-                .toList();
     }
 
 }

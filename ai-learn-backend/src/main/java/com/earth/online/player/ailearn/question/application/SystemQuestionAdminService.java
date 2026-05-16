@@ -16,6 +16,8 @@ import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
 import java.time.OffsetDateTime;
@@ -39,7 +41,7 @@ public class SystemQuestionAdminService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_IMPORT_ROWS = 1000;
     private static final long MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024L;
-    private static final int DEFAULT_IMPORTANCE_SCORE = 60;
+    private static final BigDecimal DEFAULT_IMPORTANCE_SCORE = BigDecimal.valueOf(60).setScale(1);
     private static final int DEFAULT_OCCURRENCE_COUNT = 0;
     private static final String CSV_HEADER = "code,question,question_type,standard_answer,importance_score,occurrence_count\n";
     private static final SecureRandom RANDOM = new SecureRandom();
@@ -341,7 +343,7 @@ public class SystemQuestionAdminService {
                 columns.get(1),
                 columns.get(2),
                 columns.get(3),
-                parseInteger(columns.get(4), DEFAULT_IMPORTANCE_SCORE, "第" + rowIndex + "行重要性评分不合法"),
+                parseDecimal(columns.get(4), DEFAULT_IMPORTANCE_SCORE, "第" + rowIndex + "行重要性评分不合法"),
                 parseInteger(columns.get(5), DEFAULT_OCCURRENCE_COUNT, "第" + rowIndex + "行真实面试出现次数不合法")
         );
     }
@@ -390,6 +392,25 @@ public class SystemQuestionAdminService {
         }
         try {
             return Integer.parseInt(value.trim());
+        } catch (NumberFormatException exception) {
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), message);
+        }
+    }
+
+    /**
+     * 解析小数。
+     *
+     * @param value 原始值
+     * @param defaultValue 默认值
+     * @param message 错误提示
+     * @return 小数值
+     */
+    private BigDecimal parseDecimal(String value, BigDecimal defaultValue, String message) {
+        if (!StringUtils.hasText(value)) {
+            return defaultValue;
+        }
+        try {
+            return new BigDecimal(value.trim());
         } catch (NumberFormatException exception) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), message);
         }
@@ -514,9 +535,9 @@ public class SystemQuestionAdminService {
      * @param value 原始评分
      * @return 安全评分
      */
-    private int normalizeImportanceScore(Integer value) {
-        int score = value == null ? DEFAULT_IMPORTANCE_SCORE : value;
-        if (score < 0 || score > 100) {
+    private BigDecimal normalizeImportanceScore(BigDecimal value) {
+        BigDecimal score = value == null ? DEFAULT_IMPORTANCE_SCORE : value.setScale(1, RoundingMode.HALF_UP);
+        if (score.compareTo(BigDecimal.ZERO) < 0 || score.compareTo(BigDecimal.valueOf(100)) > 0) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "重要性评分必须在0到100之间");
         }
         return score;
