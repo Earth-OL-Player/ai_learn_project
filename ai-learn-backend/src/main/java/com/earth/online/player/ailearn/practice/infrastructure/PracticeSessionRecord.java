@@ -10,6 +10,7 @@ public class PracticeSessionRecord {
     private String questionCode;
     private String phase;
     private Integer lastScore;
+    private String lastAnswerText;
 
     /** 获取状态ID。 */
     public Long getId() { return id; }
@@ -40,4 +41,10 @@ public class PracticeSessionRecord {
 
     /** 设置最近得分。 */
     public void setLastScore(Integer lastScore) { this.lastScore = lastScore; }
+
+    /** 获取最近一次答案原文。 */
+    public String getLastAnswerText() { return lastAnswerText; }
+
+    /** 设置最近一次答案原文。 */
+    public void setLastAnswerText(String lastAnswerText) { this.lastAnswerText = lastAnswerText; }
 }

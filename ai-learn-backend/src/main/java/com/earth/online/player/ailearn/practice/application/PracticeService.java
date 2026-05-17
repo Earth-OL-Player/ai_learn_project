@@ -12,6 +12,7 @@ import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.growth.interfaces.GrowthResponse;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiClient;
+import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiGradingResult;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeQuestionRecord;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeSessionRecord;
@@ -27,6 +28,7 @@ import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import org.springframework.stereotype.Service;
@@ -46,7 +48,9 @@ public class PracticeService {
     private static final String ACTION_GRADING = "GRADING";
     private static final String ACTION_DISCUSSION = "DISCUSSION";
     private static final String ACTION_TIP = "TIP";
-    private static final Set<String> UNRELATED_WORDS = Set.of("天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话");
+    private static final String FALLBACK_DISCUSSION_MESSAGE = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。";
+    private static final int MAX_STORED_ANSWER_LENGTH = 4000;
+    private static final Set<String> UNRELATED_WORDS = Set.of("天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看");
 
     private final PracticeMapper practiceMapper;
     private final GrowthMapper growthMapper;
@@ -191,12 +195,13 @@ public class PracticeService {
      */
     private PracticeMessageResponse handleAnsweringMessage(Long userId, String content) {
         if (isRetryRequest(content) || isNextRequest(content)) {
-            return tip(PHASE_ANSWERING, "请先提交当前题答案；如果想换题，可以点击下一题按钮。 ");
+            return tip(PHASE_ANSWERING, "请先提交当前题答案；如果想换题，可以点击下一题按钮。");
         }
-        if (isObviouslyUnrelated(content)) {
-            return tip(PHASE_ANSWERING, "当前处于答题阶段，请围绕本题提交答案。其他话题可以完成本题后再讨论。 ");
+        PracticeQuestionRecord question = currentQuestion(userId);
+        if (isUnrelatedToPractice(question, PHASE_ANSWERING, content)) {
+            return tip(PHASE_ANSWERING, "当前处于答题阶段，请先围绕本题提交你的答案。完成评分后，我再陪你分析本题细节。");
         }
-        return submitAnswer(userId, content);
+        return submitAnswer(userId, question, content);
     }
 
     /**
@@ -218,7 +223,12 @@ public class PracticeService {
             return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
-        String reply = practiceAiClient.discuss(question, content).orElseGet(() -> buildLocalDiscussionReply(question));
+        if (isUnrelatedToPractice(question, PHASE_DISCUSSING, content)) {
+            return tip(PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
+        }
+        PracticeSessionRecord session = practiceMapper.findSession(userId);
+        String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
+        String reply = practiceAiClient.discuss(question, lastUserAnswer, content).orElseGet(this::buildLocalDiscussionReply);
         return new PracticeMessageResponse(ACTION_DISCUSSION, PHASE_DISCUSSING, reply, toQuestionResponse(question), null, growthService.getCurrentGrowth());
     }
 
@@ -226,12 +236,14 @@ public class PracticeService {
      * 提交并评分答案。
      *
      * @param userId 用户ID
+     * @param question 当前题目
      * @param userAnswer 用户答案
      * @return 评分响应
      */
-    private PracticeMessageResponse submitAnswer(Long userId, String userAnswer) {
-        PracticeQuestionRecord question = currentQuestion(userId);
-        GradingResult gradingResult = practiceAiClient.grade(userId, question, userAnswer)
+    private PracticeMessageResponse submitAnswer(Long userId, PracticeQuestionRecord question, String userAnswer) {
+        Optional<PracticeAiGradingResult> aiGradingResult = practiceAiClient.grade(userId, question, userAnswer);
+        boolean fallbackUsed = aiGradingResult.map(PracticeAiGradingResult::fallbackUsed).orElse(true);
+        GradingResult gradingResult = aiGradingResult.map(PracticeAiGradingResult::gradingResult)
                 .orElseGet(() -> answerGradingPort.grade(
                         userId,
                         question.getId(),
@@ -240,13 +252,11 @@ public class PracticeService {
                         List.of(question.getQuestionType()),
                         userAnswer
                 ));
-        PracticeGradingResponse grading = recordSummaryAndBuildResponse(userId, question, gradingResult);
-        practiceMapper.updateSessionPhase(userId, PHASE_DISCUSSING, grading.score());
+        PracticeGradingResponse grading = recordSummaryAndBuildResponse(userId, question, gradingResult, fallbackUsed);
+        practiceMapper.updateSessionPhase(userId, PHASE_DISCUSSING, grading.score(), limitStoredAnswer(userAnswer));
 
-        // 评分完成后进入本题讨论阶段，不保存用户答案原文。
-        String message = grading.earnedExperience() > 0
-                ? "评分完成，本次提升了 " + grading.earnedExperience() + " 点经验。你可以继续追问本题，也可以下一题。"
-                : "评分完成，本次未超过历史最高分，经验值不增加。你可以继续追问本题，也可以重新回答。";
+        // 评分完成后进入本题讨论阶段，并仅保存当前题最近一次答案用于后续追问上下文。
+        String message = buildGradingMessage(fallbackUsed);
         return new PracticeMessageResponse(ACTION_GRADING, PHASE_DISCUSSING, message, toQuestionResponse(question), grading, growthService.getCurrentGrowth());
     }
 
@@ -256,14 +266,17 @@ public class PracticeService {
      * @param userId 用户ID
      * @param question 题目
      * @param gradingResult 评分结果
+     * @param fallbackUsed 是否使用兜底评分
      * @return 评分响应
      */
     private PracticeGradingResponse recordSummaryAndBuildResponse(
             Long userId,
             PracticeQuestionRecord question,
-            GradingResult gradingResult) {
+            GradingResult gradingResult,
+            boolean fallbackUsed) {
         PracticeStatRecord oldStat = practiceMapper.findStat(userId, question.getCode());
         int previousBest = oldStat == null || oldStat.getBestScore() == null ? 0 : oldStat.getBestScore();
+        int previousLast = oldStat == null || oldStat.getLastScore() == null ? 0 : oldStat.getLastScore();
         int score = Math.max(0, Math.min(100, gradingResult.score()));
         int earnedExperience = Math.max(0, score - previousBest);
         practiceMapper.upsertStat(userId, question.getCode(), score);
@@ -283,9 +296,46 @@ public class PracticeService {
                 gradingResult.improvementAdvice(),
                 gradingResult.reviewKnowledgePoints(),
                 earnedExperience,
+                previousBest,
+                oldStat == null ? null : previousLast,
+                buildExperienceDetail(oldStat == null, previousBest, previousLast, score, earnedExperience),
                 totalExperience,
-                Collections.emptyList()
+                Collections.emptyList(),
+                fallbackUsed
         );
+    }
+
+    /**
+     * 构造经验变化说明。
+     *
+     * @param firstAnswer 是否首次答题
+     * @param previousBest 评分前历史最高分
+     * @param previousLast 评分前最近一次得分
+     * @param score 本次得分
+     * @param earnedExperience 本次新增经验
+     * @return 经验变化说明
+     */
+    private String buildExperienceDetail(boolean firstAnswer, int previousBest, int previousLast, int score, int earnedExperience) {
+        if (firstAnswer) {
+            return "首次回答得了 " + score + " 分，新增 " + earnedExperience + " 经验。";
+        }
+        if (earnedExperience > 0) {
+            return "比上次回答多拿了 " + Math.max(0, score - previousLast) + " 分，并突破历史最高分新增 " + earnedExperience + " 经验。";
+        }
+        return "未能突破上次最高分 " + previousBest + " 分，本次经验不变。";
+    }
+
+    /**
+     * 构造评分完成提示。
+     *
+     * @param fallbackUsed 是否使用兜底评分
+     * @return 评分完成提示
+     */
+    private String buildGradingMessage(boolean fallbackUsed) {
+        if (fallbackUsed) {
+            return "评分完成。当前大模型调用异常，已使用本地兜底策略完成评分和解析。您可以重新作答或者开始下一题。";
+        }
+        return "评分完成。您可以与我探讨细节、重新作答或者开始下一题。";
     }
 
     /**
@@ -492,6 +542,24 @@ public class PracticeService {
     }
 
     /**
+     * 判断用户输入是否偏离刷题上下文。
+     *
+     * @param question 当前题目
+     * @param phase 当前阶段
+     * @param content 用户输入
+     * @return 是否无关
+     */
+    private boolean isUnrelatedToPractice(PracticeQuestionRecord question, String phase, String content) {
+        Optional<Boolean> aiRelevance = practiceAiClient.judgeRelevance(question, phase, content);
+        if (aiRelevance.isPresent()) {
+            return !aiRelevance.get();
+        }
+
+        // 大模型不可用时保留关键词兜底，避免明显闲聊进入评分或讨论。
+        return isObviouslyUnrelated(content);
+    }
+
+    /**
      * 判断是否明显无关。
      *
      * @param content 用户输入
@@ -502,15 +570,27 @@ public class PracticeService {
     }
 
     /**
+     * 限制当前题答案记忆长度。
+     *
+     * @param userAnswer 用户答案
+     * @return 可保存答案
+     */
+    private String limitStoredAnswer(String userAnswer) {
+        if (userAnswer.length() <= MAX_STORED_ANSWER_LENGTH) {
+            return userAnswer;
+        }
+
+        // 仅保留足够追问的上下文，避免异常长答案撑大当前会话记录。
+        return userAnswer.substring(0, MAX_STORED_ANSWER_LENGTH);
+    }
+
+    /**
      * 构造本地讨论回复。
      *
-     * @param question 当前题目
      * @return 讨论回复
      */
-    private String buildLocalDiscussionReply(PracticeQuestionRecord question) {
-        return "可以从核心概念、关键流程、工程注意事项三个层次理解。"
-                + "本题属于「" + question.getQuestionType() + "」，答题时建议先覆盖核心概念，再补充流程、优缺点和工程化注意事项。"
-                + "参考答案要点是：" + question.getStandardAnswer();
+    private String buildLocalDiscussionReply() {
+        return FALLBACK_DISCUSSION_MESSAGE;
     }
 
     /**

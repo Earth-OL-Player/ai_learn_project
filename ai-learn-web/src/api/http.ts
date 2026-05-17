@@ -5,6 +5,11 @@ export interface ApiResponse<T> {
   traceId: string;
 }
 
+export interface StreamEvent {
+  event: string;
+  data: string;
+}
+
 export const AUTH_TOKEN_STORAGE_KEY = 'ai_learn_access_token';
 
 const SUCCESS_CODE = 'SUCCESS';
@@ -118,6 +123,99 @@ export async function post<T, B = unknown>(path: string, body?: B): Promise<T> {
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
+}
+
+/**
+ * 发起 POST 流式请求。
+ */
+export async function postStream<B = unknown>(
+  path: string,
+  body: B,
+  onEvent: (event: StreamEvent) => void,
+): Promise<void> {
+  const response = await fetch(buildRequestUrl(path), {
+    method: 'POST',
+    headers: buildHeaders({
+      Accept: 'text/event-stream',
+      'Content-Type': 'application/json',
+    }),
+    body: JSON.stringify(body),
+  });
+
+  // 流式接口仍复用后端自动续期 token。
+  if (!response.ok || !response.body) {
+    throw new Error('服务暂时不可用，请稍后重试');
+  }
+  saveRefreshedToken(response);
+  await readEventStream(response.body, onEvent);
+}
+
+/**
+ * 读取 SSE 响应流。
+ */
+async function readEventStream(stream: ReadableStream<Uint8Array>, onEvent: (event: StreamEvent) => void): Promise<void> {
+  const reader = stream.getReader();
+  const decoder = new TextDecoder('utf-8');
+  let buffer = '';
+
+  // 持续解析服务端推送的事件块，直到流结束。
+  while (true) {
+    const { value, done } = await reader.read();
+    if (done) {
+      break;
+    }
+    buffer += decoder.decode(value, { stream: true });
+    buffer = dispatchBufferedEvents(buffer, onEvent);
+  }
+
+  // 处理流结束后残留的最后一个事件块。
+  buffer += decoder.decode();
+  dispatchFinalEvent(buffer, onEvent);
+}
+
+/**
+ * 派发缓冲区中的完整 SSE 事件。
+ */
+function dispatchBufferedEvents(buffer: string, onEvent: (event: StreamEvent) => void): string {
+  const parts = buffer.split(/\r?\n\r?\n/);
+  const remaining = parts.pop() ?? '';
+  parts.forEach((part) => {
+    const event = parseStreamEvent(part);
+    if (event.data) {
+      onEvent(event);
+    }
+  });
+  return remaining;
+}
+
+/**
+ * 解析单个 SSE 事件块。
+ */
+function parseStreamEvent(block: string): StreamEvent {
+  let eventName = 'message';
+  const dataLines: string[] = [];
+  block.split(/\r?\n/).forEach((line) => {
+    if (line.startsWith('event:')) {
+      eventName = line.slice('event:'.length).trim();
+    }
+    if (line.startsWith('data:')) {
+      dataLines.push(line.slice('data:'.length).replace(/^ /, ''));
+    }
+  });
+  return { event: eventName, data: dataLines.join('\n') };
+}
+
+/**
+ * 派发流结束时剩余的最后事件。
+ */
+function dispatchFinalEvent(buffer: string, onEvent: (event: StreamEvent) => void): void {
+  if (!buffer.trim()) {
+    return;
+  }
+  const event = parseStreamEvent(buffer);
+  if (event.data) {
+    onEvent(event);
+  }
 }
 
 /**

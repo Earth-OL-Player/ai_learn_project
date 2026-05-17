@@ -1,9 +1,9 @@
 # MySQL 中间件说明
 
-版本：v1.8
-日期：2026-05-16  
+版本：v1.9
+日期：2026-05-17  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化
 
 ## 1. 用途
 
@@ -157,7 +157,7 @@ SELECT id, username, super_admin FROM users WHERE username = '本地用户名占
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行 `V1` 到 `V11` migration，包含用户、互动、题库、刷题、RAG、成长徽章和超级管理员标识相关表结构。
+3. 确认 Flyway 已执行 `V1` 到 `V13` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识和当前题答案记忆字段。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -197,7 +197,8 @@ SELECT id, username, super_admin FROM users WHERE username = '本地用户名占
 | `questions` | `importance_score` | 抽题权重使用的重要性评分，0-100，支持 1 位小数 |
 | `questions` | `occurrence_count` | 真实面试出现次数，用于辅助抽题权重 |
 | `user_question_stats` | 全表 | 保存用户、题目编码维度的答题次数、最高分和最近得分 |
-| `user_practice_sessions` | 全表 | 保存用户当前刷题阶段和当前题目编码，不保存聊天明细 |
+| `user_practice_sessions` | 全表 | 保存用户当前刷题阶段、当前题目编码和当前题最近一次答案，不保存完整聊天明细 |
+| `user_practice_sessions` | `last_answer_text` | 当前题最近一次答案原文，用于本题讨论阶段让 AI 记住刚刚的回答 |
 
 本地验证 SQL：
 
@@ -210,6 +211,7 @@ SELECT DISTINCT question_type FROM questions WHERE deleted = 0 ORDER BY question
 SELECT code, question_type, importance_score, occurrence_count FROM questions WHERE deleted = 0 LIMIT 5;
 SELECT CONSTRAINT_NAME FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND CONSTRAINT_TYPE = 'FOREIGN KEY';
 SELECT user_id, question_code, answer_count, best_score, last_score FROM user_question_stats WHERE user_id = 用户ID占位符;
+SELECT user_id, question_code, phase, last_score, LEFT(last_answer_text, 80) AS last_answer_preview FROM user_practice_sessions WHERE user_id = 用户ID占位符;
 ```
 
 注意事项：
@@ -217,7 +219,8 @@ SELECT user_id, question_code, answer_count, best_score, last_score FROM user_qu
 - `questions.code` 必须保持稳定；CSV 初始化数据在编码为空时使用 `AI-TOP-0001` 到 `AI-TOP-0300` 自动编码，管理员删除后再次导入同编码题目时，系统会按编码恢复或更新题目。
 - `questions` 不再保留 `title`、`content`、`difficulty`、`tags`、`analysis`、`owner_user_id`、`source_type` 等历史字段，避免个人题库和系统题库混用。
 - 不再通过用户自定义题库承载刷题题目，普通用户只能从系统题库刷题。
-- 不新增完整聊天记录表，也不新增完整答题记录表；如需排查问题，应优先使用接口日志和 `user_question_stats` 汇总字段。
+- 不新增完整聊天记录表，也不新增完整答题记录表；`last_answer_text` 只保存当前题最近一次答案，用于讨论上下文，不用于长期答题明细沉淀。
+- 生产排查时禁止把 `last_answer_text` 全量打印到日志，只允许按需查看脱敏片段或在授权范围内临时查询。
 - 系统表不再定义数据库外键，删除和清理数据由业务逻辑与索引约束保证，避免本地调试时被外键阻塞。
 - `V12__remove_foreign_keys_and_knowledge_tables.sql` 会兼容已初始化数据库：移除历史外键、删除知识点表和关系表，并用 Top300 CSV 题库重置系统题目。
 - 生产部署前必须先备份 MySQL，再发布 Flyway migration；全新环境可直接执行最新 migration 初始化表结构。

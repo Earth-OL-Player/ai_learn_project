@@ -29,7 +29,8 @@
         <el-empty v-if="messages.length === 0" description="选择分类后点击开始，或直接输入想练习的题型" />
         <article v-for="item in messages" :key="item.id" class="practice-message" :class="item.role">
           <div class="message-bubble">
-            <p v-if="item.text" class="message-text">{{ item.text }}</p>
+            <div v-if="item.text" class="message-text message-markdown" v-html="renderMessageText(item)"></div>
+            <p v-if="item.streaming && !item.text" class="message-text stream-placeholder">AI 正在思考中...</p>
             <div v-if="item.question" class="question-bubble-card">
               <div class="question-meta-row">
                 <el-tag effect="plain">{{ item.question.questionType }}</el-tag>
@@ -45,26 +46,33 @@
                 <el-tag :type="item.grading.correct ? 'success' : 'warning'" effect="light">
                   {{ item.grading.correct ? '基本正确' : '继续加油' }}
                 </el-tag>
+                <el-tag v-if="item.grading.fallbackUsed" type="info" effect="plain">本地兜底评分</el-tag>
+                <el-tooltip :content="experienceTooltip(item.grading)" placement="top" effect="light">
+                  <div class="experience-float" :class="item.grading.earnedExperience > 0 ? 'gain' : 'same'">
+                    <span v-if="item.grading.earnedExperience > 0">↗ +{{ item.grading.earnedExperience }} 经验</span>
+                    <span v-else>经验不变</span>
+                  </div>
+                </el-tooltip>
               </div>
-              <p class="grading-advice">{{ item.grading.improvementAdvice }}</p>
+              <p class="grading-advice"><strong>优化建议：</strong>{{ item.grading.improvementAdvice }}</p>
               <el-collapse>
                 <el-collapse-item title="查看评分详情" name="detail">
                   <section class="grading-detail-grid">
                     <div>
                       <h4>命中点</h4>
-                      <p>{{ formatList(item.grading.hitPoints) }}</p>
+                      <ul class="grading-point-list">
+                        <li v-for="(point, index) in normalizeList(item.grading.hitPoints)" :key="`hit-${index}-${point}`">{{ point }}</li>
+                      </ul>
                     </div>
                     <div>
                       <h4>缺失点</h4>
-                      <p>{{ formatList(item.grading.missingPoints) }}</p>
+                      <ul class="grading-point-list">
+                        <li v-for="(point, index) in normalizeList(item.grading.missingPoints)" :key="`missing-${index}-${point}`">{{ point }}</li>
+                      </ul>
                     </div>
                     <div>
                       <h4>参考答案</h4>
                       <p>{{ item.grading.referenceAnswer }}</p>
-                    </div>
-                    <div>
-                      <h4>经验变化</h4>
-                      <p>本次 +{{ item.grading.earnedExperience }}，当前总经验 {{ item.grading.totalExperience }}</p>
                     </div>
                   </section>
                 </el-collapse-item>
@@ -91,16 +99,18 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
+import MarkdownIt from 'markdown-it';
 import { computed, nextTick, onMounted, ref } from 'vue';
 import {
   fetchNextPracticeQuestion,
   fetchPracticeState,
   retryPracticeQuestion,
-  sendPracticeMessage,
+  sendPracticeMessageStream,
   type PracticeGrading,
   type PracticeMessageResult,
   type PracticePhase,
   type PracticeQuestion,
+  type PracticeState,
 } from '../../api/practice';
 import type { GrowthInfo } from '../../types/growth';
 import { useAuthStore } from '../../stores/auth';
@@ -111,8 +121,19 @@ interface ChatMessage {
   text: string;
   question?: PracticeQuestion | null;
   grading?: PracticeGrading | null;
+  streaming?: boolean;
 }
 
+interface PracticeChatSnapshot {
+  phase: PracticePhase;
+  questionCode: string;
+  messages: ChatMessage[];
+  updatedAt: number;
+}
+
+const EMPTY_LIST_TEXT = '暂无';
+const PRACTICE_CHAT_STORAGE_PREFIX = 'ai_learn_practice_chat_';
+const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
 const loading = ref(false);
 const inputText = ref('');
 const phase = ref<PracticePhase>('QUESTIONING');
@@ -152,7 +173,10 @@ async function initializePage(): Promise<void> {
     growth.value = state.growth;
     syncAuthGrowth(state.growth);
     if (state.currentQuestion) {
-      messages.value = [buildAssistantMessage(state.phase === 'DISCUSSING' ? '你可以继续追问本题，或点击下一题。' : '上次还有一道题未完成，请继续作答。', state.currentQuestion, null)];
+      restorePracticeSnapshot(state);
+    } else {
+      messages.value = [];
+      clearPracticeSnapshot();
     }
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '刷题状态加载失败');
@@ -202,12 +226,23 @@ async function sendMessage(): Promise<void> {
   }
   inputText.value = '';
   messages.value.push({ id: messageId++, role: 'user', text: content });
+  const assistantMessage = buildAssistantMessage('', null, null);
+  assistantMessage.streaming = true;
+  messages.value.push(assistantMessage);
+  savePracticeSnapshot();
+  scrollToBottom();
   loading.value = true;
   try {
-    const result = await sendPracticeMessage({ content, questionTypes: selectedCategories.value });
-    applyResult(result, result.action === 'QUESTION');
+    await sendPracticeMessageStream(
+      { content, questionTypes: selectedCategories.value },
+      {
+        onMessageChunk: (chunk: string) => appendStreamingChunk(assistantMessage, chunk),
+        onResult: (result: PracticeMessageResult) => applyStreamingResult(result, assistantMessage),
+      },
+    );
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '发送失败');
+    removeStreamingMessage(assistantMessage.id);
   } finally {
     loading.value = false;
   }
@@ -226,11 +261,53 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
   const displayQuestion = result.action === 'QUESTION' ? result.question : null;
   const message = buildAssistantMessage(result.message, displayQuestion, result.grading);
   if (clearMessages) {
+    clearPracticeSnapshot();
     messages.value = [message];
   } else {
     messages.value.push(message);
   }
+  savePracticeSnapshot();
   scrollToBottom();
+}
+
+/**
+ * 应用流式接口的最终响应。
+ */
+function applyStreamingResult(result: PracticeMessageResult, assistantMessage: ChatMessage): void {
+  const clearMessages = shouldStartNewQuestion(result);
+  phase.value = result.phase;
+  currentQuestion.value = result.question || currentQuestion.value;
+  growth.value = result.growth;
+  syncAuthGrowth(result.growth);
+
+  // 最终事件携带完整业务数据，用于补齐题目卡片、评分卡片和阶段状态。
+  assistantMessage.streaming = false;
+  assistantMessage.text = result.message || assistantMessage.text;
+  assistantMessage.question = result.action === 'QUESTION' ? result.question : null;
+  assistantMessage.grading = result.grading;
+  if (clearMessages) {
+    clearPracticeSnapshot();
+    messages.value = [assistantMessage];
+  }
+  savePracticeSnapshot();
+  scrollToBottom();
+}
+
+/**
+ * 追加流式文本片段。
+ */
+function appendStreamingChunk(message: ChatMessage, chunk: string): void {
+  message.text += chunk;
+  savePracticeSnapshot();
+  scrollToBottom();
+}
+
+/**
+ * 移除异常中断的流式消息。
+ */
+function removeStreamingMessage(messageIdValue: number): void {
+  messages.value = messages.value.filter((item) => item.id !== messageIdValue);
+  savePracticeSnapshot();
 }
 
 /**
@@ -238,6 +315,83 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
  */
 function buildAssistantMessage(text: string, question?: PracticeQuestion | null, grading?: PracticeGrading | null): ChatMessage {
   return { id: messageId++, role: 'assistant', text, question, grading };
+}
+
+/**
+ * 判断是否已经切换到新题。
+ */
+function shouldStartNewQuestion(result: PracticeMessageResult): boolean {
+  if (result.action !== 'QUESTION' || !result.question) {
+    return false;
+  }
+
+  // 仅当题目编码发生变化时开启新的聊天记录，重答本题保留上下文。
+  return currentQuestion.value?.code !== result.question.code;
+}
+
+/**
+ * 恢复当前题聊天快照。
+ */
+function restorePracticeSnapshot(state: PracticeState): void {
+  const snapshot = readPracticeSnapshot();
+  if (snapshot && snapshot.questionCode === state.currentQuestion?.code && snapshot.messages.length > 0) {
+    messages.value = snapshot.messages;
+    messageId = Math.max(...snapshot.messages.map((item) => item.id), 0) + 1;
+    return;
+  }
+
+  // 没有可用快照时，仍然用后端当前题恢复最小可继续状态。
+  const text = state.phase === 'DISCUSSING' ? '您可以与我探讨细节、重新作答或者开始下一题。' : '上次还有一道题未完成，请继续作答。';
+  messages.value = [buildAssistantMessage(text, state.currentQuestion, null)];
+  savePracticeSnapshot();
+}
+
+/**
+ * 读取当前用户的本地聊天快照。
+ */
+function readPracticeSnapshot(): PracticeChatSnapshot | null {
+  try {
+    const rawValue = localStorage.getItem(practiceChatStorageKey());
+    if (!rawValue) {
+      return null;
+    }
+    return JSON.parse(rawValue) as PracticeChatSnapshot;
+  } catch {
+    clearPracticeSnapshot();
+    return null;
+  }
+}
+
+/**
+ * 保存当前题聊天快照。
+ */
+function savePracticeSnapshot(): void {
+  if (!currentQuestion.value) {
+    return;
+  }
+  const snapshot: PracticeChatSnapshot = {
+    phase: phase.value,
+    questionCode: currentQuestion.value.code,
+    messages: messages.value,
+    updatedAt: Date.now(),
+  };
+
+  // localStorage 仅保存当前用户当前题轻量对话状态，不保存真实密钥或敏感配置。
+  localStorage.setItem(practiceChatStorageKey(), JSON.stringify(snapshot));
+}
+
+/**
+ * 清理当前用户的本地聊天快照。
+ */
+function clearPracticeSnapshot(): void {
+  localStorage.removeItem(practiceChatStorageKey());
+}
+
+/**
+ * 构造当前用户聊天快照键。
+ */
+function practiceChatStorageKey(): string {
+  return `${PRACTICE_CHAT_STORAGE_PREFIX}${authStore.user?.id ?? 'anonymous'}`;
 }
 
 /**
@@ -267,8 +421,22 @@ function scrollToBottom(): void {
 /**
  * 格式化列表文案。
  */
-function formatList(values: string[]): string {
-  return values.length > 0 ? values.join('；') : '暂无';
+function normalizeList(values: string[]): string[] {
+  return values.length > 0 ? values : [EMPTY_LIST_TEXT];
+}
+
+/**
+ * 渲染聊天 Markdown 文本。
+ */
+function renderMessageText(item: ChatMessage): string {
+  return markdownParser.render(item.text);
+}
+
+/**
+ * 生成经验变化悬浮说明。
+ */
+function experienceTooltip(grading: PracticeGrading): string {
+  return grading.experienceDetail || (grading.earnedExperience > 0 ? `比历史最高分多拿了 ${grading.earnedExperience} 分` : '未能突破上次分数');
 }
 
 onMounted(initializePage);
@@ -432,8 +600,58 @@ onMounted(initializePage);
   white-space: pre-wrap;
 }
 
+.message-markdown {
+  white-space: normal;
+}
+
+.message-markdown :deep(h1),
+.message-markdown :deep(h2),
+.message-markdown :deep(h3) {
+  // 讨论阶段支持 Markdown 标题，间距保持轻量清爽。
+  margin: 0 0 10px;
+  color: #17233d;
+  line-height: 1.45;
+}
+
+.practice-message.user .message-markdown :deep(h1),
+.practice-message.user .message-markdown :deep(h2),
+.practice-message.user .message-markdown :deep(h3),
+.practice-message.user .message-markdown :deep(strong) {
+  color: #ffffff;
+}
+
+.message-markdown :deep(p) {
+  margin: 0 0 8px;
+  line-height: 1.85;
+}
+
+.message-markdown :deep(p:last-child),
+.message-markdown :deep(ul:last-child),
+.message-markdown :deep(ol:last-child) {
+  margin-bottom: 0;
+}
+
+.message-markdown :deep(ul),
+.message-markdown :deep(ol) {
+  margin: 8px 0;
+  padding-left: 20px;
+  line-height: 1.8;
+}
+
+.message-markdown :deep(code) {
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: rgba(47, 125, 246, 0.1);
+  font-family: 'JetBrains Mono', Consolas, monospace;
+}
+
+.stream-placeholder {
+  color: #667085;
+}
+
 .question-bubble-card,
 .grading-bubble-card {
+  position: relative;
   margin-top: 12px;
   padding: 16px;
   border-radius: 18px;
@@ -464,6 +682,30 @@ onMounted(initializePage);
   color: #344054;
 }
 
+.grading-advice strong {
+  color: #17233d;
+}
+
+.experience-float {
+  // 经验变化从详情中移出，用轻量浮层减少对评分内容的干扰。
+  margin-left: auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 700;
+  box-shadow: 0 10px 24px rgba(61, 91, 132, 0.12);
+}
+
+.experience-float.gain {
+  color: #047857;
+  background: linear-gradient(135deg, #dcfce7 0%, #f0fdf4 100%);
+}
+
+.experience-float.same {
+  color: #667085;
+  background: linear-gradient(135deg, #f1f5f9 0%, #ffffff 100%);
+}
+
 .grading-bubble-card :deep(.el-collapse) {
   // 评分详情与建议文案拉开间距，降低贴边拥挤感。
   margin-top: 12px;
@@ -477,7 +719,7 @@ onMounted(initializePage);
 
 .grading-detail-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: 1fr;
   gap: 14px;
   padding: 4px 2px;
 }
@@ -494,6 +736,16 @@ onMounted(initializePage);
 .grading-detail-grid h4 {
   margin: 0 0 8px;
   color: #17233d;
+}
+
+.grading-point-list {
+  // 列表化展示命中点和缺失点，便于用户逐条对照改进。
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 18px;
+  color: #344054;
+  line-height: 1.8;
 }
 
 .practice-input-bar {

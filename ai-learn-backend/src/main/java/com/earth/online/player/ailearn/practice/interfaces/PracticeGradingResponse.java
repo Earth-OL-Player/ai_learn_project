@@ -15,8 +15,12 @@ import java.util.List;
  * @param improvementAdvice 优化建议
  * @param reviewKnowledgePoints 建议复习点
  * @param earnedExperience 本次获得经验
+ * @param previousBestScore 评分前历史最高分
+ * @param previousLastScore 评分前最近一次得分
+ * @param experienceDetail 经验变化说明
  * @param totalExperience 当前总经验
  * @param newBadges 新获得徽章
+ * @param fallbackUsed 是否使用兜底评分
  */
 public record PracticeGradingResponse(
         Integer score,
@@ -28,7 +32,11 @@ public record PracticeGradingResponse(
         String improvementAdvice,
         List<String> reviewKnowledgePoints,
         Integer earnedExperience,
+        Integer previousBestScore,
+        Integer previousLastScore,
+        String experienceDetail,
         Integer totalExperience,
-        List<BadgeResponse> newBadges
+        List<BadgeResponse> newBadges,
+        Boolean fallbackUsed
 ) {
 }

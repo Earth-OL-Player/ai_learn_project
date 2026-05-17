@@ -59,7 +59,7 @@ public class PracticeAiClient {
      * @param userAnswer 用户答案
      * @return 评分结果
      */
-    public Optional<GradingResult> grade(Long userId, PracticeQuestionRecord question, String userAnswer) {
+    public Optional<PracticeAiGradingResult> grade(Long userId, PracticeQuestionRecord question, String userAnswer) {
         if (!isEnabled()) {
             return Optional.empty();
         }
@@ -77,7 +77,7 @@ public class PracticeAiClient {
             if (data == null) {
                 return Optional.empty();
             }
-            return Optional.of(toGradingResult(data));
+            return Optional.of(toPracticeAiGradingResult(data));
         } catch (RuntimeException exception) {
             LOGGER.warn("AI 服务评分结果转换失败，已切换后端本地评分：questionCode={}", question.getCode(), exception);
             return Optional.empty();
@@ -91,7 +91,7 @@ public class PracticeAiClient {
      * @param message 用户消息
      * @return 讨论回复
      */
-    public Optional<String> discuss(PracticeQuestionRecord question, String message) {
+    public Optional<String> discuss(PracticeQuestionRecord question, String lastUserAnswer, String message) {
         if (!isEnabled()) {
             return Optional.empty();
         }
@@ -101,6 +101,7 @@ public class PracticeAiClient {
             payload.put("question", question.getQuestion());
             payload.put("questionType", question.getQuestionType());
             payload.put("standardAnswer", question.getStandardAnswer());
+            payload.put("lastUserAnswer", lastUserAnswer == null ? "" : lastUserAnswer);
             payload.put("message", message);
             JsonNode data = postJson("/internal/v1/practice/discuss", payload).orElse(null);
             if (data == null || !data.hasNonNull("reply")) {
@@ -109,6 +110,39 @@ public class PracticeAiClient {
             return Optional.of(data.get("reply").asText());
         } catch (RuntimeException exception) {
             LOGGER.warn("AI 服务讨论结果转换失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 请求 AI 服务判断用户输入是否与当前刷题上下文相关。
+     *
+     * @param question 当前题目
+     * @param phase 当前阶段
+     * @param message 用户消息
+     * @return 相关性判断
+     */
+    public Optional<Boolean> judgeRelevance(PracticeQuestionRecord question, String phase, String message) {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        try {
+            ObjectNode payload = objectMapper.createObjectNode();
+            payload.put("questionCode", question.getCode());
+            payload.put("question", question.getQuestion());
+            payload.put("questionType", question.getQuestionType());
+            payload.put("standardAnswer", question.getStandardAnswer());
+            payload.put("phase", phase);
+            payload.put("message", message);
+
+            // AI 服务不可用时返回空，由后端保留关键词兜底拦截。
+            JsonNode data = postJson("/internal/v1/practice/relevance", payload).orElse(null);
+            if (data == null || !data.hasNonNull("relevant")) {
+                return Optional.empty();
+            }
+            return Optional.of(data.get("relevant").asBoolean(true));
+        } catch (RuntimeException exception) {
+            LOGGER.warn("AI 服务相关性判断失败，已切换关键词兜底：questionCode={}", question.getCode(), exception);
             return Optional.empty();
         }
     }
@@ -149,13 +183,13 @@ public class PracticeAiClient {
     }
 
     /**
-     * 转换 AI 服务评分结果。
+     * 转换 AI 服务评分包装结果。
      *
      * @param data 响应节点
      * @return 评分结果
      */
-    private GradingResult toGradingResult(JsonNode data) {
-        return new GradingResult(
+    private PracticeAiGradingResult toPracticeAiGradingResult(JsonNode data) {
+        GradingResult gradingResult = new GradingResult(
                 clampScore(data.path("score").asInt(0)),
                 data.path("correct").asBoolean(false),
                 readStringList(data.get("hitPoints")),
@@ -165,6 +199,9 @@ public class PracticeAiClient {
                 data.path("improvementAdvice").asText(""),
                 readStringList(data.get("reviewKnowledgePoints"))
         );
+
+        // AI 服务会显式告诉后端本次评分是否来自本地规则兜底。
+        return new PracticeAiGradingResult(gradingResult, data.path("fallbackUsed").asBoolean(false));
     }
 
     /**

@@ -1,4 +1,4 @@
-import { get, post } from './http';
+import { get, post, postStream, type StreamEvent } from './http';
 import type { BadgeInfo, GrowthInfo } from '../types/growth';
 
 export interface PracticeQuestion {
@@ -33,8 +33,12 @@ export interface PracticeGrading {
   improvementAdvice: string;
   reviewKnowledgePoints: string[];
   earnedExperience: number;
+  previousBestScore: number;
+  previousLastScore: number | null;
+  experienceDetail: string;
   totalExperience: number;
   newBadges: BadgeInfo[];
+  fallbackUsed: boolean;
 }
 
 export interface PracticeMessageResult {
@@ -52,6 +56,11 @@ export interface PracticeActionPayload {
 
 export interface PracticeMessagePayload extends PracticeActionPayload {
   content: string;
+}
+
+export interface PracticeMessageStreamHandlers {
+  onMessageChunk: (chunk: string) => void;
+  onResult: (result: PracticeMessageResult) => void;
 }
 
 /**
@@ -87,6 +96,28 @@ export function retryPracticeQuestion(): Promise<PracticeMessageResult> {
  */
 export function sendPracticeMessage(payload: PracticeMessagePayload): Promise<PracticeMessageResult> {
   return post<PracticeMessageResult, PracticeMessagePayload>('/practice/messages', payload);
+}
+
+/**
+ * 发送刷题聊天消息并接收流式回复。
+ */
+export function sendPracticeMessageStream(
+  payload: PracticeMessagePayload,
+  handlers: PracticeMessageStreamHandlers,
+): Promise<void> {
+  return postStream<PracticeMessagePayload>('/practice/messages/stream', payload, (event: StreamEvent) => {
+    if (event.event === 'message') {
+      handlers.onMessageChunk(event.data);
+      return;
+    }
+    if (event.event === 'result') {
+      handlers.onResult(JSON.parse(event.data) as PracticeMessageResult);
+      return;
+    }
+    if (event.event === 'error') {
+      throw new Error(event.data || '发送失败');
+    }
+  });
 }
 
 /**

@@ -10,8 +10,14 @@ import uuid
 from typing import Any
 
 from app.config.settings import settings
-from app.rag.index_task_service import rag_service
-from app.schemas.practice import PracticeDiscussRequest, PracticeDiscussResponse, PracticeGradeRequest, PracticeGradeResponse
+from app.schemas.practice import (
+    PracticeDiscussRequest,
+    PracticeDiscussResponse,
+    PracticeGradeRequest,
+    PracticeGradeResponse,
+    PracticeRelevanceRequest,
+    PracticeRelevanceResponse,
+)
 
 _SPLIT_PATTERN = re.compile(r"[\s，。、；：,.!?！？（）()\"'“”‘’]+")
 _MAX_KEYWORDS = 10
@@ -19,8 +25,11 @@ _LOCAL_RULE_MODEL = "LOCAL_RULE"
 _API_KEY_PLACEHOLDER = "AI_GRADING_API_KEY占位符"
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
 _LLM_RESPONSE_PREVIEW_LENGTH = 200
+_FALLBACK_DISCUSS_REPLY = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。"
 _ASCII_TERM_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+_.-]{1,}")
 _ASCII_IGNORED_TERMS = {"query", "rewrite"}
+_UNRELATED_WORDS = {"天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看", "星座"}
+_PRACTICE_RELATED_WORDS = {"题", "答案", "回答", "评分", "分数", "知识点", "技术", "概念", "原理", "为什么", "怎么", "如何"}
 _DOMAIN_TERMS = (
     "RAG",
     "Embedding",
@@ -108,13 +117,28 @@ class PracticeAgentService:
             if llm_response is not None:
                 return llm_response
 
-        # 大模型不可用时，仍然给出可用的本地讨论回复。
+        # 大模型不可用时，不再伪造讨论内容，只提示当前无法探讨。
         logger.info(
-            "未调用真实大模型，使用本地规则讨论：model=%s baseUrlConfigured=%s",
+            "未调用真实大模型，返回讨论不可用提示：model=%s baseUrlConfigured=%s",
             settings.ai_grading_model,
             bool(settings.ai_grading_base_url),
         )
         return self._discuss_by_local_rule(request)
+
+    def judge_relevance(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse:
+        """优先调用真实大模型判断输入是否与刷题上下文相关。"""
+        if self._is_llm_enabled():
+            llm_response = self._judge_relevance_by_llm(request)
+            if llm_response is not None:
+                return llm_response
+
+        # 未配置真实大模型时，使用保守本地规则兜底，避免影响正常答题。
+        logger.info(
+            "未调用真实大模型，使用本地规则判断相关性：model=%s baseUrlConfigured=%s",
+            settings.ai_grading_model,
+            bool(settings.ai_grading_base_url),
+        )
+        return self._judge_relevance_by_local_rule(request)
 
     def _grade_answer_by_local_rule(self, request: PracticeGradeRequest) -> PracticeGradeResponse:
         """结合 RAG 片段和本地规则给答案评分。"""
@@ -127,9 +151,9 @@ class PracticeAgentService:
         missing_points: list[str] = []
         for keyword in keywords:
             if self._keyword_hit(keyword, normalized_answer):
-                hit_points.append(f"命中了「{keyword}」相关要点")
+                hit_points.append(f"已覆盖「{keyword}」相关核心要点")
             else:
-                missing_points.append(f"缺少「{keyword}」相关说明")
+                missing_points.append(f"待补充「{keyword}」相关说明")
 
         # 分数由关键词覆盖度和内容完整度共同决定。
         score = self._calculate_score(len(hit_points), len(keywords), len(answer))
@@ -144,20 +168,29 @@ class PracticeAgentService:
             referenceAnswer=request.standardAnswer,
             improvementAdvice=advice,
             reviewKnowledgePoints=self._review_points(request.questionType, missing_points),
+            fallbackUsed=True,
         )
 
     def _discuss_by_local_rule(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse:
-        """围绕当前题生成本地规则学习讨论回复。"""
-        snippets = self._search_snippets(request.message)
-        snippet_text = "；".join(snippets[:2]) if snippets else "暂无额外检索片段"
+        """大模型异常时返回无法继续探讨的兜底提示。"""
+        _ = request
 
-        # 讨论回复不持久化，只返回给后端展示。
-        reply = (
-            f"我们继续看这道「{request.questionType}」题。"
-            f"建议先对照参考答案确认核心点：{request.standardAnswer}。"
-            f"可参考的检索片段：{snippet_text}。"
-        )
-        return PracticeDiscussResponse(reply=reply)
+        # 讨论能力不再使用本地规则伪造，避免给用户造成模型仍可追问的误解。
+        return PracticeDiscussResponse(reply=_FALLBACK_DISCUSS_REPLY)
+
+    def _judge_relevance_by_local_rule(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse:
+        """使用本地规则兜底判断输入相关性。"""
+        normalized_message = self._normalize_text(request.message)
+        if any(word in request.message for word in _UNRELATED_WORDS):
+            return PracticeRelevanceResponse(relevant=False, reason="命中明显无关闲聊词")
+
+        # 命中题目、参考答案、分类或常见刷题词时视为相关。
+        related_sources = [request.question, request.standardAnswer, request.questionType]
+        if any(self._normalize_text(source) and self._normalize_text(source) in normalized_message for source in related_sources):
+            return PracticeRelevanceResponse(relevant=True, reason="命中当前题上下文")
+        if any(word in request.message for word in _PRACTICE_RELATED_WORDS):
+            return PracticeRelevanceResponse(relevant=True, reason="命中刷题相关表达")
+        return PracticeRelevanceResponse(relevant=True, reason="本地规则保守放行")
 
     def _grade_answer_by_llm(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
         """调用 OpenAI 兼容大模型接口完成答案评分。"""
@@ -183,6 +216,7 @@ class PracticeAgentService:
                 referenceAnswer=str(data.get("referenceAnswer") or request.standardAnswer),
                 improvementAdvice=str(data.get("improvementAdvice") or "建议对照参考答案补充关键要点。"),
                 reviewKnowledgePoints=self._normalize_string_list(data.get("reviewKnowledgePoints")) or [request.questionType],
+                fallbackUsed=False,
             )
         except (TypeError, ValueError, json.JSONDecodeError) as exc:
             logger.warning("大模型评分结果解析失败，使用本地规则兜底：traceId=%s error=%s", trace_id, exc)
@@ -199,6 +233,25 @@ class PracticeAgentService:
         if not content:
             return None
         return PracticeDiscussResponse(reply=content.strip())
+
+    def _judge_relevance_by_llm(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse | None:
+        """调用 OpenAI 兼容大模型接口判断输入相关性。"""
+        trace_id = self._new_trace_id()
+        prompt = self._build_relevance_prompt(request)
+        messages = self._build_messages(prompt)
+
+        # 相关性判断只要求返回短 JSON，解析失败时走本地保守规则。
+        content = self._call_chat_completion(trace_id, "practice_relevance", messages)
+        if not content:
+            return None
+        try:
+            data = self._extract_json_object(content)
+            relevant = self._normalize_bool(data.get("relevant"), True)
+            reason = str(data.get("reason") or "")[:120]
+            return PracticeRelevanceResponse(relevant=relevant, reason=reason)
+        except (TypeError, ValueError, json.JSONDecodeError) as exc:
+            logger.warning("大模型相关性判断解析失败，使用本地规则兜底：traceId=%s error=%s", trace_id, exc)
+            return None
 
     def _call_chat_completion(self, trace_id: str, scene: str, messages: list[dict[str, str]]) -> str | None:
         """调用 OpenAI 兼容 chat completions 接口，并输出调用前后日志。"""
@@ -270,13 +323,6 @@ class PracticeAgentService:
             if self._normalize_text(term) in normalized_source:
                 self._add_keyword(keywords, term)
 
-    def _search_snippets(self, query: str) -> list[str]:
-        """从 Qdrant 检索相关片段。"""
-        try:
-            return [item.chunkText for item in rag_service.search(query, 3)]
-        except Exception:  # noqa: BLE001 - 向量服务失败时使用本地评分兜底
-            return []
-
     def _add_keyword(self, keywords: list[str], value: str | None) -> None:
         """追加单个关键词。"""
         if not value:
@@ -336,14 +382,20 @@ class PracticeAgentService:
         if score >= 90 and not missing_points:
             return "回答已经很完整，继续保持这种结构化表达。"
         if missing_points:
-            return "建议优先补充：" + "；".join(missing_points) + "。"
+            advice_points = [self._missing_point_to_advice(item) for item in missing_points]
+            return "建议优先补充：" + "；".join(advice_points) + "。"
         if problems:
             return "；".join(problems) + "。"
         return "整体回答不错，可以再补充一个工程实践案例。"
 
+    def _missing_point_to_advice(self, missing_point: str) -> str:
+        """把缺失点转换为简短建议。"""
+        point = missing_point.replace("待补充「", "").replace("」相关说明", "")
+        return f"补充「{point}」"
+
     def _review_points(self, question_type: str, missing_points: list[str]) -> list[str]:
         """提取建议复习点。"""
-        points = [item.replace("缺少「", "").replace("」相关说明", "") for item in missing_points]
+        points = [item.replace("待补充「", "").replace("」相关说明", "") for item in missing_points]
         return points or [question_type]
 
     def _is_llm_enabled(self) -> bool:
@@ -386,6 +438,8 @@ class PracticeAgentService:
             "JSON 字段为：score、correct、hitPoints、missingPoints、problems、referenceAnswer、"
             "improvementAdvice、reviewKnowledgePoints。\n"
             "score 必须是 0 到 100 的整数，correct 表示是否及格。\n"
+            "hitPoints 和 missingPoints 必须返回简短的总结式数组，每项只表达一个要点。\n"
+            "improvementAdvice 使用一到两句话概括最优先的改进方向，不要输出冗长段落。\n"
             "不要把题目分类当作必须命中的扣分项；允许用户使用同义表达，只按是否覆盖参考答案含义评分。\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
@@ -398,10 +452,27 @@ class PracticeAgentService:
         return (
             "请围绕当前刷题内容，用简洁、清晰的中文回答用户疑问。\n"
             "不要复述用户疑问或题目原文，直接给出解释、示例或改进建议。\n"
+            "如果用户询问刚刚的题目、刚刚提交的答案或评分依据，请优先使用下方上下文准确回答。\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
             f"参考答案：{request.standardAnswer}\n"
+            f"用户刚刚提交的答案：{request.lastUserAnswer or '暂无'}\n"
             f"用户疑问：{request.message}"
+        )
+
+    def _build_relevance_prompt(self, request: PracticeRelevanceRequest) -> str:
+        """构造输入相关性判断提示词。"""
+        return (
+            "请判断用户输入是否与刷题、回答当前面试题、讨论当前题技术点、泛技术学习问题有关。\n"
+            "只返回 JSON，不要返回 Markdown。JSON 字段：relevant、reason。\n"
+            "相关示例：提交答案、问刚刚答案是什么、追问知识点、要求解释技术概念、请求重答或下一题。\n"
+            "无关示例：天气、新闻、股票、旅游、做饭、写诗、闲聊颜值、与技术学习无关的翻译或娱乐请求。\n"
+            "不确定时请返回 relevant=true，避免误伤正常学习表达。\n"
+            f"当前阶段：{request.phase}\n"
+            f"题目分类：{request.questionType}\n"
+            f"题目：{request.question}\n"
+            f"参考答案：{request.standardAnswer}\n"
+            f"用户输入：{request.message}"
         )
 
     def _read_chat_content(self, response_data: dict[str, Any]) -> str:

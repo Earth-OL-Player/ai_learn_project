@@ -68,9 +68,9 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
         String normalizedAnswer = normalizeText(safeAnswer);
         for (String keyword : keywords) {
             if (isKeywordHit(keyword, normalizedAnswer)) {
-                hitPoints.add("命中了「" + keyword + "」相关要点");
+                hitPoints.add("已覆盖「" + keyword + "」相关核心要点");
             } else {
-                missingPoints.add("缺少「" + keyword + "」相关说明");
+                missingPoints.add("待补充「" + keyword + "」相关说明");
             }
         }
 
@@ -319,9 +319,22 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
             return "整体回答较完整，建议继续补充工程化细节和实际案例。";
         }
         if (!missingPoints.isEmpty()) {
-            return "建议优先补充：" + String.join("；", missingPoints) + "。";
+            return "建议优先补充：" + String.join("；", toAdvicePoints(missingPoints)) + "。";
         }
         return String.join("；", problems) + "。";
+    }
+
+    /**
+     * 转换缺失点为建议短句。
+     *
+     * @param missingPoints 缺失点
+     * @return 建议短句列表
+     */
+    private List<String> toAdvicePoints(List<String> missingPoints) {
+        return missingPoints.stream()
+                .map(point -> point.replace("待补充「", "").replace("」相关说明", ""))
+                .map(point -> "补充「" + point + "」")
+                .toList();
     }
 
     /**
@@ -332,7 +345,7 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
      */
     private List<String> extractReviewPoints(List<String> missingPoints) {
         return missingPoints.stream()
-                .map(point -> point.replace("缺少「", "").replace("」相关说明", ""))
+                .map(point -> point.replace("待补充「", "").replace("」相关说明", ""))
                 .toList();
     }
 
