@@ -5,6 +5,7 @@ import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.suggestion.application.SuggestionService;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,13 +35,15 @@ public class SuggestionController {
      *
      * @param pageNo 页码
      * @param pageSize 每页数量
+     * @param sort 排序方式
      * @return 建议分页响应
      */
     @GetMapping
     public ApiResponse<PageResponse<SuggestionResponse>> findPage(
             @RequestParam(required = false) Integer pageNo,
-            @RequestParam(required = false) Integer pageSize) {
-        return ApiResponse.success(suggestionService.findPage(pageNo, pageSize));
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) String sort) {
+        return ApiResponse.success(suggestionService.findPage(pageNo, pageSize, sort));
     }
 
     /**
@@ -52,5 +55,16 @@ public class SuggestionController {
     @PostMapping
     public ApiResponse<SuggestionResponse> create(@Valid @RequestBody CreateSuggestionRequest request) {
         return ApiResponse.success(suggestionService.create(request));
+    }
+
+    /**
+     * 点赞或取消点赞建议。
+     *
+     * @param id 建议ID
+     * @return 最新建议信息
+     */
+    @PostMapping("/{id}/like")
+    public ApiResponse<SuggestionResponse> toggleLike(@PathVariable Long id) {
+        return ApiResponse.success(suggestionService.toggleLike(id));
     }
 }

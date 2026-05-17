@@ -5,8 +5,8 @@ import type { CreateSuggestionPayload, SuggestionItem } from '../types/suggestio
 /**
  * 分页查询建议列表。
  */
-export function fetchSuggestions(pageNo: number, pageSize: number): Promise<PageResponse<SuggestionItem>> {
-  return get<PageResponse<SuggestionItem>>(`/suggestions?pageNo=${pageNo}&pageSize=${pageSize}`);
+export function fetchSuggestions(pageNo: number, pageSize: number, sort: string): Promise<PageResponse<SuggestionItem>> {
+  return get<PageResponse<SuggestionItem>>(`/suggestions?pageNo=${pageNo}&pageSize=${pageSize}&sort=${sort}`);
 }
 
 /**
@@ -14,4 +14,11 @@ export function fetchSuggestions(pageNo: number, pageSize: number): Promise<Page
  */
 export function createSuggestion(payload: CreateSuggestionPayload): Promise<SuggestionItem> {
   return post<SuggestionItem, CreateSuggestionPayload>('/suggestions', payload);
+}
+
+/**
+ * 点赞或取消点赞建议。
+ */
+export function toggleSuggestionLike(suggestionId: string): Promise<SuggestionItem> {
+  return post<SuggestionItem>(`/suggestions/${suggestionId}/like`);
 }

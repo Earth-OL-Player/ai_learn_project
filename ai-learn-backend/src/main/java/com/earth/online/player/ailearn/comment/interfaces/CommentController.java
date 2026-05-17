@@ -5,6 +5,7 @@ import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -34,13 +35,15 @@ public class CommentController {
      *
      * @param pageNo 页码
      * @param pageSize 每页数量
+     * @param sort 排序方式
      * @return 评论分页响应
      */
     @GetMapping
     public ApiResponse<PageResponse<CommentResponse>> findPage(
             @RequestParam(required = false) Integer pageNo,
-            @RequestParam(required = false) Integer pageSize) {
-        return ApiResponse.success(commentService.findPage(pageNo, pageSize));
+            @RequestParam(required = false) Integer pageSize,
+            @RequestParam(required = false) String sort) {
+        return ApiResponse.success(commentService.findPage(pageNo, pageSize, sort));
     }
 
     /**
@@ -52,5 +55,16 @@ public class CommentController {
     @PostMapping
     public ApiResponse<CommentResponse> create(@Valid @RequestBody CreateCommentRequest request) {
         return ApiResponse.success(commentService.create(request));
+    }
+
+    /**
+     * 点赞或取消点赞评论。
+     *
+     * @param id 评论ID
+     * @return 最新评论信息
+     */
+    @PostMapping("/{id}/like")
+    public ApiResponse<CommentResponse> toggleLike(@PathVariable Long id) {
+        return ApiResponse.success(commentService.toggleLike(id));
     }
 }

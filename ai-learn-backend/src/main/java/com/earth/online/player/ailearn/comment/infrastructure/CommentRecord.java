@@ -11,10 +11,13 @@ public class CommentRecord {
     private String content;
     private Long parentId;
     private Integer likeCount;
+    private Boolean liked;
+    private Integer replyCount;
     private Long authorId;
     private String authorUsername;
     private String authorNickname;
     private String authorAvatar;
+    private Integer authorExperience;
     private LocalDateTime createdAt;
 
     /** 获取评论ID。 */
@@ -41,6 +44,18 @@ public class CommentRecord {
     /** 设置点赞数。 */
     public void setLikeCount(Integer likeCount) { this.likeCount = likeCount; }
 
+    /** 获取当前用户是否已点赞。 */
+    public Boolean getLiked() { return liked; }
+
+    /** 设置当前用户是否已点赞。 */
+    public void setLiked(Boolean liked) { this.liked = liked; }
+
+    /** 获取回复数量。 */
+    public Integer getReplyCount() { return replyCount; }
+
+    /** 设置回复数量。 */
+    public void setReplyCount(Integer replyCount) { this.replyCount = replyCount; }
+
     /** 获取作者ID。 */
     public Long getAuthorId() { return authorId; }
 
@@ -64,6 +79,12 @@ public class CommentRecord {
 
     /** 设置作者头像。 */
     public void setAuthorAvatar(String authorAvatar) { this.authorAvatar = authorAvatar; }
+
+    /** 获取作者经验值。 */
+    public Integer getAuthorExperience() { return authorExperience; }
+
+    /** 设置作者经验值。 */
+    public void setAuthorExperience(Integer authorExperience) { this.authorExperience = authorExperience; }
 
     /** 获取创建时间。 */
     public LocalDateTime getCreatedAt() { return createdAt; }

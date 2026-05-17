@@ -11,14 +11,11 @@ public enum SuggestionType {
     /** 体验优化。 */
     EXPERIENCE("体验优化"),
 
-    /** 内容建议。 */
-    CONTENT("内容建议"),
-
     /** 问题反馈。 */
     BUG("问题反馈"),
 
-    /** 其他建议。 */
-    OTHER("其他");
+    /** 内容建议。 */
+    CONTENT("内容建议");
 
     private final String text;
 

@@ -8,14 +8,15 @@ import java.time.LocalDateTime;
 public class SuggestionRecord {
 
     private Long id;
-    private String title;
     private String content;
     private String type;
-    private String status;
+    private Integer likeCount;
+    private Boolean liked;
     private Long authorId;
     private String authorUsername;
     private String authorNickname;
     private String authorAvatar;
+    private Integer authorExperience;
     private LocalDateTime createdAt;
 
     /** 获取建议ID。 */
@@ -23,12 +24,6 @@ public class SuggestionRecord {
 
     /** 设置建议ID。 */
     public void setId(Long id) { this.id = id; }
-
-    /** 获取标题。 */
-    public String getTitle() { return title; }
-
-    /** 设置标题。 */
-    public void setTitle(String title) { this.title = title; }
 
     /** 获取内容。 */
     public String getContent() { return content; }
@@ -42,11 +37,17 @@ public class SuggestionRecord {
     /** 设置类型。 */
     public void setType(String type) { this.type = type; }
 
-    /** 获取状态。 */
-    public String getStatus() { return status; }
+    /** 获取点赞数。 */
+    public Integer getLikeCount() { return likeCount; }
 
-    /** 设置状态。 */
-    public void setStatus(String status) { this.status = status; }
+    /** 设置点赞数。 */
+    public void setLikeCount(Integer likeCount) { this.likeCount = likeCount; }
+
+    /** 获取当前用户是否已点赞。 */
+    public Boolean getLiked() { return liked; }
+
+    /** 设置当前用户是否已点赞。 */
+    public void setLiked(Boolean liked) { this.liked = liked; }
 
     /** 获取作者ID。 */
     public Long getAuthorId() { return authorId; }
@@ -71,6 +72,12 @@ public class SuggestionRecord {
 
     /** 设置作者头像。 */
     public void setAuthorAvatar(String authorAvatar) { this.authorAvatar = authorAvatar; }
+
+    /** 获取作者经验值。 */
+    public Integer getAuthorExperience() { return authorExperience; }
+
+    /** 设置作者经验值。 */
+    public void setAuthorExperience(Integer authorExperience) { this.authorExperience = authorExperience; }
 
     /** 获取创建时间。 */
     public LocalDateTime getCreatedAt() { return createdAt; }

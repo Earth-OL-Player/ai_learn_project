@@ -1,20 +1,20 @@
 # MySQL 中间件说明
 
-版本：v1.10
+版本：v1.11
 日期：2026-05-17  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化、`sprint2617` 成长等级与修仙境界段位重构
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化、`sprint2617` 成长等级与修仙境界段位重构、`sprint2619` 建议评论区评论流重构
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、题目、刷题汇总、成长等级快照和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照和审计字段。
 
 当前边界说明：
 
 - `ai-learn-backend` 负责读写 MySQL。
 - Flyway 负责自动执行用户、建议、评论、题目、刷题汇总、RAG 任务和成长体系相关表 migration。
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
-- 建议状态创建时默认为 `PENDING`，评论点赞和回复字段本期只预留。
+- `sprint2619` 后，建议区不再保存处理状态和标题；建议与评论均通过点赞明细表记录用户点赞状态，评论支持一级父子评论。
 - 系统题库通过 migration 初始化 `AI面试题Top300.csv` 中的真实题目数据，供热门面经和 AI 智能刷题使用。
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
 - Redis、Qdrant 等中间件不参与建议评论区最小闭环。
@@ -157,19 +157,20 @@ SELECT id, username, super_admin FROM users WHERE username = '本地用户名占
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行 `V1` 到 `V14` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段和修仙境界默认值刷新。
+3. 确认 Flyway 已执行 `V1` 到 `V15` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新和建议评论区评论流重构。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
 7. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `/api/v1/users/me`。
-8. 以游客身份调用 `GET /api/v1/suggestions?pageNo=1&pageSize=10` 和 `GET /api/v1/comments?pageNo=1&pageSize=10`，确认可公开分页查询。
-9. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `POST /api/v1/suggestions` 和 `POST /api/v1/comments`，确认登录用户可发布。
-10. 查询 `suggestions.status` 默认为 `PENDING`，查询 `comments.like_count` 默认为 `0`。
+8. 以游客身份调用 `GET /api/v1/suggestions?pageNo=1&pageSize=10&sort=hot` 和 `GET /api/v1/comments?pageNo=1&pageSize=10&sort=hot`，确认可公开分页查询。
+9. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `POST /api/v1/suggestions` 和 `POST /api/v1/comments`，确认登录用户可发布纯文字建议和评论。
+10. 查询 `suggestions.like_count` 和 `comments.like_count` 默认为 `0`，并确认 `suggestions` 不再包含 `title`、`status` 字段。
 11. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `GET /api/v1/questions?pageNo=1&pageSize=10`，确认可分页查询系统题库。
 12. 调用 `GET /api/v1/questions/types`，确认可从题目表查询分类下拉数据。
 13. 调用 `GET /api/v1/questions/<题目ID占位符>`，确认可查看题目、参考答案、分类、重要性评分和真实面试出现次数。
 14. 注册一个本地普通用户，确认 `users.super_admin` 默认等于 `0`。
-15. 如需验收超级管理员入口，可在本地测试库执行 `UPDATE users SET super_admin = 1 WHERE username = '本地用户名占位符';`，重新登录后确认前端展示“管理者中心”。
+15. 使用 `Authorization: Bearer <accessToken占位符>` 调用 `POST /api/v1/suggestions/<建议ID占位符>/like` 和 `POST /api/v1/comments/<评论ID占位符>/like`，确认点赞明细表写入并可再次调用取消点赞。
+16. 如需验收超级管理员入口，可在本地测试库执行 `UPDATE users SET super_admin = 1 WHERE username = '本地用户名占位符';`，重新登录后确认前端展示“管理者中心”。
 
 ## 8. 后续部署到服务器注意事项
 
@@ -257,4 +258,53 @@ SELECT COALESCE(SUM(best_score), 0) AS total_experience FROM user_question_stats
 - 发布前必须备份 MySQL，确认 `rank_code` 字段长度已扩大到 32。
 - 不允许在生产库手工写入旧通用段位编码，新段位编码必须使用后端 `GrowthRank` 统一计算。
 - 排查成长数据时只能查询必要账号，禁止导出全量用户成长数据到不受控环境。
+
+
+## 11. sprint2619 建议评论区评论流说明
+
+本迭代新增 `V15__redesign_interaction_comments.sql`，用于把建议评论区从旧表单状态模型调整为轻量评论流模型。
+
+新增或调整内容：
+
+| 表 | 字段或索引 | 用途 |
+| --- | --- | --- |
+| `suggestions` | 删除 `title` | 建议区不再填写标题，只保留正文。 |
+| `suggestions` | 删除 `status` | 建议无需待处理、已处理状态。 |
+| `suggestions` | 新增 `like_count` | 支持建议按点赞数最热排序。 |
+| `comments` | 新增父级和点赞排序索引 | 支持父评论分页、一级子评论查询和最热排序。 |
+| `comment_likes` | 全表 | 保存用户对评论的点赞状态，避免重复点赞。 |
+| `suggestion_likes` | 全表 | 保存用户对建议的点赞状态，避免重复点赞。 |
+
+本地验证 SQL：
+
+```sql
+DESC suggestions;
+DESC comments;
+DESC comment_likes;
+DESC suggestion_likes;
+SELECT version, description, success FROM flyway_schema_history WHERE version = '15';
+SHOW INDEX FROM suggestions;
+SHOW INDEX FROM comments;
+SELECT id, type, content, like_count FROM suggestions ORDER BY created_at DESC LIMIT 5;
+SELECT id, parent_id, content, like_count FROM comments ORDER BY created_at DESC LIMIT 5;
+```
+
+本地联调接口：
+
+```text
+GET  /api/v1/suggestions?pageNo=1&pageSize=10&sort=hot
+GET  /api/v1/suggestions?pageNo=1&pageSize=10&sort=latest
+POST /api/v1/suggestions
+POST /api/v1/suggestions/<建议ID占位符>/like
+GET  /api/v1/comments?pageNo=1&pageSize=10&sort=hot
+GET  /api/v1/comments?pageNo=1&pageSize=10&sort=latest
+POST /api/v1/comments
+POST /api/v1/comments/<评论ID占位符>/like
+```
+
+部署注意事项：
+
+- 发布前必须备份 MySQL，确认旧建议数据中的 `type` 已被迁移到功能建议、体验优化、问题反馈、内容建议四类之一。
+- 生产库不允许手工写入 `comment_likes`、`suggestion_likes`，点赞状态必须通过后端接口生成。
+- 建议和评论正文只允许纯文字；排查数据时不要把用户原文批量导出到不受控环境。
 

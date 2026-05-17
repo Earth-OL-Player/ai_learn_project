@@ -5,7 +5,10 @@ export interface CommentItem {
   content: string;
   parentId: string | null;
   likeCount: number;
+  liked: boolean;
+  replyCount: number;
   author: AuthorSummary;
+  children: CommentItem[];
   createdAt: string | null;
 }
 

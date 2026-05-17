@@ -10,6 +10,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -24,6 +26,8 @@ public class AuthFilter extends OncePerRequestFilter {
 
     /** 自动续期 token 响应头。 */
     public static final String REFRESH_TOKEN_HEADER = "X-Refresh-Token";
+
+    private static final Logger LOGGER = LoggerFactory.getLogger(AuthFilter.class);
 
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX = "Bearer ";
@@ -41,7 +45,10 @@ public class AuthFilter extends OncePerRequestFilter {
             "/api/v1/admin",
             "/api/v1/practice"
     );
-    private final List<String> postProtectedPaths = List.of("/api/v1/suggestions", "/api/v1/comments");
+    private final List<String> postProtectedPrefixes = List.of(
+            "/api/v1/suggestions",
+            "/api/v1/comments"
+    );
 
     /**
      * 创建认证过滤器。
@@ -118,9 +125,11 @@ public class AuthFilter extends OncePerRequestFilter {
     private void refreshPublicRequestToken(HttpServletRequest request, HttpServletResponse response) {
         try {
             JwtParseResult parseResult = jwtTokenService.parseTokenDetail(resolveToken(request));
+            AuthContext.setUser(parseResult.user());
             refreshToken(response, parseResult.user());
         } catch (JwtUnauthorizedException exception) {
             // 公开接口不因过期 token 失败，受保护接口仍会严格拦截。
+            LOGGER.debug("公开接口携带的登录令牌无效：{}", exception.getMessage());
         }
     }
 
@@ -150,9 +159,9 @@ public class AuthFilter extends OncePerRequestFilter {
             return true;
         }
 
-        // 建议和评论列表公开可读，仅发布动作要求登录。
+        // 建议和评论列表公开可读，发布、回复和点赞动作要求登录。
         return HttpMethod.POST.matches(request.getMethod())
-                && postProtectedPaths.stream().anyMatch(requestUri::equals);
+                && postProtectedPrefixes.stream().anyMatch(prefix -> hasPathPrefix(requestUri, prefix));
     }
 
     /**
@@ -195,3 +204,4 @@ public class AuthFilter extends OncePerRequestFilter {
         response.getWriter().write(objectMapper.writeValueAsString(body));
     }
 }
+

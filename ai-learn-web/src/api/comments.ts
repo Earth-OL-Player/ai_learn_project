@@ -5,8 +5,8 @@ import type { PageResponse } from '../types/page';
 /**
  * 分页查询评论列表。
  */
-export function fetchComments(pageNo: number, pageSize: number): Promise<PageResponse<CommentItem>> {
-  return get<PageResponse<CommentItem>>(`/comments?pageNo=${pageNo}&pageSize=${pageSize}`);
+export function fetchComments(pageNo: number, pageSize: number, sort: string): Promise<PageResponse<CommentItem>> {
+  return get<PageResponse<CommentItem>>(`/comments?pageNo=${pageNo}&pageSize=${pageSize}&sort=${sort}`);
 }
 
 /**
@@ -14,4 +14,11 @@ export function fetchComments(pageNo: number, pageSize: number): Promise<PageRes
  */
 export function createComment(payload: CreateCommentPayload): Promise<CommentItem> {
   return post<CommentItem, CreateCommentPayload>('/comments', payload);
+}
+
+/**
+ * 点赞或取消点赞评论。
+ */
+export function toggleCommentLike(commentId: string): Promise<CommentItem> {
+  return post<CommentItem>(`/comments/${commentId}/like`);
 }

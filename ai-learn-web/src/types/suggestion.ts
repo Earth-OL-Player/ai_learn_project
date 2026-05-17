@@ -3,22 +3,23 @@ export interface AuthorSummary {
   username: string;
   nickname: string | null;
   avatar: string | null;
+  level: string;
+  levelValue: number;
+  rank: string;
 }
 
 export interface SuggestionItem {
   id: string;
-  title: string;
   content: string;
   type: string;
   typeText: string;
-  status: string;
-  statusText: string;
+  likeCount: number;
+  liked: boolean;
   author: AuthorSummary;
   createdAt: string | null;
 }
 
 export interface CreateSuggestionPayload {
-  title: string;
   type: string;
   content: string;
 }
