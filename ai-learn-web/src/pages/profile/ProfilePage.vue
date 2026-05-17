@@ -16,18 +16,7 @@
         <el-descriptions-item label="昵称">{{ authStore.user?.nickname || '暂未设置' }}</el-descriptions-item>
         <el-descriptions-item label="邮箱">{{ authStore.user?.email || '暂未绑定' }}</el-descriptions-item>
         <el-descriptions-item label="注册时间">{{ formattedCreatedAt }}</el-descriptions-item>
-        <el-descriptions-item label="经验值">{{ authStore.user?.experience ?? 0 }}</el-descriptions-item>
-        <el-descriptions-item label="等级">{{ authStore.user?.level }} · {{ authStore.user?.levelName }}</el-descriptions-item>
-        <el-descriptions-item label="段位">{{ authStore.user?.rank }}</el-descriptions-item>
       </el-descriptions>
-
-      <el-alert
-        class="profile-tip"
-        type="info"
-        show-icon
-        :closable="false"
-        title="AI智能刷题仅保留题目答题次数和历史最高分，用更轻量的方式沉淀学习成果。"
-      />
     </el-card>
 
     <GrowthOverviewPanel />
@@ -36,8 +25,8 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
 import { useAuthStore } from '../../stores/auth';
+import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
 
 const authStore = useAuthStore();
 
@@ -67,10 +56,12 @@ const formattedCreatedAt = computed(() => {
 }
 
 .profile-header {
+  // 基础资料卡只保留用户身份信息，成长信息统一放入下方成长概览。
   display: flex;
   align-items: center;
   gap: 18px;
   margin-bottom: 22px;
+  padding: 18px 10px 6px;
 }
 
 .profile-header h2 {
@@ -81,9 +72,5 @@ const formattedCreatedAt = computed(() => {
 .profile-header p {
   margin: 6px 0 0;
   color: #667085;
-}
-
-.profile-tip {
-  margin-top: 18px;
 }
 </style>

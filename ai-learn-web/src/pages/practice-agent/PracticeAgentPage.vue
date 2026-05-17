@@ -2,14 +2,21 @@
   <section class="practice-chat-page">
     <aside class="practice-side-card">
       <div class="filter-card-title">
-        <strong>一起学习成长吧！</strong>
+        <strong>昨日因,今日果,前尘不咎</strong>
+        <strong>今日因,明日果,当下即道</strong>
       </div>
 
-      <div v-if="growth" class="practice-growth-card">
-        <span>当前经验</span>
-        <strong>{{ growth.currentExperience }}</strong>
-        <small>{{ growth.level }} · {{ growth.levelName }} · {{ growth.rank }}</small>
-      </div>
+      <RealmCharacterCard
+        v-if="growth"
+        class="practice-realm-card"
+        :nickname="displayName"
+        :rank="growth.rank"
+        :level="growth.level"
+        :current-experience="growth.currentExperience"
+        :next-level-experience="growth.nextLevelExperience"
+        :level-progress-text="growth.levelProgressText"
+        compact
+      />
 
     </aside>
 
@@ -100,6 +107,7 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
 import MarkdownIt from 'markdown-it';
+import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
 import { computed, nextTick, onMounted, ref } from 'vue';
 import {
   fetchNextPracticeQuestion,
@@ -145,6 +153,9 @@ const messages = ref<ChatMessage[]>([]);
 const messagePanelRef = ref<HTMLElement | null>(null);
 const authStore = useAuthStore();
 let messageId = 1;
+
+// 左侧角色卡昵称优先使用用户昵称，未设置时回退用户名。
+const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
 
 // 按阶段展示主按钮文案，首次进入是开始，后续是下一题。
 const nextButtonText = computed(() => (phase.value === 'QUESTIONING' ? '开始' : '下一题'));
@@ -405,6 +416,11 @@ function syncAuthGrowth(nextGrowth: GrowthInfo): void {
   authStore.user.level = nextGrowth.level;
   authStore.user.levelName = nextGrowth.levelName;
   authStore.user.rank = nextGrowth.rank;
+  authStore.user.levelValue = nextGrowth.levelValue;
+  authStore.user.currentLevelExperience = nextGrowth.currentLevelExperience;
+  authStore.user.nextLevelExperience = nextGrowth.nextLevelExperience;
+  authStore.user.experienceToNextLevel = nextGrowth.experienceToNextLevel;
+  authStore.user.levelProgressText = nextGrowth.levelProgressText;
 }
 
 /**
@@ -469,8 +485,8 @@ onMounted(initializePage);
   display: flex;
   flex-direction: column;
   justify-content: center;
-  min-height: 108px;
-  padding: 20px;
+  min-height: 124px;
+  padding: 22px 24px;
   border: 1px solid rgba(47, 125, 246, 0.08);
   border-radius: 24px;
   background:
@@ -481,29 +497,17 @@ onMounted(initializePage);
 
 .filter-card-title strong {
   color: #17233d;
-  font-size: 23px;
-  letter-spacing: 0.02em;
-  line-height: 1.45;
+  font-family: SimSun, '宋体', serif;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: 0;
+  line-height: 1.75;
+  white-space: nowrap;
 }
 
-.practice-growth-card {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 16px;
-  padding: 16px;
-  border-radius: 18px;
-  background: linear-gradient(135deg, #f7fbff 0%, #f6fff9 100%);
-}
-
-.practice-growth-card span,
-.practice-growth-card small {
-  color: #667085;
-}
-
-.practice-growth-card strong {
-  color: #1f6feb;
-  font-size: 24px;
+.practice-realm-card {
+  // 段位角色直接承接左侧引导语，避免重复展示经验卡片。
+  margin-top: 18px;
 }
 
 .practice-chat-card {
@@ -562,7 +566,7 @@ onMounted(initializePage);
 .practice-message-panel {
   // 对话区留出更大空白，突出刷题内容本身。
   flex: 1;
-  min-height: 500px;
+  min-height: 460px;
   max-height: calc(100vh - 300px);
   overflow-y: auto;
   padding: 24px;

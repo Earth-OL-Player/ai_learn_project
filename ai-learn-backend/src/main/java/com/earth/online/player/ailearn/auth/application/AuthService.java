@@ -6,6 +6,9 @@ import com.earth.online.player.ailearn.auth.interfaces.RegisterRequest;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.JwtTokenService;
+import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
+import com.earth.online.player.ailearn.growth.domain.GrowthRank;
+import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.domain.UserSummary;
 import com.earth.online.player.ailearn.user.domain.UserSummaryConverter;
@@ -24,10 +27,11 @@ public class AuthService {
     private static final String TOKEN_TYPE = "Bearer";
     private static final int DEFAULT_EXPERIENCE = 0;
     private static final String DEFAULT_LEVEL_CODE = "LV1";
-    private static final String DEFAULT_RANK_CODE = "BRONZE";
+    private static final String DEFAULT_RANK_CODE = "QI_REFINING";
     private static final boolean DEFAULT_SUPER_ADMIN = false;
 
     private final UserMapper userMapper;
+    private final GrowthMapper growthMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
 
@@ -35,11 +39,17 @@ public class AuthService {
      * 创建认证应用服务。
      *
      * @param userMapper 用户仓储
+     * @param growthMapper 成长仓储
      * @param passwordEncoder 密码编码器
      * @param jwtTokenService JWT 服务
      */
-    public AuthService(UserMapper userMapper, PasswordEncoder passwordEncoder, JwtTokenService jwtTokenService) {
+    public AuthService(
+            UserMapper userMapper,
+            GrowthMapper growthMapper,
+            PasswordEncoder passwordEncoder,
+            JwtTokenService jwtTokenService) {
         this.userMapper = userMapper;
+        this.growthMapper = growthMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
     }
@@ -102,10 +112,27 @@ public class AuthService {
      * @return 认证响应
      */
     private AuthResponse buildAuthResponse(User user) {
+        refreshGrowthSnapshot(user);
         UserSummary summary = UserSummaryConverter.toSummary(user);
         String accessToken = jwtTokenService.generateToken(user.getId(), user.getUsername());
         return new AuthResponse(accessToken, TOKEN_TYPE, jwtTokenService.getExpiresInSeconds(), summary);
     }
 
-}
+    /**
+     * 刷新用户成长快照。
+     *
+     * @param user 用户信息
+     */
+    private void refreshGrowthSnapshot(User user) {
+        int experience = Math.max(0, growthMapper.sumBestScores(user.getId()));
+        GrowthLevel level = GrowthLevel.resolveByExperience(experience);
+        GrowthRank rank = GrowthRank.resolveByExperience(experience);
 
+        // 登录响应也使用最新成长规则，避免旧等级名称继续显示。
+        userMapper.updateGrowth(user.getId(), experience, level.code(), rank.code());
+        user.setExperience(experience);
+        user.setLevelCode(level.code());
+        user.setRankCode(rank.code());
+    }
+
+}

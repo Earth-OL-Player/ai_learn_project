@@ -10,6 +10,11 @@ export interface CurrentUser {
   level: string;
   levelName: string;
   rank: string;
+  levelValue: number;
+  currentLevelExperience: number;
+  nextLevelExperience: number;
+  experienceToNextLevel: number;
+  levelProgressText: string;
   superAdmin: boolean;
   createdAt: string;
 }

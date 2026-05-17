@@ -9,16 +9,23 @@
 
     <el-skeleton :loading="loading" animated :rows="5">
       <div v-if="growth" class="growth-content">
-        <div class="growth-grid">
-          <el-statistic title="当前经验" :value="growth.currentExperience" />
-          <el-statistic title="累计答题" :value="growth.answeredCount" />
-          <el-statistic title="平均得分" :value="Number(growth.averageScore.toFixed(1))" />
-          <el-statistic title="连续学习" :value="growth.streakDays" suffix="天" />
-          <div class="level-summary">{{ growth.level }} · {{ growth.levelName }} · {{ growth.rank }}</div>
-        </div>
-        <div class="progress-block">
-          <span>距离下一级还需 {{ growth.experienceToNextLevel }} 经验</span>
-          <el-progress :percentage="progressPercent" :stroke-width="12" />
+        <div class="growth-hero">
+          <RealmCharacterCard
+            :nickname="displayName"
+            :rank="growth.rank"
+            :level="growth.level"
+            :current-experience="growth.currentExperience"
+            :next-level-experience="growth.nextLevelExperience"
+            :level-progress-text="growth.levelProgressText"
+            compact
+          />
+          <div class="growth-grid">
+            <el-statistic title="当前总经验" :value="growth.currentExperience" />
+            <el-statistic title="累计答题" :value="growth.answeredCount" />
+            <el-statistic title="平均得分" :value="Number(growth.averageScore.toFixed(1))" />
+            <el-statistic title="连续学习" :value="growth.streakDays" suffix="天" />
+            <div class="level-summary">{{ growth.levelProgressText }} · {{ growth.rank }}</div>
+          </div>
         </div>
         <section class="badge-wall">
           <h3>徽章墙</h3>
@@ -44,23 +51,16 @@
 import { ElMessage } from 'element-plus';
 import { computed, onMounted, ref } from 'vue';
 import { fetchMyGrowth } from '../../../api/practice';
+import RealmCharacterCard from '../../../components/growth/RealmCharacterCard.vue';
+import { useAuthStore } from '../../../stores/auth';
 import type { GrowthInfo } from '../../../types/growth';
 
 const loading = ref(false);
 const growth = ref<GrowthInfo | null>(null);
+const authStore = useAuthStore();
 
-// 经验进度只做展示，满级时固定显示100%。
-const progressPercent = computed(() => {
-  if (!growth.value) {
-    return 0;
-  }
-  if (growth.value.experienceToNextLevel === 0 || growth.value.nextLevelExperience <= growth.value.currentExperience) {
-    return 100;
-  }
-
-  // 当前接口不额外返回上一等级阈值，这里按总进度做轻量展示。
-  return Math.max(0, Math.min(100, Math.round((growth.value.currentExperience / growth.value.nextLevelExperience) * 100)));
-});
+// 展示角色卡昵称时优先使用用户昵称，保持与个人中心一致。
+const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
 
 /**
  * 加载成长概览。
@@ -80,18 +80,99 @@ onMounted(loadGrowth);
 </script>
 
 <style scoped lang="scss">
-.growth-card { border: 1px solid #edf2f7; border-radius: 18px; }
-.card-header, .growth-grid { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-.growth-content { display: flex; flex-direction: column; gap: 18px; }
-.growth-grid { flex-wrap: wrap; }
-.level-summary { padding: 12px 16px; color: #1f2a44; font-weight: 700; border-radius: 14px; background: #f5f8ff; }
-.progress-block span { display: inline-block; margin-bottom: 8px; color: #667085; }
-.badge-wall h3, .event-list h3 { margin: 0 0 12px; color: #1f2a44; }
-.badge-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.badge-item { display: flex; flex-direction: column; gap: 6px; padding: 14px; border-radius: 16px; background: #f7fbff; border: 1px solid #dbeafe; }
-.badge-item span { font-size: 26px; }
-.badge-item strong { color: #1f2a44; }
-.badge-item small { color: #667085; line-height: 1.5; }
-.badge-item.locked { filter: grayscale(1); opacity: 0.45; }
-.event-list p { margin: 6px 0; color: #475467; }
+.growth-card {
+  border: 1px solid #edf2f7;
+  border-radius: 18px;
+}
+
+.card-header,
+.growth-grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.growth-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.growth-hero {
+  // 角色卡与指标并列，提升个人中心成长体系的游戏化辨识度。
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 22px;
+  align-items: stretch;
+}
+
+.growth-grid {
+  flex-wrap: wrap;
+  align-content: center;
+  padding: 18px;
+  border: 1px solid rgba(83, 116, 170, 0.1);
+  border-radius: 22px;
+  background: #fbfdff;
+}
+
+.level-summary {
+  padding: 12px 16px;
+  border-radius: 14px;
+  color: #1f2a44;
+  font-weight: 700;
+  background: #f5f8ff;
+}
+
+
+.badge-wall h3,
+.event-list h3 {
+  margin: 0 0 12px;
+  color: #1f2a44;
+}
+
+.badge-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+
+.badge-item {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid #dbeafe;
+  border-radius: 16px;
+  background: #f7fbff;
+}
+
+.badge-item span {
+  font-size: 26px;
+}
+
+.badge-item strong {
+  color: #1f2a44;
+}
+
+.badge-item small {
+  color: #667085;
+  line-height: 1.5;
+}
+
+.badge-item.locked {
+  filter: grayscale(1);
+  opacity: 0.45;
+}
+
+.event-list p {
+  margin: 6px 0;
+  color: #475467;
+}
+
+@media (max-width: 900px) {
+  .growth-hero {
+    grid-template-columns: 1fr;
+  }
+}
 </style>

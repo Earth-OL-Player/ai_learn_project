@@ -4,9 +4,12 @@ export interface GrowthInfo {
   level: string;
   levelName: string;
   rank: string;
+  levelValue: number;
+  currentLevelExperience: number;
+  nextLevelExperience: number;
+  levelProgressText: string;
   answeredCount: number;
   averageScore: number;
-  nextLevelExperience: number;
   experienceToNextLevel: number;
   streakDays: number;
   badges: BadgeInfo[];

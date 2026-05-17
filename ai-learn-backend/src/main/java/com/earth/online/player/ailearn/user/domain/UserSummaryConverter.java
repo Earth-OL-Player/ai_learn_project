@@ -37,6 +37,11 @@ public final class UserSummaryConverter {
                 level.displayCode(),
                 level.displayName(),
                 rank.displayName(),
+                level.levelValue(),
+                level.minExperience(),
+                level.nextLevelExperience(),
+                Math.max(0, level.nextLevelExperience() - experience),
+                level.progressText(experience),
                 superAdmin,
                 user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
         );

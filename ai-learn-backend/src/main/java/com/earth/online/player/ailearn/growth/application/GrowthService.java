@@ -61,16 +61,20 @@ public class GrowthService {
         int experience = Math.max(0, growthMapper.sumBestScores(user.getId()));
         GrowthLevel level = growthRuleService.resolveLevel(experience);
         GrowthRank rank = growthRuleService.resolveRank(experience);
-        int nextLevelExperience = GrowthLevel.nextLevelExperience(experience);
+        int nextLevelExperience = level.nextLevelExperience();
+        int currentLevelExperience = level.minExperience();
         return new GrowthResponse(
                 0,
                 experience,
                 level.displayCode(),
                 level.displayName(),
                 rank.displayName(),
+                level.levelValue(),
+                currentLevelExperience,
+                nextLevelExperience,
+                level.progressText(experience),
                 growthMapper.countAnsweredQuestions(user.getId()),
                 growthMapper.averageBestScore(user.getId()),
-                nextLevelExperience,
                 Math.max(0, nextLevelExperience - experience),
                 growthAwardService.calculateStreakDays(user.getId()),
                 growthAwardService.findBadgeWall(user.getId()),

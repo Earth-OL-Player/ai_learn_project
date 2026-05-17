@@ -1,13 +1,13 @@
 # MySQL 中间件说明
 
-版本：v1.9
+版本：v1.10
 日期：2026-05-17  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化、`sprint2617` 成长等级与修仙境界段位重构
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、题目、刷题汇总和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、题目、刷题汇总、成长等级快照和审计字段。
 
 当前边界说明：
 
@@ -157,7 +157,7 @@ SELECT id, username, super_admin FROM users WHERE username = '本地用户名占
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行 `V1` 到 `V13` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识和当前题答案记忆字段。
+3. 确认 Flyway 已执行 `V1` 到 `V14` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段和修仙境界默认值刷新。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -224,3 +224,37 @@ SELECT user_id, question_code, phase, last_score, LEFT(last_answer_text, 80) AS 
 - 系统表不再定义数据库外键，删除和清理数据由业务逻辑与索引约束保证，避免本地调试时被外键阻塞。
 - `V12__remove_foreign_keys_and_knowledge_tables.sql` 会兼容已初始化数据库：移除历史外键、删除知识点表和关系表，并用 Top300 CSV 题库重置系统题目。
 - 生产部署前必须先备份 MySQL，再发布 Flyway migration；全新环境可直接执行最新 migration 初始化表结构。
+
+## 10. sprint2617 成长等级与修仙境界段位说明
+
+本迭代新增 `V14__refresh_growth_realm_defaults.sql`，用于配合成长体系从旧等级名称和通用段位迁移到 `LV + 修仙境界` 展示。
+
+调整内容：
+
+| 表 | 字段 | 调整 | 用途 |
+| --- | --- | --- | --- |
+| `users` | `level_code` | 默认值保持 `LV1` | 保存当前等级编码，等级展示由后端按总经验动态计算 |
+| `users` | `rank_code` | 扩大为 `VARCHAR(32)`，默认值改为 `QI_REFINING` | 保存修仙境界编码，兼容 `FOUNDATION_BUILDING` 等较长编码 |
+
+成长计算说明：
+
+- 总经验仍按 `user_question_stats.best_score` 汇总得到，即所有题目历史最高分之和。
+- 每 300 总经验升 1 级，展示格式为 `LV3 700/900`。
+- 段位由等级范围映射得到，例如 `LV1~LV10` 为炼气期，`LV11~LV20` 为筑基期。
+- 历史 `BRONZE`、`SILVER`、`GOLD`、`PLATINUM`、`DIAMOND`、`KING` 会先回收为 `QI_REFINING`，用户登录、查询个人信息或完成答题后会按真实总经验刷新为正确境界编码。
+
+本地验证 SQL：
+
+```sql
+DESC users;
+SELECT version, description, success FROM flyway_schema_history WHERE version = '14';
+SELECT id, username, experience, level_code, rank_code FROM users WHERE username = '本地用户名占位符';
+SELECT COALESCE(SUM(best_score), 0) AS total_experience FROM user_question_stats WHERE user_id = 用户ID占位符;
+```
+
+部署注意事项：
+
+- 发布前必须备份 MySQL，确认 `rank_code` 字段长度已扩大到 32。
+- 不允许在生产库手工写入旧通用段位编码，新段位编码必须使用后端 `GrowthRank` 统一计算。
+- 排查成长数据时只能查询必要账号，禁止导出全量用户成长数据到不受控环境。
+
