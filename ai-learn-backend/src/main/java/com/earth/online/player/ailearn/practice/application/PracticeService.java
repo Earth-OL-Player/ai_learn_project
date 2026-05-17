@@ -218,7 +218,7 @@ public class PracticeService {
             return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
-        String reply = practiceAiClient.discuss(question, content).orElseGet(() -> buildLocalDiscussionReply(question, content));
+        String reply = practiceAiClient.discuss(question, content).orElseGet(() -> buildLocalDiscussionReply(question));
         return new PracticeMessageResponse(ACTION_DISCUSSION, PHASE_DISCUSSING, reply, toQuestionResponse(question), null, growthService.getCurrentGrowth());
     }
 
@@ -505,11 +505,10 @@ public class PracticeService {
      * 构造本地讨论回复。
      *
      * @param question 当前题目
-     * @param content 用户输入
      * @return 讨论回复
      */
-    private String buildLocalDiscussionReply(PracticeQuestionRecord question, String content) {
-        return "我们继续围绕本题学习。你刚才关注的是：“" + content + "”。"
+    private String buildLocalDiscussionReply(PracticeQuestionRecord question) {
+        return "可以从核心概念、关键流程、工程注意事项三个层次理解。"
                 + "本题属于「" + question.getQuestionType() + "」，答题时建议先覆盖核心概念，再补充流程、优缺点和工程化注意事项。"
                 + "参考答案要点是：" + question.getStandardAnswer();
     }

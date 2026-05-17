@@ -2,13 +2,17 @@ package com.earth.online.player.ailearn.common.config;
 
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.common.security.JwtProperties;
+import java.util.List;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.Ordered;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.web.servlet.config.annotation.CorsRegistry;
-import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
+import org.springframework.web.cors.CorsConfiguration;
+import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
+import org.springframework.web.filter.CorsFilter;
 
 /**
  * Web 基础配置。
@@ -17,29 +21,34 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 @EnableConfigurationProperties({JwtProperties.class, AiServiceProperties.class})
 public class WebConfig {
 
+    private static final String API_PATH_PATTERN = "/api/v1/**";
+    private static final long CORS_MAX_AGE_SECONDS = 3600L;
+
     /**
-     * 配置本地开发跨域访问。
+     * 配置本地开发跨域访问过滤器。
      *
-     * @return Web MVC 配置器
+     * @return CORS 过滤器注册信息
      */
     @Bean
-    public WebMvcConfigurer corsConfigurer() {
-        return new WebMvcConfigurer() {
-            /**
-             * 添加跨域映射，支持本地前端联调。
-             *
-             * @param registry 跨域注册器
-             */
-            @Override
-            public void addCorsMappings(CorsRegistry registry) {
-                registry.addMapping("/api/v1/**")
-                        .allowedOrigins("http://localhost:5173", "http://127.0.0.1:5173")
-                        .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
-                        .allowedHeaders("*")
-                        .exposedHeaders("X-Trace-Id", "X-Refresh-Token")
-                        .maxAge(3600);
-            }
-        };
+    public FilterRegistrationBean<CorsFilter> corsFilterRegistration() {
+        CorsConfiguration configuration = new CorsConfiguration();
+
+        // Vite 本地端口可能被占用后自动切换，按 localhost/127.0.0.1 放开任意本地端口。
+        configuration.setAllowedOriginPatterns(List.of("http://localhost:[*]", "http://127.0.0.1:[*]"));
+        configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
+        configuration.setAllowedHeaders(List.of("*"));
+
+        // 暴露追踪和续期头，便于前端统一处理登录态。
+        configuration.setExposedHeaders(List.of("X-Trace-Id", "X-Refresh-Token"));
+        configuration.setMaxAge(CORS_MAX_AGE_SECONDS);
+
+        UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
+        source.registerCorsConfiguration(API_PATH_PATTERN, configuration);
+
+        // CORS 必须早于认证过滤器执行，避免预检或认证失败响应缺少跨域响应头。
+        FilterRegistrationBean<CorsFilter> registrationBean = new FilterRegistrationBean<>(new CorsFilter(source));
+        registrationBean.setOrder(Ordered.HIGHEST_PRECEDENCE);
+        return registrationBean;
     }
 
     /**

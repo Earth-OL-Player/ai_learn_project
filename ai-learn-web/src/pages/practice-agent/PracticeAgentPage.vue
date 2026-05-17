@@ -222,7 +222,9 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
   growth.value = result.growth;
   syncAuthGrowth(result.growth);
 
-  const message = buildAssistantMessage(result.message, result.question, result.grading);
+  // 仅出题类消息展示题目卡片，评分和追问回复不再重复复述题目。
+  const displayQuestion = result.action === 'QUESTION' ? result.question : null;
+  const message = buildAssistantMessage(result.message, displayQuestion, result.grading);
   if (clearMessages) {
     messages.value = [message];
   } else {
@@ -462,10 +464,31 @@ onMounted(initializePage);
   color: #344054;
 }
 
+.grading-bubble-card :deep(.el-collapse) {
+  // 评分详情与建议文案拉开间距，降低贴边拥挤感。
+  margin-top: 12px;
+  border-top-color: rgba(83, 116, 170, 0.12);
+  border-bottom-color: rgba(83, 116, 170, 0.12);
+}
+
+.grading-bubble-card :deep(.el-collapse-item__content) {
+  padding: 10px 8px 4px;
+}
+
 .grading-detail-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  padding: 4px 2px;
+}
+
+.grading-detail-grid > div {
+  // 明细块增加内边距和浅色卡片底，阅读时左侧不再贴边。
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid rgba(83, 116, 170, 0.1);
+  border-radius: 16px;
+  background: #ffffff;
 }
 
 .grading-detail-grid h4 {

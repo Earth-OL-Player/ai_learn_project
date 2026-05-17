@@ -39,7 +39,15 @@ async def log_http_request(request: Request, call_next: Callable[[Request], Awai
 @app.exception_handler(RequestValidationError)
 async def log_validation_error(request: Request, exc: RequestValidationError) -> Response:
     """记录 FastAPI 422 参数校验失败详情，便于排查 Java 传参问题。"""
-    logger.warning("Python AI 服务请求参数校验失败：method=%s path=%s errors=%s", request.method, request.url.path, exc.errors())
+    # 只记录元信息，不打印鉴权头和请求体，避免答案内容或 Token 出现在日志中。
+    logger.warning(
+        "Python AI 服务请求参数校验失败：method=%s path=%s contentType=%s contentLength=%s errors=%s",
+        request.method,
+        request.url.path,
+        request.headers.get("content-type", ""),
+        request.headers.get("content-length", ""),
+        exc.errors(),
+    )
     return await request_validation_exception_handler(request, exc)
 
 

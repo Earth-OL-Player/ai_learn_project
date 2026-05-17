@@ -19,6 +19,60 @@ _LOCAL_RULE_MODEL = "LOCAL_RULE"
 _API_KEY_PLACEHOLDER = "AI_GRADING_API_KEY占位符"
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
 _LLM_RESPONSE_PREVIEW_LENGTH = 200
+_ASCII_TERM_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+_.-]{1,}")
+_ASCII_IGNORED_TERMS = {"query", "rewrite"}
+_DOMAIN_TERMS = (
+    "RAG",
+    "Embedding",
+    "Chunk",
+    "Query Rewrite",
+    "BM25",
+    "Rerank",
+    "Prompt",
+    "Fine-tuning",
+    "检索增强生成",
+    "离线建库",
+    "在线问答",
+    "文档解析",
+    "权限过滤",
+    "查询改写",
+    "问题理解",
+    "向量检索",
+    "混合检索",
+    "关键词检索",
+    "向量库",
+    "向量化",
+    "召回",
+    "重排",
+    "精排",
+    "证据",
+    "引用",
+    "拒答",
+    "上下文压缩",
+    "评测闭环",
+    "反馈闭环",
+    "可追溯",
+    "知识更新",
+    "微调",
+    "输出风格",
+    "格式遵循",
+)
+_KEYWORD_ALIASES = {
+    "rag": ("检索增强生成", "检索增强", "外部知识", "知识库问答"),
+    "检索增强生成": ("RAG", "检索增强", "外部知识", "知识库问答"),
+    "embedding": ("向量化", "向量表示", "嵌入模型", "转成向量"),
+    "chunk": ("切分", "分块", "切片", "文本块", "知识片段"),
+    "query rewrite": ("查询改写", "问题改写", "改写问题"),
+    "bm25": ("关键词检索", "稀疏检索", "混合检索"),
+    "rerank": ("重排", "精排", "重新排序"),
+    "prompt": ("提示词", "上下文"),
+    "fine-tuning": ("微调", "模型微调"),
+    "向量化": ("Embedding", "嵌入", "向量表示"),
+    "重排": ("Rerank", "精排", "排序"),
+    "查询改写": ("Query Rewrite", "问题改写", "改写问题"),
+    "离线建库": ("文档解析", "清洗", "切分", "向量库", "入库"),
+    "在线问答": ("用户提问", "检索召回", "召回", "生成答案"),
+}
 
 logger = logging.getLogger("ai_service.practice.llm")
 logger.setLevel(logging.INFO)
@@ -67,12 +121,12 @@ class PracticeAgentService:
         keywords = self._build_keywords(request)
         answer = request.userAnswer.strip()
 
-        # 命中判断保持大小写不敏感，兼容英文技术名词。
-        lowered_answer = answer.lower()
+        # 命中判断保持大小写和空白不敏感，兼容英文技术名词及中文同义表达。
+        normalized_answer = self._normalize_text(answer)
         hit_points: list[str] = []
         missing_points: list[str] = []
         for keyword in keywords:
-            if keyword.lower() in lowered_answer:
+            if self._keyword_hit(keyword, normalized_answer):
                 hit_points.append(f"命中了「{keyword}」相关要点")
             else:
                 missing_points.append(f"缺少「{keyword}」相关说明")
@@ -100,7 +154,6 @@ class PracticeAgentService:
         # 讨论回复不持久化，只返回给后端展示。
         reply = (
             f"我们继续看这道「{request.questionType}」题。"
-            f"你的问题是：{request.message.strip()}。"
             f"建议先对照参考答案确认核心点：{request.standardAnswer}。"
             f"可参考的检索片段：{snippet_text}。"
         )
@@ -192,18 +245,30 @@ class PracticeAgentService:
             return None
 
     def _build_keywords(self, request: PracticeGradeRequest) -> list[str]:
-        """从题目、分类、参考答案和 RAG 片段构建关键词。"""
+        """只从参考答案构建必答关键词。"""
         keywords: list[str] = []
-        self._add_keyword(keywords, request.questionType)
 
-        # RAG 检索失败不能影响本地评分主流程。
-        for snippet in self._search_snippets(request.question + " " + request.standardAnswer):
-            for token in _SPLIT_PATTERN.split(snippet):
-                self._add_keyword(keywords, token)
+        # 题目分类和检索片段不作为扣分项，避免用户答对但没复述分类名时被误扣。
+        self._add_ascii_terms(keywords, request.standardAnswer)
+        self._add_domain_terms(keywords, request.standardAnswer)
 
         for token in _SPLIT_PATTERN.split(request.standardAnswer):
             self._add_keyword(keywords, token)
-        return keywords[:_MAX_KEYWORDS]
+        return self._filter_excluded_keywords(keywords, request)[:_MAX_KEYWORDS]
+
+    def _add_ascii_terms(self, keywords: list[str], source: str) -> None:
+        """提取英文技术词。"""
+        for match in _ASCII_TERM_PATTERN.finditer(source):
+            term = match.group()
+            if term.lower() not in _ASCII_IGNORED_TERMS:
+                self._add_keyword(keywords, term)
+
+    def _add_domain_terms(self, keywords: list[str], source: str) -> None:
+        """从参考答案中提取常见领域短语。"""
+        normalized_source = self._normalize_text(source)
+        for term in _DOMAIN_TERMS:
+            if self._normalize_text(term) in normalized_source:
+                self._add_keyword(keywords, term)
 
     def _search_snippets(self, query: str) -> list[str]:
         """从 Qdrant 检索相关片段。"""
@@ -219,6 +284,35 @@ class PracticeAgentService:
         keyword = value.strip()
         if 2 <= len(keyword) <= 24 and keyword not in keywords:
             keywords.append(keyword)
+
+    def _filter_excluded_keywords(self, keywords: list[str], request: PracticeGradeRequest) -> list[str]:
+        """过滤题目和分类中已经包含的宽泛词。"""
+        excluded_sources = [request.question, request.questionType]
+        return [keyword for keyword in keywords if not self._is_excluded_keyword(keyword, excluded_sources)]
+
+    def _is_excluded_keyword(self, keyword: str, excluded_sources: list[str]) -> bool:
+        """判断关键词是否属于非扣分来源。"""
+        normalized_keyword = self._normalize_text(keyword)
+        for source in excluded_sources:
+            normalized_source = self._normalize_text(source)
+            if normalized_source and (normalized_keyword in normalized_source or normalized_source in normalized_keyword):
+                return True
+        return False
+
+    def _keyword_hit(self, keyword: str, normalized_answer: str) -> bool:
+        """判断答案是否覆盖关键词或同义表达。"""
+        if self._normalize_text(keyword) in normalized_answer:
+            return True
+
+        # 同义表达只用于放宽命中，不额外增加必答项。
+        aliases = _KEYWORD_ALIASES.get(keyword.lower(), ())
+        return any(self._normalize_text(alias) in normalized_answer for alias in aliases)
+
+    def _normalize_text(self, value: str | None) -> str:
+        """规整文本用于大小写和空白不敏感匹配。"""
+        if not value:
+            return ""
+        return re.sub(r"\s+", "", value).lower()
 
     def _calculate_score(self, hit_count: int, total_count: int, answer_length: int) -> int:
         """计算百分制得分。"""
@@ -292,6 +386,7 @@ class PracticeAgentService:
             "JSON 字段为：score、correct、hitPoints、missingPoints、problems、referenceAnswer、"
             "improvementAdvice、reviewKnowledgePoints。\n"
             "score 必须是 0 到 100 的整数，correct 表示是否及格。\n"
+            "不要把题目分类当作必须命中的扣分项；允许用户使用同义表达，只按是否覆盖参考答案含义评分。\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
             f"参考答案：{request.standardAnswer}\n"
@@ -302,6 +397,7 @@ class PracticeAgentService:
         """构造学习讨论提示词。"""
         return (
             "请围绕当前刷题内容，用简洁、清晰的中文回答用户疑问。\n"
+            "不要复述用户疑问或题目原文，直接给出解释、示例或改进建议。\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
             f"参考答案：{request.standardAnswer}\n"

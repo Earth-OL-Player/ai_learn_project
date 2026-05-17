@@ -9,11 +9,14 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -24,7 +27,8 @@ import org.springframework.util.StringUtils;
 public class PracticeAiClient {
 
     private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
-    private static final String JSON_CONTENT_TYPE = "application/json";
+    private static final String JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+    private static final Logger LOGGER = LoggerFactory.getLogger(PracticeAiClient.class);
 
     private final AiServiceProperties properties;
     private final ObjectMapper objectMapper;
@@ -39,7 +43,12 @@ public class PracticeAiClient {
     public PracticeAiClient(AiServiceProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder().connectTimeout(timeout()).build();
+
+        // Uvicorn 不支持 Java HttpClient 默认的明文 HTTP/2 升级请求，固定 HTTP/1.1 保证请求体稳定送达。
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(timeout())
+                .version(HttpClient.Version.HTTP_1_1)
+                .build();
     }
 
     /**
@@ -70,6 +79,7 @@ public class PracticeAiClient {
             }
             return Optional.of(toGradingResult(data));
         } catch (RuntimeException exception) {
+            LOGGER.warn("AI 服务评分结果转换失败，已切换后端本地评分：questionCode={}", question.getCode(), exception);
             return Optional.empty();
         }
     }
@@ -98,6 +108,7 @@ public class PracticeAiClient {
             }
             return Optional.of(data.get("reply").asText());
         } catch (RuntimeException exception) {
+            LOGGER.warn("AI 服务讨论结果转换失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
             return Optional.empty();
         }
     }
@@ -114,21 +125,25 @@ public class PracticeAiClient {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(normalizeBaseUrl() + path))
                     .timeout(timeout())
+                    .version(HttpClient.Version.HTTP_1_1)
                     .header("Content-Type", JSON_CONTENT_TYPE)
                     .header("Accept", JSON_CONTENT_TYPE)
                     .header(INTERNAL_TOKEN_HEADER, properties.getToken())
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                LOGGER.warn("AI 服务调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
                 return Optional.empty();
             }
             JsonNode root = objectMapper.readTree(response.body());
             if (!"SUCCESS".equals(root.path("code").asText())) {
+                LOGGER.warn("AI 服务业务响应失败，已进入本地兜底：path={} code={}", path, root.path("code").asText());
                 return Optional.empty();
             }
             return Optional.ofNullable(root.get("data"));
         } catch (Exception exception) {
+            LOGGER.warn("AI 服务调用异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         }
     }

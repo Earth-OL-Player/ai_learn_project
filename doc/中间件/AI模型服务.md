@@ -69,3 +69,21 @@ AI_GRADING_TIMEOUT_SECONDS=20
 - 生产环境应配置超时、限流、重试、成本监控和日志脱敏。
 - 不得把用户完整答案和聊天记录写入日志或向量库。
 - 如果模型返回结构化 JSON，需要后端或 AI 服务做字段校验和兜底，避免模型异常输出影响刷题主流程。
+
+## 9. sprint202614 本地联调和 422 排查补充
+
+本期修复了 Java 后端调用 Python AI 服务时，本地 Uvicorn 对明文 HTTP/2 h2c 升级请求兼容不足可能导致请求体丢失的问题。当前后端到 `ai-service` 的内部调用要求如下：
+
+- Java 后端固定使用 HTTP/1.1 调用 `ai-service`，避免本地 Uvicorn 出现 `Unsupported upgrade request` 后影响请求体解析。
+- 请求头使用 `Content-Type: application/json; charset=utf-8`，请求体统一使用 UTF-8 JSON。
+- `AI_SERVICE_TOKEN` 必须在 Java 后端和 Python AI 服务两侧保持一致；示例值只能使用占位符，真实值请在本地或服务器环境变量中配置。
+- 如果 Python 日志出现 422 参数校验失败，请优先检查 `contentType`、`contentLength`、`AI_SERVICE_ENABLED`、`AI_SERVICE_BASE_URL` 和内部 Token 是否配置正确。
+- 排查日志不得打印用户答案全文、真实 Token、真实模型 Key 或生产服务地址。
+
+本地验证建议：
+
+1. 启动 `ai-service` 后访问 `http://127.0.0.1:8000/health`，确认返回 `UP`。
+2. 启动 Java 后端并配置 `AI_SERVICE_ENABLED=true`、`AI_SERVICE_BASE_URL=http://127.0.0.1:8000`。
+3. 在前端 AI 智能刷题页面提交答案。
+4. Python 日志应能看到 `/internal/v1/practice/answer/grade` 返回 200；如果真实模型未配置，Python 会使用本地规则评分。
+5. 如果停止 Python AI 服务，Java 后端应自动切换为本地评分兜底，前端仍能看到评分结果。
