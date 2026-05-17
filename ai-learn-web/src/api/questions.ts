@@ -22,6 +22,13 @@ export function fetchQuestionDetail(id: string): Promise<QuestionDetail> {
 }
 
 /**
+ * 查询热门面经阅读文档。
+ */
+export function fetchInterviewQuestionDocument(): Promise<QuestionDetail[]> {
+  return get<QuestionDetail[]>('/questions/interview-document');
+}
+
+/**
  * 查询题目分类列表。
  */
 export function fetchQuestionTypes(): Promise<string[]> {

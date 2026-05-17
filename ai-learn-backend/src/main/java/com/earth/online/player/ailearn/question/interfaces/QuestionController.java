@@ -58,6 +58,16 @@ public class QuestionController {
     }
 
     /**
+     * 查询热门面经阅读文档。
+     *
+     * @return 热门面经题目详情列表
+     */
+    @GetMapping("/interview-document")
+    public ApiResponse<List<QuestionDetailResponse>> findInterviewDocument() {
+        return ApiResponse.success(questionService.findInterviewDocument());
+    }
+
+    /**
      * 查询题目详情。
      *
      * @param id 题目ID

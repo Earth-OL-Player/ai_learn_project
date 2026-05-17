@@ -87,6 +87,24 @@ public interface QuestionMapper {
     QuestionDetailRecord findDetailById(@Param("id") Long id);
 
     /**
+     * 查询热门面经阅读文档所需题目。
+     *
+     * @return 热门面经题目详情列表
+     */
+    @Select("""
+            SELECT q.id, q.code, q.question, q.question_type, q.standard_answer,
+                   q.importance_score, q.occurrence_count, q.created_at, q.updated_at
+            FROM questions q
+            WHERE q.deleted = 0
+            ORDER BY q.question_type ASC,
+                     q.importance_score DESC,
+                     q.occurrence_count DESC,
+                     q.created_at DESC,
+                     q.id DESC
+            """)
+    List<QuestionDetailRecord> findInterviewDocument();
+
+    /**
      * 查询题目表中实际存在的分类。
      *
      * @return 题目分类列表

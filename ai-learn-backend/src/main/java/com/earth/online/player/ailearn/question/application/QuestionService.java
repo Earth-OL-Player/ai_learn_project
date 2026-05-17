@@ -74,6 +74,19 @@ public class QuestionService {
     }
 
     /**
+     * 查询热门面经阅读文档题目。
+     *
+     * @return 热门面经题目详情列表
+     */
+    public List<QuestionDetailResponse> findInterviewDocument() {
+        // 阅读文档需要一次性拿到参考答案，避免前端逐题打开详情弹窗。
+        return questionMapper.findInterviewDocument()
+                .stream()
+                .map(this::toDetailResponse)
+                .toList();
+    }
+
+    /**
      * 查询题目详情。
      *
      * @param id 题目ID

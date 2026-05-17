@@ -1,343 +1,405 @@
 <template>
-  <section class="question-page">
-    <div class="question-hero">
-      <div>
-        <p class="eyebrow">系统题库基础</p>
-        <h2>热门面经</h2>
-        <p class="hero-desc">浏览 AI、RAG、Agent 等方向的精选题目，重点关注真实面试高频题。</p>
-      </div>
-      <el-tag type="success" effect="light">登录后可浏览</el-tag>
-    </div>
-
-    <el-card shadow="never" class="filter-card">
-      <el-form :model="filters" label-position="top" class="filter-form">
-        <el-form-item label="关键词">
-          <el-input v-model="filters.keyword" clearable placeholder="搜索编码、题目或答案" @keyup.enter="searchQuestions" />
-        </el-form-item>
-        <el-form-item label="分类">
-          <el-select v-model="filters.questionType" clearable filterable placeholder="全部分类" @change="searchQuestions">
-            <el-option v-for="item in questionTypes" :key="item" :label="item" :value="item" />
-          </el-select>
-        </el-form-item>
-        <el-form-item class="filter-actions">
-          <el-button type="primary" round :loading="loading" @click="searchQuestions">查询</el-button>
-          <el-button round @click="resetFilters">重置</el-button>
-        </el-form-item>
-      </el-form>
-    </el-card>
-
-    <el-card shadow="never" class="list-card">
-      <template #header>
-        <div class="card-header">
-          <span>题目列表</span>
-          <el-button text type="primary" :loading="loading" @click="loadQuestions">刷新</el-button>
+  <section class="roadmap-page interview-document-page">
+    <div :class="['markdown-layout', { 'is-toc-collapsed': isTocCollapsed }]">
+      <nav
+        v-if="tocItems.length"
+        :class="['markdown-toc-card', { 'is-collapsed': isTocCollapsed }]"
+        aria-label="热门面经目录"
+      >
+        <div class="markdown-toc-header">
+          <h3 v-if="!isTocCollapsed">目录</h3>
+          <button type="button" class="markdown-toc-toggle" @click="toggleToc">
+            {{ isTocCollapsed ? '展开' : '收起' }}
+          </button>
         </div>
-      </template>
 
-      <el-skeleton :loading="loading" animated :rows="5">
-        <el-empty v-if="questions.length === 0" description="暂无匹配题目，换个筛选条件试试" />
-        <div v-else class="question-list">
-          <article v-for="item in questions" :key="item.id" class="question-card" @click="openDetail(item.id)">
-            <div class="question-title-row">
-              <h3>{{ item.question }}</h3>
-              <div class="tag-row">
-                <el-tag effect="plain">{{ item.questionTypeText }}</el-tag>
-                <el-tag :type="resolveImportanceType(item.importanceScore)" effect="light">重要性 {{ item.importanceScore }}</el-tag>
-              </div>
-            </div>
-            <div class="meta-grid">
-              <span>题目编码：{{ item.code }}</span>
-              <span>真实面试出现次数：{{ item.occurrenceCount }}</span>
-              <span>创建时间：{{ formatTime(item.createdAt) }}</span>
-            </div>
-          </article>
+        <div v-show="!isTocCollapsed" class="markdown-toc-list">
+          <a
+            v-for="item in tocItems"
+            :key="item.id"
+            :href="`#${item.id}`"
+            :class="[
+              'markdown-toc-link',
+              `markdown-toc-level-${item.level}`,
+              { 'is-active': activeTocId === item.id },
+            ]"
+            @click="setActiveToc(item.id)"
+          >
+            {{ item.title }}
+          </a>
         </div>
-      </el-skeleton>
+      </nav>
 
-      <el-pagination
-        v-model:current-page="page.pageNo"
-        v-model:page-size="page.pageSize"
-        layout="prev, pager, next, total"
-        :total="page.total"
-        @current-change="loadQuestions"
-      />
-    </el-card>
+      <article class="markdown-card interview-document-card">
+        <el-skeleton :loading="loading" animated :rows="10">
+          <el-empty v-if="categorySections.length === 0" description="暂无热门面经内容，管理员补充题库后将自动展示" />
+          <div v-else class="markdown-body interview-markdown-body">
+            <h1>热门面经</h1>
+            <p class="interview-document-intro">
+              精选 AI、RAG、Agent 等方向真实面试高频题，按分类连续阅读，帮助你用文档方式系统复盘。
+            </p>
 
-    <el-dialog v-model="detailVisible" title="题目详情" width="760px" class="question-detail-dialog">
-      <el-skeleton :loading="detailLoading" animated :rows="8">
-        <div v-if="detail" class="detail-content">
-          <h3>{{ detail.question }}</h3>
-          <div class="tag-row detail-tags">
-            <el-tag effect="plain">{{ detail.questionTypeText }}</el-tag>
-            <el-tag :type="resolveImportanceType(detail.importanceScore)" effect="light">重要性 {{ detail.importanceScore }}</el-tag>
-            <el-tag type="success" effect="light">真实面试出现次数 {{ detail.occurrenceCount }}</el-tag>
+            <section
+              v-for="section in categorySections"
+              :id="section.id"
+              :key="section.id"
+              class="interview-category-section"
+            >
+              <h2>{{ section.title }}</h2>
+
+              <article
+                v-for="(question, index) in section.questions"
+                :key="question.id"
+                class="interview-question-card"
+              >
+                <div class="interview-question-head">
+                  <p class="interview-question-title">题目 {{ index + 1 }}：{{ question.question || '未命名题目' }}</p>
+                  <div class="interview-question-meta" aria-label="题目热度信息">
+                    <span class="interview-meta-badge is-importance">重要性 {{ formatNumber(question.importanceScore) }}</span>
+                    <span class="interview-meta-badge is-occurrence">真实面试 {{ question.occurrenceCount || 0 }} 次</span>
+                  </div>
+                </div>
+
+                <div class="interview-answer-title">参考答案</div>
+                <div class="interview-answer" v-html="renderAnswerMarkdown(question.standardAnswer)"></div>
+              </article>
+            </section>
           </div>
-          <section>
-            <h4>题目编码</h4>
-            <p>{{ detail.code }}</p>
-          </section>
-          <section>
-            <h4>参考答案</h4>
-            <p>{{ detail.standardAnswer }}</p>
-          </section>
-        </div>
-      </el-skeleton>
-    </el-dialog>
+        </el-skeleton>
+      </article>
+    </div>
   </section>
 </template>
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
-import { onMounted, reactive, ref } from 'vue';
-import { fetchQuestionDetail, fetchQuestions, fetchQuestionTypes } from '../../api/questions';
-import type { QuestionDetail, QuestionListItem } from '../../types/question';
+import MarkdownIt from 'markdown-it';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { fetchInterviewQuestionDocument } from '../../api/questions';
+import type { QuestionDetail } from '../../types/question';
 
-const PAGE_SIZE = 10;
-const loading = ref(false);
-const detailLoading = ref(false);
-const detailVisible = ref(false);
-const questions = ref<QuestionListItem[]>([]);
-const questionTypes = ref<string[]>([]);
-const detail = ref<QuestionDetail | null>(null);
-
-const page = reactive({ pageNo: 1, pageSize: PAGE_SIZE, total: 0 });
-const filters = reactive({ keyword: '', questionType: '' });
-
-/**
- * 加载分类筛选数据。
- */
-async function loadQuestionTypes(): Promise<void> {
-  questionTypes.value = await fetchQuestionTypes();
+interface TocItem {
+  id: string;
+  level: number;
+  title: string;
 }
 
+interface CategorySection {
+  id: string;
+  title: string;
+  questions: QuestionDetail[];
+}
+
+const SCROLL_ACTIVE_OFFSET = 132;
+
+const activeTocId = ref('');
+const isTocCollapsed = ref(false);
+const loading = ref(false);
+const questionDetails = ref<QuestionDetail[]>([]);
+
+let scrollUpdatePending = false;
+
+const markdown = new MarkdownIt({
+  html: false,
+  linkify: true,
+  breaks: false,
+});
+
+const defaultLinkOpenRenderer = markdown.renderer.rules.link_open;
+
+// 外部链接统一新窗口打开，并避免把来源页面信息带给外部站点。
+markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
+  if (tokens[index].attrIndex('target') < 0) {
+    tokens[index].attrPush(['target', '_blank']);
+  }
+
+  tokens[index].attrSet('rel', 'noreferrer');
+  return defaultLinkOpenRenderer
+    ? defaultLinkOpenRenderer(tokens, index, options, env, self)
+    : self.renderToken(tokens, index, options);
+};
+
+const categorySections = computed(() => buildCategorySections(questionDetails.value));
+const tocItems = computed(() => categorySections.value.map(toTocItem));
+
 /**
- * 按当前条件加载题目列表。
+ * 加载热门面经阅读文档。
  */
-async function loadQuestions(): Promise<void> {
+async function loadInterviewDocument(): Promise<void> {
   loading.value = true;
   try {
-    const result = await fetchQuestions({
-      pageNo: page.pageNo,
-      pageSize: page.pageSize,
-      keyword: filters.keyword.trim(),
-      questionType: filters.questionType.trim(),
-    });
-    questions.value = result.records;
-    page.total = result.total;
+    // 后端已按分类和高频权重排序，前端只负责阅读体验编排。
+    questionDetails.value = await fetchInterviewQuestionDocument();
+    await nextTick();
+    updateActiveTocByReadingPosition();
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '热门面经加载失败');
   } finally {
     loading.value = false;
   }
 }
 
 /**
- * 重置到第一页并查询。
+ * 按题目分类构建页面阅读分区。
  */
-async function searchQuestions(): Promise<void> {
-  page.pageNo = 1;
-  await loadQuestions();
+function buildCategorySections(items: QuestionDetail[]): CategorySection[] {
+  const headingIdGenerator = createHeadingIdGenerator();
+
+  // 分类文案为空时兜底到“未分类”，避免正文标题缺失。
+  return Array.from(groupQuestionsByType(items).entries()).map(([title, questions]) => ({
+    id: headingIdGenerator(title),
+    title,
+    questions,
+  }));
 }
 
 /**
- * 清空筛选条件。
+ * 按题目分类分组，并保持后端返回顺序。
  */
-async function resetFilters(): Promise<void> {
-  filters.keyword = '';
-  filters.questionType = '';
-  await searchQuestions();
+function groupQuestionsByType(items: QuestionDetail[]): Map<string, QuestionDetail[]> {
+  const groupedQuestions = new Map<string, QuestionDetail[]>();
+
+  // 使用 Map 保持接口返回的分类顺序，避免前端二次排序产生跳动。
+  items.forEach((item) => {
+    const questionTypeText = item.questionTypeText?.trim() || item.questionType?.trim() || '未分类';
+    const questions = groupedQuestions.get(questionTypeText) || [];
+    questions.push(item);
+    groupedQuestions.set(questionTypeText, questions);
+  });
+
+  return groupedQuestions;
 }
 
 /**
- * 打开题目详情弹窗。
+ * 转换阅读分区为左侧目录项。
  */
-async function openDetail(id: string): Promise<void> {
-  detailVisible.value = true;
-  detailLoading.value = true;
-  detail.value = null;
-  try {
-    detail.value = await fetchQuestionDetail(id);
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '题目详情加载失败');
-    detailVisible.value = false;
-  } finally {
-    detailLoading.value = false;
-  }
+function toTocItem(section: CategorySection): TocItem {
+  return {
+    id: section.id,
+    level: 2,
+    title: section.title,
+  };
 }
 
 /**
- * 解析重要性标签样式。
+ * 创建标题锚点生成器，重复标题自动追加序号。
  */
-function resolveImportanceType(score: number): 'success' | 'warning' | 'danger' | 'info' {
-  if (score >= 85) {
-    return 'danger';
-  }
-  if (score >= 60) {
-    return 'warning';
-  }
-  if (score > 0) {
-    return 'success';
-  }
-  return 'info';
+function createHeadingIdGenerator(): (title: string) => string {
+  const headingIdCounter = new Map<string, number>();
+
+  return (title: string) => {
+    const baseId = title
+      .trim()
+      .toLowerCase()
+      .replace(/[`*_~()[\]{}]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/^-+|-+$/g, '') || 'section';
+    const count = headingIdCounter.get(baseId) || 0;
+    headingIdCounter.set(baseId, count + 1);
+    return count === 0 ? baseId : `${baseId}-${count + 1}`;
+  };
 }
 
 /**
- * 格式化本地展示时间。
+ * 渲染参考答案 Markdown。
  */
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+function renderAnswerMarkdown(value: string | undefined): string {
+  return markdown.render(normalizeAnswerMarkdown(value));
+}
+
+/**
+ * 规整参考答案 Markdown 内容。
+ */
+function normalizeAnswerMarkdown(value: string | undefined): string {
+  if (!value?.trim()) {
+    return '暂无参考答案。';
+  }
+
+  // 接口数据允许 Markdown 段落和列表，但不让答案内标题抢占分类层级。
+  return value.trim().split(/\r?\n/).map(convertAnswerHeadingToBold).join('\n');
+}
+
+/**
+ * 将答案中的标题行降级为加粗正文。
+ */
+function convertAnswerHeadingToBold(line: string): string {
+  const headingMatch = /^(#{1,6})\s+(.+)$/.exec(line);
+  if (!headingMatch) {
+    return line;
+  }
+
+  return `**${headingMatch[2].trim()}**`;
+}
+
+/**
+ * 格式化数值展示，去除无意义的小数零。
+ */
+function formatNumber(value: number): string {
+  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
+}
+
+/**
+ * 设置当前激活目录。
+ */
+function setActiveToc(tocId: string): void {
+  activeTocId.value = tocId;
+}
+
+/**
+ * 切换目录展开和收起状态。
+ */
+function toggleToc(): void {
+  isTocCollapsed.value = !isTocCollapsed.value;
+}
+
+/**
+ * 请求根据当前阅读位置刷新目录选中项。
+ */
+function requestActiveTocUpdate(): void {
+  if (scrollUpdatePending) {
+    return;
+  }
+
+  // 滚动事件较频繁，使用动画帧合并计算避免抖动。
+  scrollUpdatePending = true;
+  window.requestAnimationFrame(() => {
+    scrollUpdatePending = false;
+    updateActiveTocByReadingPosition();
+  });
+}
+
+/**
+ * 根据用户当前阅读位置选中左侧目录。
+ */
+function updateActiveTocByReadingPosition(): void {
+  if (!categorySections.value.length) {
+    activeTocId.value = '';
+    return;
+  }
+
+  let currentSectionId = categorySections.value[0].id;
+  for (const section of categorySections.value) {
+    const sectionElement = document.getElementById(section.id);
+    if (!sectionElement) {
+      continue;
+    }
+
+    // 标题到达顶部导航下方时，即认为用户进入该分类阅读区。
+    if (sectionElement.getBoundingClientRect().top <= SCROLL_ACTIVE_OFFSET) {
+      currentSectionId = section.id;
+      continue;
+    }
+    break;
+  }
+
+  activeTocId.value = currentSectionId;
 }
 
 onMounted(async () => {
-  await Promise.all([loadQuestionTypes(), loadQuestions()]);
+  await loadInterviewDocument();
+  window.addEventListener('scroll', requestActiveTocUpdate, { passive: true });
+  window.addEventListener('resize', requestActiveTocUpdate);
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', requestActiveTocUpdate);
+  window.removeEventListener('resize', requestActiveTocUpdate);
 });
 </script>
 
 <style scoped lang="scss">
-.question-page {
+.interview-document-card {
+  min-height: 640px;
+}
+
+.interview-document-intro {
+  color: #5d6b82;
+}
+
+.interview-category-section {
+  scroll-margin-top: 88px;
+}
+
+.interview-question-card {
+  padding: 22px 24px;
+  margin: 26px 0 34px;
+  background: linear-gradient(135deg, #f8fbff 0%, #f9fffb 100%);
+  border: 1px solid #e8eef7;
+  border-radius: 22px;
+}
+
+.interview-question-head {
   display: flex;
-  flex-direction: column;
   gap: 18px;
-}
-
-.question-hero {
-  display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
-  padding: 28px;
-  border-radius: 24px;
-  background: linear-gradient(135deg, #f5f8ff 0%, #f8fffb 100%);
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: #3b82f6;
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.question-hero h2 {
-  margin: 0;
-  color: #1f2a44;
-  font-size: 30px;
-}
-
-.hero-desc {
-  margin: 10px 0 0;
-  color: #667085;
-}
-
-.filter-card,
-.list-card {
-  border: 1px solid #edf2f7;
-  border-radius: 18px;
-}
-
-.filter-form {
-  display: grid;
-  grid-template-columns: 1.4fr 1fr auto;
-  gap: 14px;
-  align-items: end;
-}
-
-.filter-actions {
   margin-bottom: 18px;
 }
 
-.card-header,
-.question-title-row,
-.tag-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.question-list {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-bottom: 18px;
-}
-
-.question-card {
-  padding: 18px;
-  cursor: pointer;
-  border: 1px solid #edf2f7;
-  border-radius: 16px;
-  background: #fbfdff;
-  transition: border-color 0.2s ease, transform 0.2s ease;
-}
-
-.question-card:hover {
-  border-color: #9cc8ff;
-  transform: translateY(-1px);
-}
-
-.question-card h3 {
+.interview-question-title {
+  flex: 1;
   margin: 0;
-  color: #1f2a44;
-  line-height: 1.6;
+  color: #17233d;
+  font-size: 21px;
+  font-weight: 800;
+  line-height: 1.65;
 }
 
-.tag-row {
+.interview-question-meta {
+  display: inline-flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
-.meta-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px 18px;
-  margin-top: 14px;
-  color: #667085;
+.interview-meta-badge {
+  padding: 7px 13px;
   font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: 8px;
 }
 
-.detail-content h3 {
-  margin: 0 0 14px;
-  color: #1f2a44;
-  font-size: 22px;
-  line-height: 1.6;
+.interview-meta-badge.is-importance {
+  color: #e68a00;
+  background: #fff8e8;
+  border-color: #ffe1a8;
 }
 
-.detail-tags {
-  margin-bottom: 12px;
+.interview-meta-badge.is-occurrence {
+  color: #30a514;
+  background: #f1ffe9;
+  border-color: #c7efb4;
 }
 
-.detail-content section {
-  margin-top: 20px;
-  padding: 16px;
-  border-radius: 14px;
-  background: #f8fafc;
+.interview-answer-title {
+  margin: 4px 0 10px;
+  color: #1f6feb;
+  font-size: 15px;
+  font-weight: 800;
 }
 
-.detail-content h4 {
-  margin: 0 0 8px;
-  color: #344054;
-}
-
-.detail-content p {
-  margin: 0;
+.interview-answer {
   color: #475467;
-  line-height: 1.8;
-  white-space: pre-wrap;
+}
+
+.interview-answer :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.interview-answer :deep(p:last-child) {
+  margin-bottom: 0;
 }
 
 @media (max-width: 1080px) {
-  .filter-form,
-  .meta-grid {
-    grid-template-columns: 1fr 1fr;
-  }
-}
-
-@media (max-width: 720px) {
-  .filter-form,
-  .meta-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .question-title-row {
-    align-items: flex-start;
+  .interview-question-head {
     flex-direction: column;
+  }
+
+  .interview-question-meta {
+    justify-content: flex-start;
   }
 }
 </style>
