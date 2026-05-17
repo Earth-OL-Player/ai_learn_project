@@ -34,6 +34,10 @@ public class AuthFilter extends OncePerRequestFilter {
 
     private final JwtTokenService jwtTokenService;
     private final ObjectMapper objectMapper;
+    private final List<String> publicGetPaths = List.of(
+            "/api/v1/questions/interview-document",
+            "/api/v1/practice/categories"
+    );
     private final List<String> alwaysProtectedPaths = List.of(
             "/api/v1/users/me",
             "/api/v1/auth/logout",
@@ -152,6 +156,9 @@ public class AuthFilter extends OncePerRequestFilter {
      */
     private boolean isProtectedPath(HttpServletRequest request) {
         String requestUri = request.getRequestURI();
+        if (isPublicGetPath(request, requestUri)) {
+            return false;
+        }
         if (alwaysProtectedPaths.stream().anyMatch(requestUri::equals)) {
             return true;
         }
@@ -162,6 +169,17 @@ public class AuthFilter extends OncePerRequestFilter {
         // 建议和评论列表公开可读，发布、回复和点赞动作要求登录。
         return HttpMethod.POST.matches(request.getMethod())
                 && postProtectedPrefixes.stream().anyMatch(prefix -> hasPathPrefix(requestUri, prefix));
+    }
+
+    /**
+     * 判断是否为明确开放给游客读取的 GET 接口。
+     *
+     * @param request HTTP 请求
+     * @param requestUri 请求路径
+     * @return 是否公开可读
+     */
+    private boolean isPublicGetPath(HttpServletRequest request, String requestUri) {
+        return HttpMethod.GET.matches(request.getMethod()) && publicGetPaths.stream().anyMatch(requestUri::equals);
     }
 
     /**

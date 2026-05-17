@@ -1,4 +1,4 @@
-import { get } from './http';
+import { get, getPublic } from './http';
 import type { PageResponse } from '../types/page';
 import type { QuestionDetail, QuestionListItem, QuestionQuery } from '../types/question';
 
@@ -24,8 +24,20 @@ export function fetchQuestionDetail(id: string): Promise<QuestionDetail> {
 /**
  * 查询热门面经阅读文档。
  */
-export function fetchInterviewQuestionDocument(): Promise<QuestionDetail[]> {
-  return get<QuestionDetail[]>('/questions/interview-document');
+export function fetchInterviewQuestionDocument(questionType?: string): Promise<QuestionDetail[]> {
+  const params = new URLSearchParams();
+  appendOptionalParam(params, 'questionType', questionType);
+  const queryString = params.toString();
+
+  // 热门面经对游客开放阅读，公开接口不携带过期 token，避免游客场景被误拦截。
+  return getPublic<QuestionDetail[]>(`/public/questions/interview-document${queryString ? `?${queryString}` : ''}`);
+}
+
+/**
+ * 查询热门面经公开分类列表。
+ */
+export function fetchPublicQuestionTypes(): Promise<string[]> {
+  return getPublic<string[]>('/public/questions/types');
 }
 
 /**

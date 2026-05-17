@@ -89,20 +89,26 @@ public interface QuestionMapper {
     /**
      * 查询热门面经阅读文档所需题目。
      *
+     * @param questionType 题目分类
      * @return 热门面经题目详情列表
      */
     @Select("""
+            <script>
             SELECT q.id, q.code, q.question, q.question_type, q.standard_answer,
                    q.importance_score, q.occurrence_count, q.created_at, q.updated_at
             FROM questions q
             WHERE q.deleted = 0
+            <if test='questionType != null and questionType != ""'>
+              AND q.question_type = #{questionType}
+            </if>
             ORDER BY q.question_type ASC,
                      q.importance_score DESC,
                      q.occurrence_count DESC,
                      q.created_at DESC,
                      q.id DESC
+            </script>
             """)
-    List<QuestionDetailRecord> findInterviewDocument();
+    List<QuestionDetailRecord> findInterviewDocument(@Param("questionType") String questionType);
 
     /**
      * 查询题目表中实际存在的分类。

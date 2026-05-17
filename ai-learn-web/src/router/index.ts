@@ -39,13 +39,13 @@ const router = createRouter({
           path: 'interview-questions',
           name: 'interview-questions',
           component: InterviewQuestionsPage,
-          meta: { title: '热门面经', requiresAuth: true },
+          meta: { title: '热门面经' },
         },
         {
           path: 'practice-agent',
           name: 'practice-agent',
           component: PracticeAgentPage,
-          meta: { title: 'AI智能刷题', requiresAuth: true },
+          meta: { title: 'AI智能刷题' },
         },
         {
           path: 'profile',
@@ -96,3 +96,4 @@ router.beforeEach(async (to) => {
 });
 
 export default router;
+

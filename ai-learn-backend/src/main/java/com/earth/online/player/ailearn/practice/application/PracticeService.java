@@ -6,11 +6,12 @@ import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.AuthContext;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.growth.application.GrowthAwardService;
 import com.earth.online.player.ailearn.growth.application.GrowthService;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
-import com.earth.online.player.ailearn.growth.interfaces.GrowthResponse;
+import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiClient;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiGradingResult;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
@@ -57,6 +58,7 @@ public class PracticeService {
     private final GrowthMapper growthMapper;
     private final UserMapper userMapper;
     private final GrowthService growthService;
+    private final GrowthAwardService growthAwardService;
     private final AnswerGradingPort answerGradingPort;
     private final PracticeAiClient practiceAiClient;
 
@@ -67,6 +69,7 @@ public class PracticeService {
      * @param growthMapper 成长仓储
      * @param userMapper 用户仓储
      * @param growthService 成长服务
+     * @param growthAwardService 勋章发放服务
      * @param answerGradingPort 本地评分端口
      * @param practiceAiClient AI 服务客户端
      */
@@ -75,12 +78,14 @@ public class PracticeService {
             GrowthMapper growthMapper,
             UserMapper userMapper,
             GrowthService growthService,
+            GrowthAwardService growthAwardService,
             AnswerGradingPort answerGradingPort,
             PracticeAiClient practiceAiClient) {
         this.practiceMapper = practiceMapper;
         this.growthMapper = growthMapper;
         this.userMapper = userMapper;
         this.growthService = growthService;
+        this.growthAwardService = growthAwardService;
         this.answerGradingPort = answerGradingPort;
         this.practiceAiClient = practiceAiClient;
     }
@@ -254,7 +259,7 @@ public class PracticeService {
         PracticeSessionRecord session = practiceMapper.findSession(userId);
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
         String reply = practiceAiClient.discuss(question, lastUserAnswer, content).orElseGet(this::buildLocalDiscussionReply);
-        return new PracticeMessageResponse(ACTION_DISCUSSION, PHASE_DISCUSSING, reply, toQuestionResponse(question), null, growthService.getCurrentGrowth());
+        return discussionResponse(userId, question, reply);
     }
 
     /**
@@ -288,7 +293,7 @@ public class PracticeService {
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
         String reply = practiceAiClient.discussStream(question, lastUserAnswer, content, chunkConsumer)
                 .orElseGet(this::buildLocalDiscussionReply);
-        return new PracticeMessageResponse(ACTION_DISCUSSION, PHASE_DISCUSSING, reply, toQuestionResponse(question), null, growthService.getCurrentGrowth());
+        return discussionResponse(userId, question, reply);
     }
 
     /**
@@ -316,7 +321,14 @@ public class PracticeService {
 
         // 评分完成后进入本题讨论阶段，并仅保存当前题最近一次答案用于后续追问上下文。
         String message = buildGradingMessage(fallbackUsed);
-        return new PracticeMessageResponse(ACTION_GRADING, PHASE_DISCUSSING, message, toQuestionResponse(question), grading, growthService.getCurrentGrowth());
+        return new PracticeMessageResponse(
+                ACTION_GRADING,
+                PHASE_DISCUSSING,
+                message,
+                toQuestionResponse(question),
+                grading,
+                growthService.getCurrentGrowth(grading.newBadges())
+        );
     }
 
     /**
@@ -345,6 +357,7 @@ public class PracticeService {
         GrowthLevel level = GrowthLevel.resolveByExperience(totalExperience);
         GrowthRank rank = GrowthRank.resolveByExperience(totalExperience);
         userMapper.updateGrowth(userId, totalExperience, level.code(), rank.code());
+        List<BadgeResponse> newBadges = growthAwardService.awardAfterAnswer(userId, score, earnedExperience);
         return new PracticeGradingResponse(
                 score,
                 gradingResult.isCorrect(),
@@ -359,9 +372,44 @@ public class PracticeService {
                 oldStat == null ? null : previousLast,
                 buildExperienceDetail(oldStat == null, previousBest, previousLast, score, earnedExperience),
                 totalExperience,
-                Collections.emptyList(),
+                newBadges,
                 fallbackUsed
         );
+    }
+
+    /**
+     * 构造讨论响应并处理追问勋章。
+     *
+     * @param userId 用户ID
+     * @param question 当前题目
+     * @param reply 回复内容
+     * @return 讨论响应
+     */
+    private PracticeMessageResponse discussionResponse(Long userId, PracticeQuestionRecord question, String reply) {
+        int followUpCount = incrementDiscussionFollowUpCount(userId);
+        List<BadgeResponse> newBadges = growthAwardService.awardAfterDiscussion(userId, followUpCount);
+
+        // 追问类勋章通过成长信息透传给前端，评分结果为空时仍可弹框提示。
+        return new PracticeMessageResponse(
+                ACTION_DISCUSSION,
+                PHASE_DISCUSSING,
+                reply,
+                toQuestionResponse(question),
+                null,
+                growthService.getCurrentGrowth(newBadges)
+        );
+    }
+
+    /**
+     * 增加并读取当前题连续追问次数。
+     *
+     * @param userId 用户ID
+     * @return 追问次数
+     */
+    private int incrementDiscussionFollowUpCount(Long userId) {
+        practiceMapper.incrementDiscussionFollowUpCount(userId);
+        PracticeSessionRecord session = practiceMapper.findSession(userId);
+        return session == null ? 0 : safeInt(session.getDiscussionFollowUpCount());
     }
 
     /**

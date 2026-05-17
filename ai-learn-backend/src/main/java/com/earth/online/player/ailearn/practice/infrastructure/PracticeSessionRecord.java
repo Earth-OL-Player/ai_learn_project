@@ -11,6 +11,7 @@ public class PracticeSessionRecord {
     private String phase;
     private Integer lastScore;
     private String lastAnswerText;
+    private Integer discussionFollowUpCount;
 
     /** 获取状态ID。 */
     public Long getId() { return id; }
@@ -47,4 +48,10 @@ public class PracticeSessionRecord {
 
     /** 设置最近一次答案原文。 */
     public void setLastAnswerText(String lastAnswerText) { this.lastAnswerText = lastAnswerText; }
+
+    /** 获取当前题评分后的连续追问次数。 */
+    public Integer getDiscussionFollowUpCount() { return discussionFollowUpCount; }
+
+    /** 设置当前题评分后的连续追问次数。 */
+    public void setDiscussionFollowUpCount(Integer discussionFollowUpCount) { this.discussionFollowUpCount = discussionFollowUpCount; }
 }

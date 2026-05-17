@@ -7,9 +7,12 @@ import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
+import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
 import com.earth.online.player.ailearn.growth.interfaces.GrowthResponse;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
+import java.util.Collections;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -48,6 +51,16 @@ public class GrowthService {
      * @return 成长信息
      */
     public GrowthResponse getCurrentGrowth() {
+        return getCurrentGrowth(Collections.emptyList());
+    }
+
+    /**
+     * 查询当前用户成长信息并携带本次新勋章。
+     *
+     * @param newBadges 本次新获得勋章
+     * @return 成长信息
+     */
+    public GrowthResponse getCurrentGrowth(List<BadgeResponse> newBadges) {
         AuthenticatedUser authenticatedUser = AuthContext.getUser();
         if (authenticatedUser == null) {
             throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
@@ -57,6 +70,17 @@ public class GrowthService {
             throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录状态已失效，请重新登录");
         }
 
+        return buildGrowthResponse(user, newBadges == null ? Collections.emptyList() : newBadges);
+    }
+
+    /**
+     * 构造成长响应。
+     *
+     * @param user 用户信息
+     * @param newBadges 本次新获得勋章
+     * @return 成长响应
+     */
+    private GrowthResponse buildGrowthResponse(User user, List<BadgeResponse> newBadges) {
         // 成长数据基于用户题目汇总表，避免依赖已下线的答题记录流水。
         int experience = Math.max(0, growthMapper.sumBestScores(user.getId()));
         GrowthLevel level = growthRuleService.resolveLevel(experience);
@@ -73,12 +97,12 @@ public class GrowthService {
                 currentLevelExperience,
                 nextLevelExperience,
                 level.progressText(experience),
-                growthMapper.countAnsweredQuestions(user.getId()),
+                growthMapper.countCompletedAnswers(user.getId()),
                 growthMapper.averageBestScore(user.getId()),
                 Math.max(0, nextLevelExperience - experience),
-                growthAwardService.calculateStreakDays(user.getId()),
+                growthAwardService.calculateLearningDays(user.getId()),
                 growthAwardService.findBadgeWall(user.getId()),
-                java.util.Collections.emptyList(),
+                newBadges,
                 growthAwardService.findRecentEvents(user.getId())
         );
     }

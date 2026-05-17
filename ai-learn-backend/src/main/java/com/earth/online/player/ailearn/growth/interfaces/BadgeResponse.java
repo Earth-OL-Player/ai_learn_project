@@ -10,6 +10,9 @@ import java.time.OffsetDateTime;
  * @param description 徽章说明
  * @param icon 图标
  * @param ruleCode 规则编码
+ * @param category 分类编码
+ * @param categoryName 分类名称
+ * @param hidden 是否隐藏勋章
  * @param acquired 是否已获得
  * @param acquiredAt 获得时间
  */
@@ -19,6 +22,9 @@ public record BadgeResponse(
         String description,
         String icon,
         String ruleCode,
+        String category,
+        String categoryName,
+        boolean hidden,
         boolean acquired,
         OffsetDateTime acquiredAt
 ) {

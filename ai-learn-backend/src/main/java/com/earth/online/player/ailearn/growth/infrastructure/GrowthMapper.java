@@ -1,6 +1,5 @@
 package com.earth.online.player.ailearn.growth.infrastructure;
 
-import java.time.LocalDate;
 import java.util.List;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Mapper;
@@ -98,43 +97,37 @@ public interface GrowthMapper {
     List<GrowthEventRecord> findRecentEvents(@Param("userId") Long userId, @Param("limit") int limit);
 
     /**
-     * 查询最近刷题日期。
+     * 统计刷题评分完成次数。
      *
      * @param userId 用户ID
-     * @return 日期列表
+     * @return 完成次数
      */
-    @Select("""
-            SELECT DISTINCT DATE(last_answered_at)
-            FROM user_question_stats
-            WHERE user_id = #{userId} AND last_answered_at IS NOT NULL
-            ORDER BY DATE(last_answered_at) DESC
-            LIMIT 30
-            """)
-    List<LocalDate> findRecentAnswerDates(@Param("userId") Long userId);
+    @Select("SELECT COALESCE(SUM(answer_count), 0) FROM user_question_stats WHERE user_id = #{userId}")
+    long countCompletedAnswers(@Param("userId") Long userId);
 
     /**
-     * 按题目分类统计完成题数。
+     * 统计总学习天数。
      *
      * @param userId 用户ID
-     * @param keyword 分类关键词
-     * @return 完成题数
+     * @return 学习天数
      */
     @Select("""
             SELECT COUNT(1)
-            FROM user_question_stats stats
-            JOIN questions q ON q.code = stats.question_code
-            WHERE stats.user_id = #{userId} AND q.question_type LIKE CONCAT('%', #{keyword}, '%')
+            FROM (
+                SELECT DATE(created_at) AS learning_day
+                FROM growth_events
+                WHERE user_id = #{userId} AND event_type = 'ANSWER'
+                UNION
+                SELECT DATE(first_answered_at) AS learning_day
+                FROM user_question_stats
+                WHERE user_id = #{userId} AND first_answered_at IS NOT NULL
+                UNION
+                SELECT DATE(last_answered_at) AS learning_day
+                FROM user_question_stats
+                WHERE user_id = #{userId} AND last_answered_at IS NOT NULL
+            ) learning_days
             """)
-    long countAnsweredByKnowledgeKeyword(@Param("userId") Long userId, @Param("keyword") String keyword);
-
-    /**
-     * 统计已答题目数量。
-     *
-     * @param userId 用户ID
-     * @return 已答题目数量
-     */
-    @Select("SELECT COUNT(1) FROM user_question_stats WHERE user_id = #{userId} AND answer_count > 0")
-    long countAnsweredQuestions(@Param("userId") Long userId);
+    int countLearningDays(@Param("userId") Long userId);
 
     /**
      * 查询最高分平均值。

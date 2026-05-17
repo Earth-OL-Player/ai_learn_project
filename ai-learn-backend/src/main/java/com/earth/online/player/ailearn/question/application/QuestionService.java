@@ -76,11 +76,14 @@ public class QuestionService {
     /**
      * 查询热门面经阅读文档题目。
      *
+     * @param questionType 题目分类
      * @return 热门面经题目详情列表
      */
-    public List<QuestionDetailResponse> findInterviewDocument() {
-        // 阅读文档需要一次性拿到参考答案，避免前端逐题打开详情弹窗。
-        return questionMapper.findInterviewDocument()
+    public List<QuestionDetailResponse> findInterviewDocument(String questionType) {
+        String safeQuestionType = normalizeQuestionType(questionType);
+
+        // 阅读文档按当前分类查询，避免一次性加载全量题目造成页面卡顿。
+        return questionMapper.findInterviewDocument(safeQuestionType)
                 .stream()
                 .map(this::toDetailResponse)
                 .toList();

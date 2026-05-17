@@ -24,15 +24,32 @@
       <div class="practice-chat-header">
         <div class="practice-category-picker">
           <span>请选择题目分类</span>
-          <el-select v-model="selectedCategories" multiple collapse-tags collapse-tags-tooltip filterable placeholder="全部分类">
+          <el-select
+            v-model="selectedCategories"
+            multiple
+            collapse-tags
+            collapse-tags-tooltip
+            filterable
+            placeholder="全部分类"
+            @visible-change="handleCategoryVisibleChange"
+            @change="handleCategoryChange"
+          >
             <el-option v-for="item in categories" :key="item" :label="item" :value="item" />
           </el-select>
         </div>
         <el-button class="main-action-button" type="primary" round :loading="loading" @click="handleNextQuestion">{{ nextButtonText }}</el-button>
-        <el-button class="sub-action-button" round :disabled="!currentQuestion" :loading="loading" @click="handleRetry">重答本题</el-button>
+        <el-button class="sub-action-button" round :disabled="retryButtonDisabled" :loading="loading" @click="handleRetry">重答本题</el-button>
       </div>
 
       <section ref="messagePanelRef" class="practice-message-panel">
+        <el-alert
+          v-if="!authStore.isLoggedIn"
+          class="guest-login-alert"
+          title="游客可浏览 AI 智能刷题页面，开始练习、重答、发送答案等功能需要先注册登录。"
+          type="info"
+          :closable="false"
+          show-icon
+        />
         <el-empty v-if="messages.length === 0" description="选择分类后点击开始，或直接输入想练习的题型" />
         <article v-for="item in messages" :key="item.id" class="practice-message" :class="item.role">
           <div class="message-bubble">
@@ -96,11 +113,47 @@
           :rows="3"
           resize="none"
           :placeholder="inputPlaceholder"
+          @focus="handleGuestInteraction"
           @keydown.enter.exact.prevent="sendMessage"
         />
         <el-button type="primary" round :loading="loading" @click="sendMessage">发送</el-button>
       </div>
     </main>
+
+    <el-dialog
+      v-model="badgeDialogVisible"
+      class="badge-award-dialog"
+      width="560px"
+      align-center
+      :show-close="false"
+      :close-on-click-modal="false"
+      @closed="handleBadgeDialogClosed"
+    >
+      <template #header>
+        <div class="badge-award-header">
+          <span class="badge-award-medal">🏅</span>
+          <div>
+            <strong>恭喜获得新勋章</strong>
+            <p>{{ badgeAwardSubtitle }}</p>
+          </div>
+        </div>
+      </template>
+
+      <div class="badge-award-list" :class="{ multiple: badgeDialogBadges.length > 1 }">
+        <article v-for="badge in badgeDialogBadges" :key="badge.ruleCode || badge.id" class="badge-award-item">
+          <div class="badge-award-icon">{{ badge.icon }}</div>
+          <div class="badge-award-copy">
+            <span>{{ badge.categoryName }}</span>
+            <strong>{{ badge.name }}</strong>
+            <p>{{ badge.description }}</p>
+          </div>
+        </article>
+      </div>
+
+      <template #footer>
+        <el-button class="badge-award-confirm" type="primary" round @click="badgeDialogVisible = false">继续刷题</el-button>
+      </template>
+    </el-dialog>
   </section>
 </template>
 
@@ -108,8 +161,10 @@
 import { ElMessage } from 'element-plus';
 import MarkdownIt from 'markdown-it';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
-import { computed, nextTick, onMounted, ref } from 'vue';
+import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import {
+  fetchPracticeCategories,
   fetchNextPracticeQuestion,
   fetchPracticeState,
   retryPracticeQuestion,
@@ -120,7 +175,7 @@ import {
   type PracticeQuestion,
   type PracticeState,
 } from '../../api/practice';
-import type { GrowthInfo } from '../../types/growth';
+import type { BadgeInfo, GrowthInfo } from '../../types/growth';
 import { useAuthStore } from '../../stores/auth';
 
 interface ChatMessage {
@@ -140,6 +195,7 @@ interface PracticeChatSnapshot {
 }
 
 const EMPTY_LIST_TEXT = '暂无';
+const GUEST_LOGIN_MESSAGE = '注册登录后即可使用该功能';
 const PRACTICE_CHAT_STORAGE_PREFIX = 'ai_learn_practice_chat_';
 const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
 const loading = ref(false);
@@ -151,7 +207,11 @@ const currentQuestion = ref<PracticeQuestion | null>(null);
 const growth = ref<GrowthInfo | null>(null);
 const messages = ref<ChatMessage[]>([]);
 const messagePanelRef = ref<HTMLElement | null>(null);
+const badgeDialogVisible = ref(false);
+const badgeDialogBadges = ref<BadgeInfo[]>([]);
 const authStore = useAuthStore();
+const route = useRoute();
+const router = useRouter();
 let messageId = 1;
 
 // 左侧角色卡昵称优先使用用户昵称，未设置时回退用户名。
@@ -162,6 +222,9 @@ const nextButtonText = computed(() => (phase.value === 'QUESTIONING' ? '开始' 
 
 // 输入框提示根据当前阶段变化，引导用户输入最合适的内容。
 const inputPlaceholder = computed(() => {
+  if (!authStore.isLoggedIn) {
+    return '注册登录后即可开始练习、提交答案和获得成长经验';
+  }
   if (phase.value === 'ANSWERING') {
     return '请输入你的答案';
   }
@@ -171,12 +234,28 @@ const inputPlaceholder = computed(() => {
   return '请告诉AI你想练的题';
 });
 
+// 未登录状态下仍允许点击重答按钮，以便明确提示注册登录要求。
+const retryButtonDisabled = computed(() => authStore.isLoggedIn && !currentQuestion.value);
+
+// 勋章弹框副标题按数量动态展示，多个勋章时突出批量点亮的成就感。
+const badgeAwardSubtitle = computed(() => {
+  const badgeCount = badgeDialogBadges.value.length;
+  if (badgeCount > 1) {
+    return `一次点亮 ${badgeCount} 枚勋章，今天的修炼收获满满。`;
+  }
+  return '新的学习成就已点亮，继续保持。';
+});
+
 /**
  * 初始化刷题页面。
  */
 async function initializePage(): Promise<void> {
   loading.value = true;
   try {
+    if (!authStore.isLoggedIn) {
+      await initializeGuestPage();
+      return;
+    }
     const state = await fetchPracticeState();
     phase.value = state.phase;
     categories.value = state.questionTypes;
@@ -197,9 +276,24 @@ async function initializePage(): Promise<void> {
 }
 
 /**
+ * 初始化游客可浏览的刷题页面外壳。
+ */
+async function initializeGuestPage(): Promise<void> {
+  categories.value = await fetchPracticeCategories();
+  phase.value = 'QUESTIONING';
+  currentQuestion.value = null;
+  growth.value = null;
+  messages.value = [];
+  clearPracticeSnapshot();
+}
+
+/**
  * 抽取下一题。
  */
 async function handleNextQuestion(): Promise<void> {
+  if (!ensureLoggedIn()) {
+    return;
+  }
   loading.value = true;
   try {
     const result = await fetchNextPracticeQuestion({ questionTypes: selectedCategories.value });
@@ -215,6 +309,13 @@ async function handleNextQuestion(): Promise<void> {
  * 重新回答当前题。
  */
 async function handleRetry(): Promise<void> {
+  if (!ensureLoggedIn()) {
+    return;
+  }
+  if (!currentQuestion.value) {
+    ElMessage.warning('请先开始一道题');
+    return;
+  }
   loading.value = true;
   try {
     const result = await retryPracticeQuestion();
@@ -230,6 +331,9 @@ async function handleRetry(): Promise<void> {
  * 发送聊天消息。
  */
 async function sendMessage(): Promise<void> {
+  if (!ensureLoggedIn()) {
+    return;
+  }
   const content = inputText.value.trim();
   if (!content) {
     ElMessage.warning('请输入内容');
@@ -260,6 +364,47 @@ async function sendMessage(): Promise<void> {
 }
 
 /**
+ * 处理游客点击页面功能区的交互。
+ */
+function handleGuestInteraction(): void {
+  ensureLoggedIn();
+}
+
+/**
+ * 处理游客展开分类下拉框。
+ */
+function handleCategoryVisibleChange(visible: boolean): void {
+  if (visible) {
+    ensureLoggedIn();
+  }
+}
+
+/**
+ * 处理分类变更，游客选择后立即回退并提示登录。
+ */
+function handleCategoryChange(): void {
+  if (authStore.isLoggedIn) {
+    return;
+  }
+  selectedCategories.value = [];
+  ensureLoggedIn();
+}
+
+/**
+ * 校验是否已登录，未登录时弹出统一注册登录提示。
+ */
+function ensureLoggedIn(): boolean {
+  if (authStore.isLoggedIn) {
+    return true;
+  }
+
+  // 通过路由查询参数复用布局层登录引导弹窗，保证提示体验统一。
+  ElMessage.warning(GUEST_LOGIN_MESSAGE);
+  router.replace({ path: route.path, query: { ...route.query, loginGuide: '1' } }).catch(() => undefined);
+  return false;
+}
+
+/**
  * 应用后端返回结果。
  */
 function applyResult(result: PracticeMessageResult, clearMessages: boolean): void {
@@ -279,6 +424,7 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
   }
   savePracticeSnapshot();
   scrollToBottom();
+  showNewBadgeDialog(result);
 }
 
 /**
@@ -302,6 +448,7 @@ function applyStreamingResult(result: PracticeMessageResult, assistantMessage: C
   }
   savePracticeSnapshot();
   scrollToBottom();
+  showNewBadgeDialog(result);
 }
 
 /**
@@ -455,6 +602,62 @@ function experienceTooltip(grading: PracticeGrading): string {
   return grading.experienceDetail || (grading.earnedExperience > 0 ? `比历史最高分多拿了 ${grading.earnedExperience} 分` : '未能突破上次分数');
 }
 
+/**
+ * 展示新勋章弹框。
+ */
+function showNewBadgeDialog(result: PracticeMessageResult): void {
+  const newBadges = extractNewBadges(result);
+  if (newBadges.length === 0) {
+    return;
+  }
+
+  // 弹框打开期间如果又获得新勋章，合并展示而不是连续打断用户。
+  const currentBadges = badgeDialogVisible.value ? badgeDialogBadges.value : [];
+  badgeDialogBadges.value = mergeUniqueBadges(currentBadges, newBadges);
+  badgeDialogVisible.value = true;
+}
+
+/**
+ * 提取并去重新获得的勋章。
+ */
+function extractNewBadges(result: PracticeMessageResult): BadgeInfo[] {
+  const sourceBadges = [...(result.grading?.newBadges ?? []), ...(result.growth?.newBadges ?? [])];
+  return mergeUniqueBadges([], sourceBadges);
+}
+
+/**
+ * 合并并去重新获得的勋章。
+ */
+function mergeUniqueBadges(baseBadges: BadgeInfo[], nextBadges: BadgeInfo[]): BadgeInfo[] {
+  const badgeKeys = new Set<string>();
+
+  // 同一个勋章可能同时出现在评分结果和成长概览中，前端只提示一次。
+  return [...baseBadges, ...nextBadges].filter((badge) => {
+    const badgeKey = badge.ruleCode || badge.id;
+    if (badgeKeys.has(badgeKey)) {
+      return false;
+    }
+    badgeKeys.add(badgeKey);
+    return true;
+  });
+}
+
+/**
+ * 关闭勋章弹框后清空临时展示数据。
+ */
+function handleBadgeDialogClosed(): void {
+  badgeDialogBadges.value = [];
+}
+
+watch(
+  () => authStore.isLoggedIn,
+  (isLoggedIn) => {
+    if (isLoggedIn) {
+      initializePage();
+    }
+  },
+);
+
 onMounted(initializePage);
 </script>
 
@@ -571,6 +774,12 @@ onMounted(initializePage);
   overflow-y: auto;
   padding: 24px;
   background: linear-gradient(180deg, #f8fbff 0%, #ffffff 100%);
+}
+
+.guest-login-alert {
+  // 游客提示放在对话区顶部，既不阻断页面浏览，也明确功能使用门槛。
+  margin-bottom: 18px;
+  border-radius: 14px;
 }
 
 .practice-message {
@@ -761,6 +970,130 @@ onMounted(initializePage);
   border-top: 1px solid #edf2f7;
 }
 
+:deep(.badge-award-dialog) {
+  // 勋章弹框使用独立卡片质感，替代纯文本 alert 的拥挤观感。
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    radial-gradient(circle at 18% 0%, rgba(255, 211, 100, 0.24), transparent 32%),
+    radial-gradient(circle at 92% 18%, rgba(47, 125, 246, 0.16), transparent 30%),
+    linear-gradient(145deg, #ffffff 0%, #f7fbff 100%);
+  box-shadow: 0 28px 80px rgba(31, 42, 68, 0.18);
+}
+
+:deep(.badge-award-dialog .el-dialog__header) {
+  margin: 0;
+  padding: 0;
+}
+
+:deep(.badge-award-dialog .el-dialog__body) {
+  padding: 0 26px 8px;
+}
+
+:deep(.badge-award-dialog .el-dialog__footer) {
+  padding: 16px 26px 24px;
+}
+
+.badge-award-header {
+  // 顶部用奖章和轻量渐变营造成就反馈，不再依赖默认弹窗标题。
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  padding: 26px 26px 18px;
+}
+
+.badge-award-medal {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 20px;
+  background: linear-gradient(145deg, #fff7d6 0%, #ffffff 100%);
+  box-shadow: 0 16px 34px rgba(245, 158, 11, 0.18);
+  font-size: 30px;
+}
+
+.badge-award-header strong {
+  display: block;
+  color: #17233d;
+  font-size: 22px;
+  font-weight: 900;
+  line-height: 1.2;
+}
+
+.badge-award-header p {
+  margin: 8px 0 0;
+  color: #667085;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.badge-award-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.badge-award-list.multiple {
+  // 多枚勋章时自动使用双列卡片，比换行纯文本更清晰。
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.badge-award-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-height: 104px;
+  padding: 16px;
+  border: 1px solid rgba(47, 125, 246, 0.12);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.82);
+  box-shadow: 0 14px 34px rgba(61, 91, 132, 0.08);
+}
+
+.badge-award-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  border-radius: 18px;
+  background: linear-gradient(145deg, #eef7ff 0%, #fffaf0 100%);
+  font-size: 28px;
+}
+
+.badge-award-copy {
+  min-width: 0;
+}
+
+.badge-award-copy span {
+  color: #1f6feb;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.badge-award-copy strong {
+  display: block;
+  margin-top: 4px;
+  color: #17233d;
+  font-size: 18px;
+  font-weight: 900;
+}
+
+.badge-award-copy p {
+  margin: 6px 0 0;
+  color: #667085;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.badge-award-confirm {
+  min-width: 128px;
+  font-weight: 800;
+}
+
 @media (max-width: 980px) {
   .practice-chat-page {
     grid-template-columns: 1fr;
@@ -788,6 +1121,10 @@ onMounted(initializePage);
   }
 
   .grading-detail-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .badge-award-list.multiple {
     grid-template-columns: 1fr;
   }
 }

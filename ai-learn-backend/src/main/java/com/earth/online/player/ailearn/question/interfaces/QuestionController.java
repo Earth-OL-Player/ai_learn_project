@@ -60,11 +60,13 @@ public class QuestionController {
     /**
      * 查询热门面经阅读文档。
      *
+     * @param questionType 题目分类
      * @return 热门面经题目详情列表
      */
     @GetMapping("/interview-document")
-    public ApiResponse<List<QuestionDetailResponse>> findInterviewDocument() {
-        return ApiResponse.success(questionService.findInterviewDocument());
+    public ApiResponse<List<QuestionDetailResponse>> findInterviewDocument(
+            @RequestParam(required = false) String questionType) {
+        return ApiResponse.success(questionService.findInterviewDocument(questionType));
     }
 
     /**

@@ -87,7 +87,7 @@ public interface PracticeMapper {
      * @return 刷题状态
      */
     @Select("""
-            SELECT id, user_id, question_code, phase, last_score, last_answer_text
+            SELECT id, user_id, question_code, phase, last_score, last_answer_text, discussion_follow_up_count
             FROM user_practice_sessions
             WHERE user_id = #{userId}
             """)
@@ -102,12 +102,14 @@ public interface PracticeMapper {
      * @return 影响行数
      */
     @Insert("""
-            INSERT INTO user_practice_sessions(user_id, question_code, phase, last_score, last_answer_text, started_at, answered_at)
-            VALUES(#{userId}, #{questionCode}, #{phase}, NULL, NULL, NOW(), NULL)
+            INSERT INTO user_practice_sessions(user_id, question_code, phase, last_score, last_answer_text,
+                                               discussion_follow_up_count, started_at, answered_at)
+            VALUES(#{userId}, #{questionCode}, #{phase}, NULL, NULL, 0, NOW(), NULL)
             ON DUPLICATE KEY UPDATE question_code = VALUES(question_code),
                                     phase = VALUES(phase),
                                     last_score = NULL,
                                     last_answer_text = NULL,
+                                    discussion_follow_up_count = 0,
                                     started_at = NOW(),
                                     answered_at = NULL
             """)
@@ -128,7 +130,11 @@ public interface PracticeMapper {
      */
     @Update("""
             UPDATE user_practice_sessions
-            SET phase = #{phase}, last_score = #{lastScore}, last_answer_text = #{lastAnswerText}, answered_at = NOW()
+            SET phase = #{phase},
+                last_score = #{lastScore},
+                last_answer_text = #{lastAnswerText},
+                discussion_follow_up_count = 0,
+                answered_at = NOW()
             WHERE user_id = #{userId}
             """)
     int updateSessionPhase(
@@ -137,6 +143,19 @@ public interface PracticeMapper {
             @Param("lastScore") Integer lastScore,
             @Param("lastAnswerText") String lastAnswerText
     );
+
+    /**
+     * 增加当前题讨论追问次数。
+     *
+     * @param userId 用户ID
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE user_practice_sessions
+            SET discussion_follow_up_count = discussion_follow_up_count + 1
+            WHERE user_id = #{userId}
+            """)
+    int incrementDiscussionFollowUpCount(@Param("userId") Long userId);
 
     /**
      * 查询用户题目汇总。

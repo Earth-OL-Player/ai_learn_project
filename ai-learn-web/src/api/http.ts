@@ -35,13 +35,13 @@ function buildRequestUrl(path: string): string {
 /**
  * 构造请求头，自动追加登录令牌。
  */
-function buildHeaders(extraHeaders?: HeadersInit): HeadersInit {
+function buildHeaders(extraHeaders?: HeadersInit, includeAuthToken = true): HeadersInit {
   const headers = new Headers(extraHeaders);
   const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
 
   // 登录后统一通过 Bearer token 访问受保护接口。
   headers.set('Accept', headers.get('Accept') || 'application/json');
-  if (token) {
+  if (includeAuthToken && token) {
     headers.set('Authorization', `Bearer ${token}`);
   }
   return headers;
@@ -77,11 +77,11 @@ async function parseResponse<T>(response: Response): Promise<T> {
 /**
  * 发起 HTTP 请求并处理统一响应。
  */
-async function request<T>(path: string, init: RequestInit): Promise<T> {
+async function request<T>(path: string, init: RequestInit, includeAuthToken = true): Promise<T> {
   try {
     const response = await fetch(buildRequestUrl(path), {
       ...init,
-      headers: buildHeaders(init.headers),
+      headers: buildHeaders(init.headers, includeAuthToken),
     });
     return await parseResponse<T>(response);
   } catch (error) {
@@ -112,6 +112,13 @@ async function requestBlob(path: string): Promise<Blob> {
  */
 export async function get<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'GET' });
+}
+
+/**
+ * 发起游客公开 GET 请求，不携带本地登录令牌。
+ */
+export async function getPublic<T>(path: string): Promise<T> {
+  return request<T>(path, { method: 'GET' }, false);
 }
 
 /**

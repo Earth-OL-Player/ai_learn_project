@@ -2,53 +2,49 @@
   <section class="roadmap-page interview-document-page">
     <div :class="['markdown-layout', { 'is-toc-collapsed': isTocCollapsed }]">
       <nav
-        v-if="tocItems.length"
-        :class="['markdown-toc-card', { 'is-collapsed': isTocCollapsed }]"
-        aria-label="热门面经目录"
+        v-if="questionTypes.length"
+        :class="['markdown-toc-card interview-category-card', { 'is-collapsed': isTocCollapsed }]"
+        aria-label="热门面经分类"
       >
         <div class="markdown-toc-header">
-          <h3 v-if="!isTocCollapsed">目录</h3>
+          <h3 v-if="!isTocCollapsed">分类</h3>
           <button type="button" class="markdown-toc-toggle" @click="toggleToc">
             {{ isTocCollapsed ? '展开' : '收起' }}
           </button>
         </div>
 
-        <div v-show="!isTocCollapsed" class="markdown-toc-list">
-          <a
-            v-for="item in tocItems"
-            :key="item.id"
-            :href="`#${item.id}`"
-            :class="[
-              'markdown-toc-link',
-              `markdown-toc-level-${item.level}`,
-              { 'is-active': activeTocId === item.id },
-            ]"
-            @click="setActiveToc(item.id)"
+        <div v-show="!isTocCollapsed" class="markdown-toc-list interview-category-list">
+          <button
+            v-for="questionType in questionTypes"
+            :key="questionType"
+            type="button"
+            :class="['markdown-toc-link interview-category-button', { 'is-active': activeQuestionType === questionType }]"
+            @click="handleCategoryChange(questionType)"
           >
-            {{ item.title }}
-          </a>
+            {{ questionType }}
+          </button>
         </div>
       </nav>
 
       <article class="markdown-card interview-document-card">
         <el-skeleton :loading="loading" animated :rows="10">
-          <el-empty v-if="categorySections.length === 0" description="暂无热门面经内容，管理员补充题库后将自动展示" />
+          <el-empty v-if="!activeQuestionType" description="暂无热门面经内容，管理员补充题库后将自动展示" />
           <div v-else class="markdown-body interview-markdown-body">
             <h1>热门面经</h1>
             <p class="interview-document-intro">
-              精选 AI、RAG、Agent 等方向真实面试高频题，按分类连续阅读，帮助你用文档方式系统复盘。
+              精选 AI、RAG、Agent 等方向真实面试高频题，当前按分类加载阅读，切换分类时再查询对应题目。
             </p>
 
-            <section
-              v-for="section in categorySections"
-              :id="section.id"
-              :key="section.id"
-              class="interview-category-section"
-            >
-              <h2>{{ section.title }}</h2>
+            <section class="interview-category-section">
+              <h2>{{ activeQuestionType }}</h2>
 
+              <el-empty
+                v-if="questionDetails.length === 0"
+                :description="`${activeQuestionType} 分类暂无题目，管理员补充题库后将自动展示`"
+              />
               <article
-                v-for="(question, index) in section.questions"
+                v-for="(question, index) in questionDetails"
+                v-else
                 :key="question.id"
                 class="interview-question-card"
               >
@@ -74,30 +70,15 @@
 <script setup lang="ts">
 import { ElMessage } from 'element-plus';
 import MarkdownIt from 'markdown-it';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import { fetchInterviewQuestionDocument } from '../../api/questions';
+import { onMounted, ref } from 'vue';
+import { fetchInterviewQuestionDocument, fetchPublicQuestionTypes } from '../../api/questions';
 import type { QuestionDetail } from '../../types/question';
 
-interface TocItem {
-  id: string;
-  level: number;
-  title: string;
-}
-
-interface CategorySection {
-  id: string;
-  title: string;
-  questions: QuestionDetail[];
-}
-
-const SCROLL_ACTIVE_OFFSET = 132;
-
-const activeTocId = ref('');
+const activeQuestionType = ref('');
 const isTocCollapsed = ref(false);
 const loading = ref(false);
 const questionDetails = ref<QuestionDetail[]>([]);
-
-let scrollUpdatePending = false;
+const questionTypes = ref<string[]>([]);
 
 const markdown = new MarkdownIt({
   html: false,
@@ -119,19 +100,16 @@ markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
     : self.renderToken(tokens, index, options);
 };
 
-const categorySections = computed(() => buildCategorySections(questionDetails.value));
-const tocItems = computed(() => categorySections.value.map(toTocItem));
-
 /**
- * 加载热门面经阅读文档。
+ * 初始化热门面经分类和默认题目。
  */
-async function loadInterviewDocument(): Promise<void> {
+async function initializeInterviewDocument(): Promise<void> {
   loading.value = true;
   try {
-    // 后端已按分类和高频权重排序，前端只负责阅读体验编排。
-    questionDetails.value = await fetchInterviewQuestionDocument();
-    await nextTick();
-    updateActiveTocByReadingPosition();
+    // 先查询分类，进入页面默认加载第一个分类，避免一次性拉取所有题目。
+    questionTypes.value = await fetchPublicQuestionTypes();
+    activeQuestionType.value = questionTypes.value[0] || '';
+    questionDetails.value = activeQuestionType.value ? await fetchInterviewQuestionDocument(activeQuestionType.value) : [];
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '热门面经加载失败');
   } finally {
@@ -140,64 +118,36 @@ async function loadInterviewDocument(): Promise<void> {
 }
 
 /**
- * 按题目分类构建页面阅读分区。
+ * 处理分类切换并按分类重新查询题目。
+ *
+ * @param questionType 目标题目分类
  */
-function buildCategorySections(items: QuestionDetail[]): CategorySection[] {
-  const headingIdGenerator = createHeadingIdGenerator();
+async function handleCategoryChange(questionType: string): Promise<void> {
+  if (questionType === activeQuestionType.value || loading.value) {
+    return;
+  }
 
-  // 分类文案为空时兜底到“未分类”，避免正文标题缺失。
-  return Array.from(groupQuestionsByType(items).entries()).map(([title, questions]) => ({
-    id: headingIdGenerator(title),
-    title,
-    questions,
-  }));
+  activeQuestionType.value = questionType;
+  await loadInterviewDocumentByCategory(questionType);
 }
 
 /**
- * 按题目分类分组，并保持后端返回顺序。
+ * 按指定分类加载热门面经题目。
+ *
+ * @param questionType 题目分类
  */
-function groupQuestionsByType(items: QuestionDetail[]): Map<string, QuestionDetail[]> {
-  const groupedQuestions = new Map<string, QuestionDetail[]>();
-
-  // 使用 Map 保持接口返回的分类顺序，避免前端二次排序产生跳动。
-  items.forEach((item) => {
-    const questionTypeText = item.questionTypeText?.trim() || item.questionType?.trim() || '未分类';
-    const questions = groupedQuestions.get(questionTypeText) || [];
-    questions.push(item);
-    groupedQuestions.set(questionTypeText, questions);
-  });
-
-  return groupedQuestions;
-}
-
-/**
- * 转换阅读分区为左侧目录项。
- */
-function toTocItem(section: CategorySection): TocItem {
-  return {
-    id: section.id,
-    level: 2,
-    title: section.title,
-  };
-}
-
-/**
- * 创建标题锚点生成器，重复标题自动追加序号。
- */
-function createHeadingIdGenerator(): (title: string) => string {
-  const headingIdCounter = new Map<string, number>();
-
-  return (title: string) => {
-    const baseId = title
-      .trim()
-      .toLowerCase()
-      .replace(/[`*_~()[\]{}]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'section';
-    const count = headingIdCounter.get(baseId) || 0;
-    headingIdCounter.set(baseId, count + 1);
-    return count === 0 ? baseId : `${baseId}-${count + 1}`;
-  };
+async function loadInterviewDocumentByCategory(questionType: string): Promise<void> {
+  loading.value = true;
+  try {
+    // 每次只保留当前分类题目，降低渲染节点数量，缓解页面卡顿。
+    questionDetails.value = [];
+    questionDetails.value = await fetchInterviewQuestionDocument(questionType);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '热门面经加载失败');
+  } finally {
+    loading.value = false;
+  }
 }
 
 /**
@@ -239,72 +189,13 @@ function formatNumber(value: number): string {
 }
 
 /**
- * 设置当前激活目录。
- */
-function setActiveToc(tocId: string): void {
-  activeTocId.value = tocId;
-}
-
-/**
  * 切换目录展开和收起状态。
  */
 function toggleToc(): void {
   isTocCollapsed.value = !isTocCollapsed.value;
 }
 
-/**
- * 请求根据当前阅读位置刷新目录选中项。
- */
-function requestActiveTocUpdate(): void {
-  if (scrollUpdatePending) {
-    return;
-  }
-
-  // 滚动事件较频繁，使用动画帧合并计算避免抖动。
-  scrollUpdatePending = true;
-  window.requestAnimationFrame(() => {
-    scrollUpdatePending = false;
-    updateActiveTocByReadingPosition();
-  });
-}
-
-/**
- * 根据用户当前阅读位置选中左侧目录。
- */
-function updateActiveTocByReadingPosition(): void {
-  if (!categorySections.value.length) {
-    activeTocId.value = '';
-    return;
-  }
-
-  let currentSectionId = categorySections.value[0].id;
-  for (const section of categorySections.value) {
-    const sectionElement = document.getElementById(section.id);
-    if (!sectionElement) {
-      continue;
-    }
-
-    // 标题到达顶部导航下方时，即认为用户进入该分类阅读区。
-    if (sectionElement.getBoundingClientRect().top <= SCROLL_ACTIVE_OFFSET) {
-      currentSectionId = section.id;
-      continue;
-    }
-    break;
-  }
-
-  activeTocId.value = currentSectionId;
-}
-
-onMounted(async () => {
-  await loadInterviewDocument();
-  window.addEventListener('scroll', requestActiveTocUpdate, { passive: true });
-  window.addEventListener('resize', requestActiveTocUpdate);
-});
-
-onBeforeUnmount(() => {
-  window.removeEventListener('scroll', requestActiveTocUpdate);
-  window.removeEventListener('resize', requestActiveTocUpdate);
-});
+onMounted(initializeInterviewDocument);
 </script>
 
 <style scoped lang="scss">
@@ -314,6 +205,28 @@ onBeforeUnmount(() => {
 
 .interview-document-intro {
   color: #5d6b82;
+}
+
+.interview-category-card {
+  // 分类导航只承担筛选功能，保持左侧轻量且清爽。
+  max-height: calc(100vh - 116px);
+}
+
+.interview-category-list {
+  gap: 8px;
+}
+
+.interview-category-button {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+}
+
+.interview-category-button:hover {
+  color: #1f6feb;
+  background: #f4f8ff;
 }
 
 .interview-category-section {
@@ -403,3 +316,4 @@ onBeforeUnmount(() => {
   }
 }
 </style>
+

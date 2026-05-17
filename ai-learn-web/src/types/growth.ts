@@ -23,6 +23,9 @@ export interface BadgeInfo {
   description: string;
   icon: string;
   ruleCode: string;
+  category: string;
+  categoryName: string;
+  hidden: boolean;
   acquired: boolean;
   acquiredAt: string | null;
 }

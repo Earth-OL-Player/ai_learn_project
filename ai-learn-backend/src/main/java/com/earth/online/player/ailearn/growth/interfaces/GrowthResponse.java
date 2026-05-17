@@ -17,7 +17,7 @@ import java.util.List;
  * @param answeredCount 累计答题数量
  * @param averageScore 平均得分
  * @param experienceToNextLevel 距离下一级经验
- * @param streakDays 连续学习天数
+ * @param streakDays 总学习天数，沿用历史字段名
  * @param badges 徽章墙
  * @param newBadges 本次新获得徽章
  * @param recentEvents 最近成长事件

@@ -1,14 +1,5 @@
 <template>
   <section class="interaction-page">
-    <header class="page-hero">
-      <div>
-        <p class="eyebrow">AI 学习共建社区</p>
-        <h1>建议评论区</h1>
-        <p class="hero-desc">像浏览评论一样提交建议、交流想法，保持纯文字、轻量和高效。</p>
-      </div>
-      <div class="hero-badge">清新评论流</div>
-    </header>
-
     <nav class="mode-switch" aria-label="建议评论区切换">
       <button :class="['mode-button', { active: activeTab === 'suggestions' }]" type="button" @click="switchTab('suggestions')">
         建议区
@@ -22,7 +13,6 @@
       <header class="board-header">
         <div>
           <h2>{{ activeTitle }} <span>{{ activeTotal }}</span></h2>
-          <p>{{ activeDescription }}</p>
         </div>
         <div class="sort-tabs" aria-label="排序方式">
           <button :class="{ active: activeSort === 'hot' }" type="button" @click="changeSort('hot')">最热</button>
@@ -51,7 +41,7 @@
             v-model="suggestionForm.content"
             class="composer-input"
             maxlength="1000"
-            placeholder="写下你的建议，纯文字即可"
+            placeholder="请输入你的建议"
             @focus="guardComposerFocus"
           ></textarea>
           <textarea
@@ -59,12 +49,11 @@
             v-model="commentForm.content"
             class="composer-input"
             maxlength="1000"
-            placeholder="这里需要一条纯文字评论"
+            placeholder="请输入你的评论"
             @focus="guardComposerFocus"
           ></textarea>
 
           <div class="composer-footer">
-            <span>仅支持文字，不能使用表情、艾特或转发到动态。</span>
             <el-button type="primary" round :loading="activeSubmitting" @click="submitActiveContent">
               {{ activeSubmitText }}
             </el-button>
@@ -226,7 +215,6 @@ const activeTotal = computed(() => (activeTab.value === 'suggestions' ? suggesti
 const activePageSize = computed(() => (activeTab.value === 'suggestions' ? suggestionPage.pageSize : commentPage.pageSize));
 const activeTitle = computed(() => (activeTab.value === 'suggestions' ? '建议' : '评论'));
 const activeSubmitText = computed(() => (activeTab.value === 'suggestions' ? '发布建议' : '发表评论'));
-const activeDescription = computed(() => (activeTab.value === 'suggestions' ? '选择类型后写下建议，我们按评论流展示。' : '分享学习想法，支持一级回复和点赞。'));
 const activeEmptyText = computed(() => (activeTab.value === 'suggestions' ? '暂无建议，期待你的第一条反馈' : '暂无评论，欢迎开始交流'));
 const isActiveEmpty = computed(() => (activeTab.value === 'suggestions' ? suggestions.value.length === 0 : comments.value.length === 0));
 
@@ -600,47 +588,6 @@ onMounted(async () => {
   gap: 18px;
 }
 
-.page-hero {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 28px;
-  border: 1px solid #eef4ff;
-  border-radius: 26px;
-  background: linear-gradient(135deg, #f7fbff 0%, #f9fff7 100%);
-}
-
-.eyebrow {
-  margin: 0 0 8px;
-  color: #22a06b;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-
-.page-hero h1 {
-  margin: 0;
-  color: #1f2937;
-  font-size: 32px;
-  letter-spacing: -0.02em;
-}
-
-.hero-desc {
-  margin: 10px 0 0;
-  color: #667085;
-  line-height: 1.7;
-}
-
-.hero-badge {
-  padding: 10px 16px;
-  color: #22a06b;
-  border: 1px solid #c7f0dc;
-  border-radius: 999px;
-  background: #f0fdf4;
-  font-size: 13px;
-  font-weight: 700;
-}
-
 .mode-switch {
   display: inline-flex;
   align-self: flex-start;
@@ -693,11 +640,6 @@ onMounted(async () => {
   color: #98a2b3;
   font-size: 18px;
   font-weight: 500;
-}
-
-.board-header p {
-  margin: 8px 0 0;
-  color: #98a2b3;
 }
 
 .sort-tabs {
@@ -789,11 +731,18 @@ onMounted(async () => {
 .reply-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   margin-top: 10px;
   color: #98a2b3;
   font-size: 13px;
+}
+
+.composer-footer {
+  justify-content: flex-end;
+}
+
+.reply-footer {
+  justify-content: space-between;
 }
 
 .feed-list {
@@ -947,7 +896,6 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
-  .page-hero,
   .board-header,
   .composer-footer,
   .reply-footer {
@@ -957,6 +905,10 @@ onMounted(async () => {
 
   .interaction-board {
     padding: 22px 18px;
+  }
+
+  .composer-footer {
+    align-items: flex-end;
   }
 
   .composer-card,
