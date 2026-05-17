@@ -5,6 +5,9 @@ import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -15,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -88,6 +92,7 @@ public class PracticeAiClient {
      * 请求 AI 服务进行本题讨论。
      *
      * @param question 当前题目
+     * @param lastUserAnswer 最近一次答案
      * @param message 用户消息
      * @return 讨论回复
      */
@@ -96,13 +101,7 @@ public class PracticeAiClient {
             return Optional.empty();
         }
         try {
-            ObjectNode payload = objectMapper.createObjectNode();
-            payload.put("questionCode", question.getCode());
-            payload.put("question", question.getQuestion());
-            payload.put("questionType", question.getQuestionType());
-            payload.put("standardAnswer", question.getStandardAnswer());
-            payload.put("lastUserAnswer", lastUserAnswer == null ? "" : lastUserAnswer);
-            payload.put("message", message);
+            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, message);
             JsonNode data = postJson("/internal/v1/practice/discuss", payload).orElse(null);
             if (data == null || !data.hasNonNull("reply")) {
                 return Optional.empty();
@@ -110,6 +109,32 @@ public class PracticeAiClient {
             return Optional.of(data.get("reply").asText());
         } catch (RuntimeException exception) {
             LOGGER.warn("AI 服务讨论结果转换失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 请求 AI 服务进行本题流式讨论。
+     *
+     * @param question 当前题目
+     * @param lastUserAnswer 最近一次答案
+     * @param message 用户消息
+     * @param chunkConsumer 文本片段处理器
+     * @return 完整讨论回复
+     */
+    public Optional<String> discussStream(
+            PracticeQuestionRecord question,
+            String lastUserAnswer,
+            String message,
+            Consumer<String> chunkConsumer) {
+        if (!isEnabled()) {
+            return Optional.empty();
+        }
+        try {
+            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, message);
+            return postEventStream("/internal/v1/practice/discuss/stream", payload, chunkConsumer);
+        } catch (RuntimeException exception) {
+            LOGGER.warn("AI 服务流式讨论失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
             return Optional.empty();
         }
     }
@@ -180,6 +205,115 @@ public class PracticeAiClient {
             LOGGER.warn("AI 服务调用异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         }
+    }
+
+    /**
+     * 发送内部 SSE 请求并读取文本片段。
+     *
+     * @param path 请求路径
+     * @param payload 请求体
+     * @param chunkConsumer 文本片段处理器
+     * @return 完整文本
+     */
+    private Optional<String> postEventStream(String path, JsonNode payload, Consumer<String> chunkConsumer) {
+        try {
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(normalizeBaseUrl() + path))
+                    .timeout(timeout())
+                    .version(HttpClient.Version.HTTP_1_1)
+                    .header("Content-Type", JSON_CONTENT_TYPE)
+                    .header("Accept", "text/event-stream")
+                    .header(INTERNAL_TOKEN_HEADER, properties.getToken())
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
+                    .build();
+            HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
+            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                LOGGER.warn("AI 服务流式调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
+                return Optional.empty();
+            }
+            return readEventStream(response, chunkConsumer);
+        } catch (IOException exception) {
+            LOGGER.warn("AI 服务流式调用 IO 异常，已进入本地兜底：path={}", path, exception);
+            return Optional.empty();
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            LOGGER.warn("AI 服务流式调用被中断，已进入本地兜底：path={}", path, exception);
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * 读取内部 SSE 响应。
+     *
+     * @param response HTTP 响应
+     * @param chunkConsumer 文本片段处理器
+     * @return 完整文本
+     * @throws IOException 读取异常
+     */
+    private Optional<String> readEventStream(HttpResponse<java.io.InputStream> response, Consumer<String> chunkConsumer) throws IOException {
+        StringBuilder replyBuilder = new StringBuilder();
+        String eventName = "message";
+        StringBuilder dataBuilder = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) {
+                if (line.isBlank()) {
+                    processStreamEvent(eventName, dataBuilder.toString(), replyBuilder, chunkConsumer);
+                    eventName = "message";
+                    dataBuilder.setLength(0);
+                    continue;
+                }
+                if (line.startsWith("event:")) {
+                    eventName = line.substring("event:".length()).trim();
+                } else if (line.startsWith("data:")) {
+                    dataBuilder.append(line.substring("data:".length()).trim());
+                }
+            }
+        }
+        return replyBuilder.isEmpty() ? Optional.empty() : Optional.of(replyBuilder.toString());
+    }
+
+    /**
+     * 处理单个内部 SSE 事件。
+     *
+     * @param eventName 事件名
+     * @param data 事件数据
+     * @param replyBuilder 完整回复构造器
+     * @param chunkConsumer 文本片段处理器
+     */
+    private void processStreamEvent(String eventName, String data, StringBuilder replyBuilder, Consumer<String> chunkConsumer) {
+        if (!"message".equals(eventName) || !StringUtils.hasText(data)) {
+            return;
+        }
+        try {
+            JsonNode node = objectMapper.readTree(data);
+            String content = node.path("content").asText("");
+            if (!content.isEmpty()) {
+                replyBuilder.append(content);
+                chunkConsumer.accept(content);
+            }
+        } catch (IOException exception) {
+            LOGGER.warn("AI 服务流式事件解析失败，忽略当前片段：event={}", eventName, exception);
+        }
+    }
+
+    /**
+     * 构造讨论请求体。
+     *
+     * @param question 当前题目
+     * @param lastUserAnswer 最近一次答案
+     * @param message 用户消息
+     * @return 请求体
+     */
+    private ObjectNode buildDiscussPayload(PracticeQuestionRecord question, String lastUserAnswer, String message) {
+        ObjectNode payload = objectMapper.createObjectNode();
+        payload.put("questionCode", question.getCode());
+        payload.put("question", question.getQuestion());
+        payload.put("questionType", question.getQuestionType());
+        payload.put("standardAnswer", question.getStandardAnswer());
+        payload.put("lastUserAnswer", lastUserAnswer == null ? "" : lastUserAnswer);
+        payload.put("message", message);
+        return payload;
     }
 
     /**

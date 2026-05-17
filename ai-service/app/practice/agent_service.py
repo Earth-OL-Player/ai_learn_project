@@ -7,6 +7,7 @@ import time
 import urllib.error
 import urllib.request
 import uuid
+from collections.abc import Iterator
 from typing import Any
 
 from app.config.settings import settings
@@ -124,6 +125,21 @@ class PracticeAgentService:
             bool(settings.ai_grading_base_url),
         )
         return self._discuss_by_local_rule(request)
+
+    def stream_discuss(self, request: PracticeDiscussRequest) -> Iterator[str]:
+        """流式生成本题讨论回复。"""
+        if self._is_llm_enabled():
+            yield from self._stream_discuss_by_llm(request)
+            return
+
+        # 未启用真实模型时仍返回 SSE，保证 Java 后端和前端链路稳定。
+        logger.info(
+            "未调用真实大模型，流式返回讨论不可用提示：model=%s baseUrlConfigured=%s",
+            settings.ai_grading_model,
+            bool(settings.ai_grading_base_url),
+        )
+        yield self._build_sse_event("message", {"content": _FALLBACK_DISCUSS_REPLY})
+        yield self._build_sse_event("done", {})
 
     def judge_relevance(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse:
         """优先调用真实大模型判断输入是否与刷题上下文相关。"""
@@ -253,6 +269,22 @@ class PracticeAgentService:
             logger.warning("大模型相关性判断解析失败，使用本地规则兜底：traceId=%s error=%s", trace_id, exc)
             return None
 
+    def _stream_discuss_by_llm(self, request: PracticeDiscussRequest) -> Iterator[str]:
+        """调用 OpenAI 兼容大模型接口流式生成讨论回复。"""
+        trace_id = self._new_trace_id()
+        prompt = self._build_discuss_prompt(request)
+        messages = self._build_messages(prompt)
+        emitted_any = False
+        for content in self._call_chat_completion_stream(trace_id, "practice_discuss_stream", messages):
+            emitted_any = True
+            yield self._build_sse_event("message", {"content": content})
+
+        # 如果供应商没有返回任何可见 token，则回落为非流式调用，避免前端一直空白。
+        if not emitted_any:
+            fallback_response = self._discuss_by_llm(request) or self._discuss_by_local_rule(request)
+            yield self._build_sse_event("message", {"content": fallback_response.reply})
+        yield self._build_sse_event("done", {})
+
     def _call_chat_completion(self, trace_id: str, scene: str, messages: list[dict[str, str]]) -> str | None:
         """调用 OpenAI 兼容 chat completions 接口，并输出调用前后日志。"""
         url = self._chat_completion_url()
@@ -296,6 +328,39 @@ class PracticeAgentService:
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning("真实大模型调用失败：traceId=%s scene=%s durationMs=%s error=%s", trace_id, scene, elapsed_ms, exc)
             return None
+
+    def _call_chat_completion_stream(self, trace_id: str, scene: str, messages: list[dict[str, str]]) -> Iterator[str]:
+        """调用 OpenAI 兼容 chat completions 流式接口。"""
+        url = self._chat_completion_url()
+        start_time = time.perf_counter()
+        payload = {
+            "model": settings.ai_grading_model,
+            "messages": messages,
+            "temperature": 0.2,
+            "stream": True,
+        }
+
+        # 流式调用只记录概要信息，避免泄露完整提示词或用户答案。
+        logger.info(
+            "准备调用真实大模型流式接口：traceId=%s scene=%s model=%s url=%s promptChars=%s",
+            trace_id,
+            scene,
+            settings.ai_grading_model,
+            url,
+            sum(len(message["content"]) for message in messages),
+        )
+        try:
+            request = self._build_http_request(url, payload)
+            with urllib.request.urlopen(request, timeout=settings.ai_grading_timeout_seconds) as response:
+                for raw_line in response:
+                    content = self._read_stream_content(raw_line)
+                    if content:
+                        yield content
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.info("真实大模型流式调用完成：traceId=%s scene=%s durationMs=%s", trace_id, scene, elapsed_ms)
+        except (TimeoutError, OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, UnicodeDecodeError) as exc:
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.warning("真实大模型流式调用失败：traceId=%s scene=%s durationMs=%s error=%s", trace_id, scene, elapsed_ms, exc)
 
     def _build_keywords(self, request: PracticeGradeRequest) -> list[str]:
         """只从参考答案构建必答关键词。"""
@@ -489,6 +554,31 @@ class PracticeAgentService:
         if not isinstance(content, str):
             raise KeyError("content")
         return content.strip()
+
+    def _read_stream_content(self, raw_line: bytes) -> str:
+        """读取 OpenAI 兼容流式响应中的单个文本片段。"""
+        line = raw_line.decode("utf-8").strip()
+        if not line.startswith("data:"):
+            return ""
+        data_text = line.removeprefix("data:").strip()
+        if not data_text or data_text == "[DONE]":
+            return ""
+
+        # Chat Completions 流式响应通常位于 choices[0].delta.content。
+        data = json.loads(data_text)
+        choices = data.get("choices")
+        if not isinstance(choices, list) or not choices:
+            return ""
+        delta = choices[0].get("delta")
+        if not isinstance(delta, dict):
+            return ""
+        content = delta.get("content")
+        return content if isinstance(content, str) else ""
+
+    def _build_sse_event(self, event: str, data: dict[str, Any]) -> str:
+        """构造内部 SSE 事件文本。"""
+        payload = json.dumps(data, ensure_ascii=False)
+        return f"event: {event}\ndata: {payload}\n\n"
 
     def _extract_json_object(self, content: str) -> dict[str, Any]:
         """从大模型文本中提取 JSON 对象。"""

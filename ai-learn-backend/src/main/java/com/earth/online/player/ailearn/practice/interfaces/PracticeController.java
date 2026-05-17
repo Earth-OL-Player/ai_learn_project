@@ -9,6 +9,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.http.MediaType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -121,10 +122,16 @@ public class PracticeController {
      * @param authenticatedUser 当前用户
      */
     private void emitMessageStream(PracticeMessageRequest request, SseEmitter emitter, AuthenticatedUser authenticatedUser) {
+        AtomicBoolean chunkSent = new AtomicBoolean(false);
         try {
             AuthContext.setUser(authenticatedUser);
-            PracticeMessageResponse result = practiceService.handleMessage(request);
-            emitTextChunks(emitter, result.message());
+            PracticeMessageResponse result = practiceService.handleMessageStream(request, chunk -> {
+                emitChunk(emitter, chunk);
+                chunkSent.set(true);
+            });
+            if (!chunkSent.get()) {
+                emitTextChunks(emitter, result.message());
+            }
             emitter.send(SseEmitter.event().name("result").data(toJson(result)));
             emitter.complete();
         } catch (IOException | RuntimeException exception) {
@@ -149,6 +156,20 @@ public class PracticeController {
             if (!pauseBetweenChunks()) {
                 break;
             }
+        }
+    }
+
+    /**
+     * 输出真实模型返回的流式片段。
+     *
+     * @param emitter SSE 发射器
+     * @param chunk 文本片段
+     */
+    private void emitChunk(SseEmitter emitter, String chunk) {
+        try {
+            emitter.send(SseEmitter.event().name("message").data(chunk));
+        } catch (IOException exception) {
+            throw new IllegalStateException("流式消息发送失败", exception);
         }
     }
 

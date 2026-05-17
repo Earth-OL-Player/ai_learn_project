@@ -31,6 +31,7 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -169,6 +170,30 @@ public class PracticeService {
     }
 
     /**
+     * 处理聊天消息并尽可能流式输出讨论回复。
+     *
+     * @param request 聊天请求
+     * @param chunkConsumer 文本片段处理器
+     * @return 聊天响应
+     */
+    @Transactional
+    public PracticeMessageResponse handleMessageStream(PracticeMessageRequest request, Consumer<String> chunkConsumer) {
+        Long userId = currentUserId();
+        String content = normalizeContent(request == null ? null : request.content());
+        PracticeSessionRecord session = practiceMapper.findSession(userId);
+        String phase = session == null ? PHASE_QUESTIONING : session.getPhase();
+
+        // 出题和评分仍需要完整业务结果；讨论阶段优先使用真实模型流式输出。
+        if (PHASE_QUESTIONING.equals(phase)) {
+            return handleQuestioningMessage(userId, content, request);
+        }
+        if (PHASE_ANSWERING.equals(phase)) {
+            return handleAnsweringMessage(userId, content);
+        }
+        return handleDiscussingMessageStream(userId, content, request, chunkConsumer);
+    }
+
+    /**
      * 处理出题阶段消息。
      *
      * @param userId 用户ID
@@ -229,6 +254,40 @@ public class PracticeService {
         PracticeSessionRecord session = practiceMapper.findSession(userId);
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
         String reply = practiceAiClient.discuss(question, lastUserAnswer, content).orElseGet(this::buildLocalDiscussionReply);
+        return new PracticeMessageResponse(ACTION_DISCUSSION, PHASE_DISCUSSING, reply, toQuestionResponse(question), null, growthService.getCurrentGrowth());
+    }
+
+    /**
+     * 流式处理讨论阶段消息。
+     *
+     * @param userId 用户ID
+     * @param content 消息内容
+     * @param request 原始请求
+     * @param chunkConsumer 文本片段处理器
+     * @return 响应
+     */
+    private PracticeMessageResponse handleDiscussingMessageStream(
+            Long userId,
+            String content,
+            PracticeMessageRequest request,
+            Consumer<String> chunkConsumer) {
+        if (isRetryRequest(content)) {
+            return retryCurrentQuestion();
+        }
+        if (isNextRequest(content) || isExplicitQuestionRequest(content)) {
+            List<String> requestedTypes = mergeRequestedTypes(content, request == null ? null : request.questionTypes());
+            PracticeQuestionRecord question = selectQuestion(userId, requestedTypes);
+            practiceMapper.upsertQuestionSession(userId, question.getCode(), PHASE_ANSWERING);
+            return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
+        }
+        PracticeQuestionRecord question = currentQuestion(userId);
+        if (isUnrelatedToPractice(question, PHASE_DISCUSSING, content)) {
+            return tip(PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
+        }
+        PracticeSessionRecord session = practiceMapper.findSession(userId);
+        String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
+        String reply = practiceAiClient.discussStream(question, lastUserAnswer, content, chunkConsumer)
+                .orElseGet(this::buildLocalDiscussionReply);
         return new PracticeMessageResponse(ACTION_DISCUSSION, PHASE_DISCUSSING, reply, toQuestionResponse(question), null, growthService.getCurrentGrowth());
     }
 

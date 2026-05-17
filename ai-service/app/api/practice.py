@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends
+from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import verify_internal_token
 from app.practice.agent_service import practice_agent_service
@@ -25,6 +26,12 @@ def grade_answer(request: PracticeGradeRequest) -> ApiResponse[PracticeGradeResp
 def discuss(request: PracticeDiscussRequest) -> ApiResponse[PracticeDiscussResponse]:
     """围绕当前题继续讨论学习。"""
     return ApiResponse(data=practice_agent_service.discuss(request))
+
+
+@router.post("/discuss/stream", dependencies=[Depends(verify_internal_token)])
+def discuss_stream(request: PracticeDiscussRequest) -> StreamingResponse:
+    """围绕当前题继续流式讨论学习。"""
+    return StreamingResponse(practice_agent_service.stream_discuss(request), media_type="text/event-stream")
 
 
 @router.post("/relevance", response_model=ApiResponse[PracticeRelevanceResponse], dependencies=[Depends(verify_internal_token)])

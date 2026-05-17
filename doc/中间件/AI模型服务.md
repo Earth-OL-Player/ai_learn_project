@@ -97,12 +97,14 @@ AI_GRADING_TIMEOUT_SECONDS=20
 | 内部接口 | 用途 |
 | --- | --- |
 | `POST /internal/v1/practice/discuss` | 请求字段新增 `lastUserAnswer`，用于本题讨论阶段让模型记住当前题最近一次用户答案 |
+| `POST /internal/v1/practice/discuss/stream` | 使用 OpenAI 兼容 `stream=true` 调用模型，并把可见文本片段以 SSE 返回给 Java 后端 |
 | `POST /internal/v1/practice/relevance` | 判断用户输入是否与刷题、当前题回答或技术讨论相关 |
 
 本地联调注意事项：
 
 1. `lastUserAnswer` 由 Java 后端从 MySQL 当前会话字段读取并传入，AI 服务不持久化该内容。
 2. 相关性判断要求模型只返回 JSON：`relevant` 和 `reason`。
-3. 模型不可用、Key 使用占位符、模型名为 `LOCAL_RULE` 或解析失败时，AI 服务回退到本地保守规则。
-4. 日志只能记录 traceId、场景、模型名、耗时和响应预览，禁止打印真实 Key、完整用户答案或完整提示词。
-5. 生产部署时如接入第三方模型，需要确认供应商的数据使用、留存和脱敏策略符合项目要求。
+3. 讨论阶段流式输出依赖模型服务支持 OpenAI 兼容 Chat Completions SSE 响应，即返回 `data: {...}` 和最终 `data: [DONE]`。
+4. 模型不可用、Key 使用占位符、模型名为 `LOCAL_RULE` 或解析失败时，AI 服务回退到本地保守规则。
+5. 日志只能记录 traceId、场景、模型名、耗时和响应预览，禁止打印真实 Key、完整用户答案或完整提示词。
+6. 生产部署时如接入第三方模型，需要确认供应商的数据使用、留存和脱敏策略符合项目要求。
