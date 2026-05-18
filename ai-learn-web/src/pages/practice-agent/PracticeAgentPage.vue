@@ -51,10 +51,14 @@
           show-icon
         />
         <el-empty v-if="messages.length === 0" description="选择分类后点击开始，或直接输入想练习的题型" />
-        <article v-for="item in messages" :key="item.id" class="practice-message" :class="item.role">
+        <article v-for="item in messages" :key="item.id" class="practice-message" :class="[item.role, { 'is-streaming': item.streaming }]">
           <div class="message-bubble">
-            <div v-if="item.text" class="message-text message-markdown" v-html="renderMessageText(item)"></div>
-            <p v-if="item.streaming && !item.text" class="message-text stream-placeholder">AI 正在思考中...</p>
+            <p v-if="item.streaming" class="message-text streaming-message-text">
+              <span v-if="item.text">{{ item.text }}</span>
+              <span v-else class="streaming-placeholder">AI 正在组织答案</span>
+              <span class="stream-cursor" aria-hidden="true"></span>
+            </p>
+            <div v-else-if="item.text" class="message-text message-markdown" v-html="renderMessageText(item)"></div>
             <div v-if="item.question" class="question-bubble-card">
               <div class="question-meta-row">
                 <el-tag effect="plain">{{ item.question.questionType }}</el-tag>
@@ -161,7 +165,7 @@
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import MarkdownIt from 'markdown-it';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, triggerRef, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   fetchPracticeCategories,
@@ -177,6 +181,11 @@ import {
 } from '../../api/practice';
 import type { BadgeInfo, GrowthInfo } from '../../types/growth';
 import { useAuthStore } from '../../stores/auth';
+import {
+  SmoothStreamTypewriter,
+  type SmoothStreamChunkEvent,
+  type SmoothStreamRenderEvent,
+} from '../../utils/smoothStreamTypewriter';
 
 interface ChatMessage {
   id: number;
@@ -197,8 +206,7 @@ interface PracticeChatSnapshot {
 const EMPTY_LIST_TEXT = '暂无';
 const GUEST_LOGIN_MESSAGE = '注册登录后即可使用该功能';
 const PRACTICE_CHAT_STORAGE_PREFIX = 'ai_learn_practice_chat_';
-const STREAM_TYPEWRITER_CHARS = 2;
-const STREAM_TYPEWRITER_INTERVAL_MILLIS = 24;
+const STREAM_SNAPSHOT_SAVE_INTERVAL_MILLIS = 800;
 const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
 const loading = ref(false);
 const inputText = ref('');
@@ -215,12 +223,16 @@ const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 let messageId = 1;
-let streamChunkCount = 0;
-let streamTextQueue = '';
-let streamFlushTimer: number | undefined;
-let streamTargetMessage: ChatMessage | null = null;
 let pendingStreamingResult: { result: PracticeMessageResult; assistantMessage: ChatMessage } | null = null;
-let streamRenderedCount = 0;
+let scrollAnimationFrame: number | undefined;
+let snapshotSaveTimer: number | undefined;
+
+// 前端统一用平滑打字机重排 SSE 节奏，避免后端突发小片段直接抖动上屏。
+const streamTypewriter = new SmoothStreamTypewriter<ChatMessage>({
+  onChunk: logFrontendStreamChunk,
+  onRender: handleStreamRendered,
+  onDrain: applyPendingStreamingResult,
+});
 
 // 左侧角色卡昵称优先使用用户昵称，未设置时回退用户名。
 const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
@@ -342,6 +354,11 @@ async function sendMessage(): Promise<void> {
   if (!ensureLoggedIn()) {
     return;
   }
+  if (loading.value) {
+    return;
+  }
+
+  // 发送前先锁住当前轮次，避免用户回车打断正在播放的流式回复。
   const content = inputText.value.trim();
   if (!content) {
     ElMessage.warning('请输入内容');
@@ -349,9 +366,7 @@ async function sendMessage(): Promise<void> {
   }
   inputText.value = '';
   messages.value.push({ id: messageId++, role: 'user', text: content });
-  const assistantMessage = buildAssistantMessage('', null, null);
-  assistantMessage.streaming = true;
-  messages.value.push(assistantMessage);
+  const assistantMessage = appendStreamingAssistantMessage();
   resetStreamTypewriter(assistantMessage);
   savePracticeSnapshot();
   scrollToBottom();
@@ -364,6 +379,7 @@ async function sendMessage(): Promise<void> {
         onResult: (result: PracticeMessageResult) => applyStreamingResult(result, assistantMessage),
       },
     );
+    await streamTypewriter.waitForIdle();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '发送失败');
     clearStreamTypewriter();
@@ -441,7 +457,9 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
  * 应用流式接口的最终响应。
  */
 function applyStreamingResult(result: PracticeMessageResult, assistantMessage: ChatMessage): void {
-  if (streamTextQueue || streamFlushTimer) {
+  // result 事件只把未展示尾部放进打字机，绝不直接覆盖气泡正文。
+  streamTypewriter.queueFinalRemainder(assistantMessage, result.message);
+  if (streamTypewriter.hasPendingOutput()) {
     pendingStreamingResult = { result, assistantMessage };
     return;
   }
@@ -458,7 +476,7 @@ function finishStreamingResult(result: PracticeMessageResult, assistantMessage: 
   growth.value = result.growth;
   syncAuthGrowth(result.growth);
 
-  // 最终事件携带完整业务数据，用于补齐题目卡片、评分卡片和阶段状态。
+  // 最终事件只补齐业务卡片，正文保持平滑输出后的内容，避免答案突然整段闪现。
   assistantMessage.streaming = false;
   assistantMessage.text = assistantMessage.text || result.message || '';
   assistantMessage.question = result.action === 'QUESTION' ? result.question : null;
@@ -467,6 +485,7 @@ function finishStreamingResult(result: PracticeMessageResult, assistantMessage: 
     clearPracticeSnapshot();
     messages.value = [assistantMessage];
   }
+  refreshMessagesView();
   savePracticeSnapshot();
   scrollToBottom();
   showNewBadgeDialog(result);
@@ -476,83 +495,24 @@ function finishStreamingResult(result: PracticeMessageResult, assistantMessage: 
  * 追加流式文本片段。
  */
 function appendStreamingChunk(message: ChatMessage, chunk: string): void {
-  streamChunkCount += 1;
-  logFrontendStreamChunk(chunk);
-  streamTargetMessage = message;
-  streamTextQueue += chunk;
-  startStreamTypewriter();
+  streamTypewriter.appendChunk(message, chunk);
 }
 
 /**
  * 重置流式打字机状态。
  */
 function resetStreamTypewriter(message: ChatMessage): void {
-  clearStreamTypewriter();
-  streamChunkCount = 0;
-  streamTextQueue = '';
-  streamTargetMessage = message;
   pendingStreamingResult = null;
-  streamRenderedCount = 0;
+  streamTypewriter.reset(message);
 }
 
 /**
  * 清理流式打字机状态。
  */
 function clearStreamTypewriter(): void {
-  if (streamFlushTimer !== undefined) {
-    window.clearInterval(streamFlushTimer);
-    streamFlushTimer = undefined;
-  }
-  streamTextQueue = '';
-  streamTargetMessage = null;
   pendingStreamingResult = null;
-  streamRenderedCount = 0;
-}
-
-/**
- * 启动前端打字机，避免浏览器或代理批量吐出时页面一次性展示。
- */
-function startStreamTypewriter(): void {
-  if (streamFlushTimer !== undefined) {
-    return;
-  }
-  streamFlushTimer = window.setInterval(flushStreamTextQueue, STREAM_TYPEWRITER_INTERVAL_MILLIS);
-}
-
-/**
- * 按固定节奏把流式缓冲文本展示到页面。
- */
-function flushStreamTextQueue(): void {
-  const targetMessage = streamTargetMessage;
-  if (!targetMessage) {
-    clearStreamTypewriter();
-    return;
-  }
-
-  if (!streamTextQueue) {
-    stopStreamTypewriter();
-    applyPendingStreamingResult();
-    return;
-  }
-
-  const currentText = streamTextQueue.slice(0, STREAM_TYPEWRITER_CHARS);
-  streamTextQueue = streamTextQueue.slice(STREAM_TYPEWRITER_CHARS);
-  targetMessage.text += currentText;
-  streamRenderedCount += 1;
-  logFrontendRenderedText(currentText);
-  savePracticeSnapshot();
-  scrollToBottom();
-}
-
-/**
- * 停止流式打字机定时器。
- */
-function stopStreamTypewriter(): void {
-  if (streamFlushTimer === undefined) {
-    return;
-  }
-  window.clearInterval(streamFlushTimer);
-  streamFlushTimer = undefined;
+  streamTypewriter.clear();
+  cancelScheduledSnapshotSave();
 }
 
 /**
@@ -569,27 +529,37 @@ function applyPendingStreamingResult(): void {
 }
 
 /**
+ * 处理打字机每一批实际上屏后的副作用。
+ */
+function handleStreamRendered(event: SmoothStreamRenderEvent): void {
+  logFrontendRenderedText(event);
+  refreshMessagesView();
+  schedulePracticeSnapshotSave();
+  scheduleScrollToBottom();
+}
+
+/**
  * 记录前端打字机实际渲染片段。
  */
-function logFrontendRenderedText(currentText: string): void {
-  if (streamRenderedCount !== 1 && streamRenderedCount % 50 !== 0) {
+function logFrontendRenderedText(event: SmoothStreamRenderEvent): void {
+  if (event.count !== 1 && event.count % 50 !== 0) {
     return;
   }
 
-  // 只打印渲染长度，避免模型正文进入日志。
-  console.info('前端打字机已渲染片段', { count: streamRenderedCount, chars: currentText.length });
+  // 只打印渲染长度和积压量，避免模型正文进入日志。
+  console.info('前端平滑打字机已渲染片段', { count: event.count, chars: event.chars, queuedChars: event.queuedChars });
 }
 
 /**
  * 记录前端收到的流式片段。
  */
-function logFrontendStreamChunk(chunk: string): void {
-  if (streamChunkCount !== 1 && streamChunkCount % 50 !== 0) {
+function logFrontendStreamChunk(event: SmoothStreamChunkEvent): void {
+  if (event.count !== 1 && event.count % 50 !== 0) {
     return;
   }
 
-  // 只打印片段长度，避免用户答案或模型正文进入浏览器日志。
-  console.info('前端收到 SSE 流式片段', { count: streamChunkCount, chars: chunk.length });
+  // 只打印片段长度和当前队列，避免用户答案或模型正文进入浏览器日志。
+  console.info('前端收到 SSE 流式片段', { count: event.count, chars: event.chars, queuedChars: event.queuedChars });
 }
 
 /**
@@ -598,6 +568,26 @@ function logFrontendStreamChunk(chunk: string): void {
 function removeStreamingMessage(messageIdValue: number): void {
   messages.value = messages.value.filter((item) => item.id !== messageIdValue);
   savePracticeSnapshot();
+}
+
+/**
+ * 新增一个响应式的助手流式消息。
+ */
+function appendStreamingAssistantMessage(): ChatMessage {
+  const assistantMessage = buildAssistantMessage('', null, null);
+  assistantMessage.streaming = true;
+  messages.value.push(assistantMessage);
+
+  // 取回数组中的响应式代理对象，确保后续逐批修改能被 Vue 捕获。
+  return messages.value[messages.value.length - 1];
+}
+
+/**
+ * 主动刷新消息列表视图。
+ */
+function refreshMessagesView(): void {
+  // 打字机按字段追加文本，主动触发 ref 更新，避免最后一次状态变化才统一重渲染。
+  triggerRef(messages);
 }
 
 /**
@@ -671,6 +661,35 @@ function savePracticeSnapshot(): void {
 }
 
 /**
+ * 延迟保存聊天快照，减少流式输出期间同步 localStorage 阻塞主线程。
+ */
+function schedulePracticeSnapshotSave(): void {
+  if (snapshotSaveTimer !== undefined) {
+    return;
+  }
+  snapshotSaveTimer = window.setTimeout(flushScheduledSnapshotSave, STREAM_SNAPSHOT_SAVE_INTERVAL_MILLIS);
+}
+
+/**
+ * 立即落盘已延迟的聊天快照。
+ */
+function flushScheduledSnapshotSave(): void {
+  cancelScheduledSnapshotSave();
+  savePracticeSnapshot();
+}
+
+/**
+ * 取消待执行的快照保存任务。
+ */
+function cancelScheduledSnapshotSave(): void {
+  if (snapshotSaveTimer === undefined) {
+    return;
+  }
+  window.clearTimeout(snapshotSaveTimer);
+  snapshotSaveTimer = undefined;
+}
+
+/**
  * 清理当前用户的本地聊天快照。
  */
 function clearPracticeSnapshot(): void {
@@ -707,10 +726,30 @@ function syncAuthGrowth(nextGrowth: GrowthInfo): void {
  */
 function scrollToBottom(): void {
   nextTick(() => {
-    if (messagePanelRef.value) {
-      messagePanelRef.value.scrollTop = messagePanelRef.value.scrollHeight;
-    }
+    scrollMessagePanelToBottom();
   });
+}
+
+/**
+ * 合并滚动请求，避免流式逐字渲染时反复触发布局计算。
+ */
+function scheduleScrollToBottom(): void {
+  if (scrollAnimationFrame !== undefined) {
+    return;
+  }
+  scrollAnimationFrame = window.requestAnimationFrame(() => {
+    scrollAnimationFrame = undefined;
+    scrollMessagePanelToBottom();
+  });
+}
+
+/**
+ * 将消息面板滚动到最新消息位置。
+ */
+function scrollMessagePanelToBottom(): void {
+  if (messagePanelRef.value) {
+    messagePanelRef.value.scrollTop = messagePanelRef.value.scrollHeight;
+  }
 }
 
 /**
@@ -794,6 +833,10 @@ onMounted(initializePage);
 
 onBeforeUnmount(() => {
   clearStreamTypewriter();
+  if (scrollAnimationFrame !== undefined) {
+    window.cancelAnimationFrame(scrollAnimationFrame);
+    scrollAnimationFrame = undefined;
+  }
 });
 </script>
 
@@ -928,11 +971,23 @@ onBeforeUnmount(() => {
 }
 
 .message-bubble {
+  // 气泡需要承载流式光标和轻微高亮，因此保持相对定位。
+  position: relative;
   max-width: min(760px, 88%);
+  overflow: hidden;
   padding: 16px;
   border-radius: 20px;
   background: #ffffff;
   box-shadow: 0 10px 28px rgba(61, 91, 132, 0.08);
+}
+
+.practice-message.is-streaming .message-bubble {
+  // 流式回复使用更轻的蓝绿色描边，强化“正在生成”的即时反馈。
+  border: 1px solid rgba(47, 125, 246, 0.12);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(248, 251, 255, 0.98)),
+    radial-gradient(circle at 0% 0%, rgba(53, 187, 168, 0.1), transparent 30%);
+  box-shadow: 0 16px 42px rgba(47, 125, 246, 0.11);
 }
 
 .practice-message.user .message-bubble {
@@ -994,8 +1049,50 @@ onBeforeUnmount(() => {
   font-family: 'JetBrains Mono', Consolas, monospace;
 }
 
-.stream-placeholder {
+.streaming-message-text {
+  // 流式输出阶段使用纯文本渲染，降低 Markdown 反复解析导致的闪烁和重排。
+  color: #17233d;
+  font-size: 15.5px;
+  letter-spacing: 0.01em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-rendering: optimizeLegibility;
+}
+
+.streaming-placeholder {
+  // 首包到达前给出稳定占位，避免用户误以为卡死。
   color: #667085;
+  font-weight: 600;
+}
+
+.stream-cursor {
+  // 光标提供“正在生成”的轻量反馈，整体风格保持清新简约。
+  display: inline-block;
+  width: 2px;
+  height: 1.16em;
+  margin-left: 4px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #2f7df6, #35bba8);
+  vertical-align: -0.2em;
+  box-shadow: 0 0 12px rgba(47, 125, 246, 0.24);
+  animation: stream-cursor-breathe 0.82s ease-in-out infinite;
+}
+
+@keyframes stream-cursor-breathe {
+  0%,
+  100% {
+    opacity: 0.28;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stream-cursor {
+    animation: none;
+  }
 }
 
 .question-bubble-card,
