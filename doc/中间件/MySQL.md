@@ -1,9 +1,9 @@
 # MySQL 中间件说明
 
-版本：v1.14
+版本：v1.15
 日期：2026-05-18  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化、`sprint2617` 成长等级与修仙境界段位重构、`sprint2619` 建议评论区评论流重构、`sprint2620` 刷题勋章强联动、`sprint2621` 用户管理与容量限制、`sprint2622` AI刷题多轮短期记忆
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
 
 ## 1. 用途
 
@@ -18,7 +18,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、建议�
 - `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。
 - 系统题库通过 migration 初始化 `AI面试题Top300.csv` 中的真实题目数据，供热门面经和 AI 智能刷题使用。
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
-- Redis、Qdrant 等中间件不参与建议评论区最小闭环。
+- Redis 当前未接入运行代码；Qdrant 由 `ai-service` 访问，不直接参与 MySQL 业务主表写入。
 - `system_settings` 保存系统最大用户数等轻量配置，当前使用 `MAX_USERS` 控制开放注册容量。
 
 ## 2. 推荐版本
@@ -106,6 +106,8 @@ docker logs -f ai-learn-mysql
 | `JWT_EXPIRES_IN_SECONDS` | `7200` | access token 过期秒数 |
 
 ## 6. 示例占位符配置
+
+仓库提供 `ai-learn-backend/.env.example`，开发者可复制为本地私有 `.env` 后替换真实值；真实密码、JWT 密钥和生产地址禁止提交。
 
 后端已在 `ai-learn-backend/src/main/resources/application.yml` 中提供环境变量占位配置：
 

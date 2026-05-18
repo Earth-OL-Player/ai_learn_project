@@ -3,8 +3,9 @@ package com.earth.online.player.ailearn.suggestion.application;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthContext;
+import com.earth.online.player.ailearn.common.security.AuthSupport;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.PageRequestUtils;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.interaction.domain.AuthorSummary;
@@ -27,11 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SuggestionService {
 
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final int DEFAULT_PAGE_NO = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
     private static final int DEFAULT_LIKE_COUNT = 0;
-    private static final long ANONYMOUS_USER_ID = 0L;
 
     private final SuggestionMapper suggestionMapper;
 
@@ -53,11 +50,11 @@ public class SuggestionService {
      * @return 分页建议
      */
     public PageResponse<SuggestionResponse> findPage(Integer pageNo, Integer pageSize, String sort) {
-        int safePageNo = normalizePageNo(pageNo);
-        int safePageSize = normalizePageSize(pageSize);
-        int offset = calculateOffset(safePageNo, safePageSize);
+        int safePageNo = PageRequestUtils.normalizePageNo(pageNo);
+        int safePageSize = PageRequestUtils.normalizePageSize(pageSize);
+        int offset = PageRequestUtils.calculateOffset(safePageNo, safePageSize);
         InteractionSort safeSort = InteractionSort.from(sort);
-        long viewerUserId = resolveViewerUserId();
+        long viewerUserId = AuthSupport.resolveViewerUserId();
 
         // 建议区不支持父子结构，直接分页返回评论流卡片数据。
         List<SuggestionResponse> records = suggestionMapper.findPage(offset, safePageSize, safeSort.name(), viewerUserId)
@@ -75,7 +72,7 @@ public class SuggestionService {
      */
     @Transactional
     public SuggestionResponse create(CreateSuggestionRequest request) {
-        AuthenticatedUser currentUser = requireCurrentUser();
+        AuthenticatedUser currentUser = AuthSupport.requireCurrentUser();
         String content = InteractionTextPolicy.normalize(request.content());
         validateContent(content);
 
@@ -98,7 +95,7 @@ public class SuggestionService {
      */
     @Transactional
     public SuggestionResponse toggleLike(Long suggestionId) {
-        AuthenticatedUser currentUser = requireCurrentUser();
+        AuthenticatedUser currentUser = AuthSupport.requireCurrentUser();
         ensureSuggestionExists(suggestionId);
 
         // INSERT IGNORE 成功代表点赞，失败代表之前已点赞，需要取消。
@@ -137,29 +134,6 @@ public class SuggestionService {
     }
 
     /**
-     * 获取当前登录用户。
-     *
-     * @return 当前登录用户
-     */
-    private AuthenticatedUser requireCurrentUser() {
-        AuthenticatedUser currentUser = AuthContext.getUser();
-        if (currentUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-        return currentUser;
-    }
-
-    /**
-     * 获取当前查看用户ID。
-     *
-     * @return 当前查看用户ID，未登录时返回0
-     */
-    private long resolveViewerUserId() {
-        AuthenticatedUser currentUser = AuthContext.getUser();
-        return currentUser == null ? ANONYMOUS_USER_ID : currentUser.userId();
-    }
-
-    /**
      * 查询单条建议响应。
      *
      * @param suggestionId 建议ID
@@ -172,44 +146,6 @@ public class SuggestionService {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "建议不存在");
         }
         return toResponse(record);
-    }
-
-    /**
-     * 规整页码。
-     *
-     * @param pageNo 原始页码
-     * @return 安全页码
-     */
-    private int normalizePageNo(Integer pageNo) {
-        if (pageNo == null || pageNo < DEFAULT_PAGE_NO) {
-            return DEFAULT_PAGE_NO;
-        }
-        return pageNo;
-    }
-
-    /**
-     * 规整每页数量。
-     *
-     * @param pageSize 原始每页数量
-     * @return 安全每页数量
-     */
-    private int normalizePageSize(Integer pageSize) {
-        if (pageSize == null || pageSize < 1) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    /**
-     * 计算分页偏移量，避免极端页码导致整数溢出。
-     *
-     * @param pageNo 页码
-     * @param pageSize 每页数量
-     * @return 偏移量
-     */
-    private int calculateOffset(int pageNo, int pageSize) {
-        long offset = (long) (pageNo - 1) * pageSize;
-        return offset > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) offset;
     }
 
     /**

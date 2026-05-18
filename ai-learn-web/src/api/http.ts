@@ -1,3 +1,5 @@
+import { API_SUCCESS_CODE, AUTH_TOKEN_STORAGE_KEY, DEFAULT_API_BASE_URL, REFRESH_TOKEN_HEADER } from '../constants/api';
+
 export interface ApiResponse<T> {
   code: string;
   message: string;
@@ -9,12 +11,6 @@ export interface StreamEvent {
   event: string;
   data: string;
 }
-
-export const AUTH_TOKEN_STORAGE_KEY = 'ai_learn_access_token';
-
-const SUCCESS_CODE = 'SUCCESS';
-const REFRESH_TOKEN_HEADER = 'X-Refresh-Token';
-const DEFAULT_API_BASE_URL = '/api/v1';
 
 /**
  * 获取接口基础地址。
@@ -68,7 +64,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
   saveRefreshedToken(response);
 
   const result = (await response.json()) as ApiResponse<T>;
-  if (result.code !== SUCCESS_CODE) {
+  if (result.code !== API_SUCCESS_CODE) {
     throw new Error(result.message || '请求处理失败');
   }
   return result.data;

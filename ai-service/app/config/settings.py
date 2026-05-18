@@ -2,6 +2,8 @@ from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.config.constants import AI_GRADING_API_KEY_PLACEHOLDER, AI_SERVICE_TOKEN_PLACEHOLDER, LOCAL_RULE_MODEL
+
 
 # 固定定位 ai-service 工程目录，避免从不同目录启动时读取错 .env。
 BASE_DIR = Path(__file__).resolve().parents[2]
@@ -10,12 +12,12 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 class Settings(BaseSettings):
     """AI 服务配置。"""
 
-    ai_service_token: str = "AI_SERVICE_TOKEN占位符"
+    ai_service_token: str = AI_SERVICE_TOKEN_PLACEHOLDER
     qdrant_url: str = "http://127.0.0.1:6333"
     qdrant_collection: str = "ai_learn_knowledge"
     ai_grading_base_url: str = ""
-    ai_grading_api_key: str = "AI_GRADING_API_KEY占位符"
-    ai_grading_model: str = "LOCAL_RULE"
+    ai_grading_api_key: str = AI_GRADING_API_KEY_PLACEHOLDER
+    ai_grading_model: str = LOCAL_RULE_MODEL
     ai_grading_model_provider: str = ""
     ai_grading_timeout_seconds: int = 20
 

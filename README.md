@@ -1,13 +1,13 @@
 # AI 学习项目
 
-本项目当前迭代为 `sprint202612`，目标是在已有前后端工程底座上持续完善系统题库管理、CSV导入、AI聊天式刷题、AI评分、RAG 检索和轻量成长汇总能力。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
+本项目当前已形成“前端学习平台 + Java 业务后端 + Python AI 服务”的可运行闭环，核心能力包括学习路线展示、用户认证、建议评论区、热门面经、系统题库管理、AI 智能刷题、AI 评分/讨论、成长等级/段位/勋章和 RAG 入库检索。学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
 
 ## 项目结构
 
 | 目录 | 说明 |
 | --- | --- |
-| `ai-learn-backend` | Spring Boot 后端服务，提供用户、系统题库、AI刷题、RAG 任务和成长体系接口。 |
-| `ai-learn-web` | Vue 3 + Vite 前端项目，提供学习平台页面。 |
+| `ai-learn-backend` | Spring Boot 后端服务，提供认证、用户、互动、系统题库、AI刷题、RAG 任务、成长体系和管理后台接口。 |
+| `ai-learn-web` | Vue 3 + Vite 前端项目，提供清新简约的学习平台、刷题、个人中心和管理者中心页面。 |
 | `ai-service` | FastAPI AI 服务，提供 AI 评分和 RAG 入库相关能力。 |
 
 
@@ -24,7 +24,7 @@
 | Node.js | 20 LTS 或 22 LTS | 运行 `ai-learn-web`。 |
 | Python | 3.11+ | 运行 `ai-service`。 |
 | MySQL | 8.4 LTS | 保存用户、系统题库、刷题汇总、RAG 任务和成长数据。 |
-| Qdrant | 1.x | 必选；支撑 RAG 知识入库和向量检索能力。 |
+| Qdrant | 1.x | 启用 RAG 入库/检索时必选；默认用于知识片段向量索引。 |
 
 中间件安装、启动和部署注意事项请优先查看：
 
@@ -33,7 +33,7 @@
 - [AI模型服务配置说明](doc/中间件/AI模型服务.md)
 - [Redis 本地与部署说明](doc/中间件/Redis.md)
 
-说明：当前完整本地启动流程依赖 MySQL、Qdrant 和 AI 服务；Redis 文档仅作为后续能力预留参考。所有真实密码、Token、密钥和生产连接地址都只能保存在本地私有配置中，禁止提交到仓库。
+说明：基础登录、题库、互动和刷题功能依赖 MySQL；启用 AI 评分/讨论需启动 `ai-service`；启用 RAG 入库/检索需同时启动 Qdrant。Redis 当前未接入运行代码，文档仅作为后续缓存/限流能力预留参考。所有真实密码、Token、密钥和生产连接地址都只能保存在本地私有配置中，禁止提交到仓库。
 
 ### 2. 准备后端配置
 
@@ -49,7 +49,7 @@ SPRING_FLYWAY_ENABLED="true"
 JWT_SECRET="至少32位本地JWT密钥占位符"
 JWT_EXPIRES_IN_SECONDS="7200"
 
-# AI 服务为必选项，请保持 token 与 ai-service/.env 一致。
+# 启用 AI 服务时，请保持 token 与 ai-service/.env 一致。
 AI_SERVICE_ENABLED="true"
 AI_SERVICE_BASE_URL="http://127.0.0.1:8000"
 AI_SERVICE_TOKEN="AI_SERVICE_TOKEN本地占位符"
@@ -66,7 +66,7 @@ Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Obj
 }
 ```
 
-说明：Flyway 默认启用，后端启动后会自动执行 `V1` 到 `V11` 数据库迁移，初始化用户、互动、题库、刷题、RAG 任务、成长徽章和超级管理员标识相关表结构。
+说明：Flyway 默认启用，后端启动后会自动执行 `src/main/resources/db/migration` 下全部数据库迁移，初始化用户、互动、题库、刷题会话、RAG 任务、成长徽章、系统设置和超级管理员标识相关表结构。
 
 ### 3. 准备前端配置
 

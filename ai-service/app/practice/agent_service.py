@@ -13,6 +13,7 @@ from langchain.chat_models import init_chat_model
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 from pydantic import BaseModel
 
+from app.config.constants import AI_GRADING_API_KEY_PLACEHOLDER, CHAT_COMPLETIONS_PATH, LOCAL_RULE_MODEL
 from app.config.settings import settings
 from app.schemas.practice import (
     PracticeDiscussRequest,
@@ -23,9 +24,6 @@ from app.schemas.practice import (
 
 _SPLIT_PATTERN = re.compile(r"[\s，。、；：,.!?！？（）()\"'“”‘’]+")
 _MAX_KEYWORDS = 10
-_LOCAL_RULE_MODEL = "LOCAL_RULE"
-_API_KEY_PLACEHOLDER = "AI_GRADING_API_KEY占位符"
-_CHAT_COMPLETIONS_PATH = "/chat/completions"
 _FALLBACK_DISCUSS_REPLY = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。"
 _GRADE_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请使用简体中文完成面试题评分。"
 _DISCUSSION_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请只围绕当前刷题上下文回答，使用简体中文。"
@@ -610,8 +608,8 @@ class PracticeAgentService:
         return (
             bool(settings.ai_grading_base_url.strip())
             and bool(api_key)
-            and model.upper() != _LOCAL_RULE_MODEL
-            and api_key != _API_KEY_PLACEHOLDER
+            and model.upper() != LOCAL_RULE_MODEL
+            and api_key != AI_GRADING_API_KEY_PLACEHOLDER
         )
 
     def _grade_model(self):
@@ -658,8 +656,8 @@ class PracticeAgentService:
     def _normalized_base_url(self) -> str:
         """规整 OpenAI 兼容基础地址。"""
         base_url = settings.ai_grading_base_url.strip().rstrip("/")
-        if base_url.endswith(_CHAT_COMPLETIONS_PATH):
-            return base_url[: -len(_CHAT_COMPLETIONS_PATH)]
+        if base_url.endswith(CHAT_COMPLETIONS_PATH):
+            return base_url[: -len(CHAT_COMPLETIONS_PATH)]
         return base_url
 
     def _message_content(self, message: Any) -> str:

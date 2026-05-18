@@ -2,7 +2,7 @@ import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { login, logout, register, type LoginPayload, type RegisterPayload } from '../api/auth';
-import { AUTH_TOKEN_STORAGE_KEY } from '../api/http';
+import { AUTH_TOKEN_STORAGE_KEY } from '../constants/api';
 import { getCurrentUser, type CurrentUser } from '../api/user';
 
 /**

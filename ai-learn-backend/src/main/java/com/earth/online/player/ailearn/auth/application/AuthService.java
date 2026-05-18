@@ -1,8 +1,10 @@
 package com.earth.online.player.ailearn.auth.application;
 
+import com.earth.online.player.ailearn.auth.domain.AuthConstants;
 import com.earth.online.player.ailearn.auth.interfaces.AuthResponse;
 import com.earth.online.player.ailearn.auth.interfaces.LoginRequest;
 import com.earth.online.player.ailearn.auth.interfaces.RegisterRequest;
+import com.earth.online.player.ailearn.common.constant.AppConstants;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.JwtTokenService;
@@ -18,21 +20,11 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-
 /**
  * 认证应用服务。
  */
 @Service
 public class AuthService {
-
-    private static final String TOKEN_TYPE = "Bearer";
-    private static final int DEFAULT_EXPERIENCE = 0;
-    private static final String DEFAULT_LEVEL_CODE = "LV1";
-    private static final String DEFAULT_RANK_CODE = "QI_REFINING";
-    private static final boolean DEFAULT_SUPER_ADMIN = false;
-    private static final int DEFAULT_MAX_USERS = 10000;
-    private static final String MAX_USERS_SETTING_KEY = "MAX_USERS";
-    private static final String USER_LIMIT_REACHED_MESSAGE = "当前系统用户数量已达上限，等待管理员升级服务器并扩容";
 
     private final UserMapper userMapper;
     private final GrowthMapper growthMapper;
@@ -90,10 +82,10 @@ public class AuthService {
         user.setNickname(nickname);
         user.setEmail(email);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setExperience(DEFAULT_EXPERIENCE);
-        user.setLevelCode(DEFAULT_LEVEL_CODE);
-        user.setRankCode(DEFAULT_RANK_CODE);
-        user.setSuperAdmin(DEFAULT_SUPER_ADMIN);
+        user.setExperience(AuthConstants.DEFAULT_EXPERIENCE);
+        user.setLevelCode(AuthConstants.DEFAULT_LEVEL_CODE);
+        user.setRankCode(AuthConstants.DEFAULT_RANK_CODE);
+        user.setSuperAdmin(AuthConstants.DEFAULT_SUPER_ADMIN);
         userMapper.insert(user);
 
         User savedUser = userMapper.findById(user.getId());
@@ -121,7 +113,7 @@ public class AuthService {
     private void ensureUserCapacityAvailable() {
         long currentUsers = userMapper.countActiveUsers();
         if (currentUsers >= resolveMaxUsers()) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), USER_LIMIT_REACHED_MESSAGE);
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), AuthConstants.USER_LIMIT_REACHED_MESSAGE);
         }
     }
 
@@ -131,14 +123,14 @@ public class AuthService {
      * @return 最大用户数
      */
     private int resolveMaxUsers() {
-        String value = systemSettingMapper.findValue(MAX_USERS_SETTING_KEY);
+        String value = systemSettingMapper.findValue(AuthConstants.MAX_USERS_SETTING_KEY);
         if (value == null || value.isBlank()) {
-            return DEFAULT_MAX_USERS;
+            return AuthConstants.DEFAULT_MAX_USERS;
         }
         try {
             return Math.max(1, Integer.parseInt(value));
         } catch (NumberFormatException exception) {
-            return DEFAULT_MAX_USERS;
+            return AuthConstants.DEFAULT_MAX_USERS;
         }
     }
 
@@ -152,7 +144,7 @@ public class AuthService {
         refreshGrowthSnapshot(user);
         UserSummary summary = UserSummaryConverter.toSummary(user);
         String accessToken = jwtTokenService.generateToken(user.getId(), user.getUsername());
-        return new AuthResponse(accessToken, TOKEN_TYPE, jwtTokenService.getExpiresInSeconds(), summary);
+        return new AuthResponse(accessToken, AppConstants.TOKEN_TYPE_BEARER, jwtTokenService.getExpiresInSeconds(), summary);
     }
 
     /**

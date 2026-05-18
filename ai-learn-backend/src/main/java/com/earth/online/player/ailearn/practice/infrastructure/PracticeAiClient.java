@@ -1,5 +1,6 @@
 package com.earth.online.player.ailearn.practice.infrastructure;
 
+import com.earth.online.player.ailearn.ai.AiServiceConstants;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -31,8 +32,6 @@ import org.springframework.util.StringUtils;
 @Component
 public class PracticeAiClient {
 
-    private static final String INTERNAL_TOKEN_HEADER = "X-Internal-Token";
-    private static final String JSON_CONTENT_TYPE = "application/json; charset=utf-8";
     private static final Logger LOGGER = LoggerFactory.getLogger(PracticeAiClient.class);
 
     private final AiServiceProperties properties;
@@ -78,7 +77,7 @@ public class PracticeAiClient {
             payload.put("userAnswer", userAnswer);
 
             // AI 服务异常时返回空结果，由后端本地规则兜底。
-            JsonNode data = postJson("/internal/v1/practice/answer/grade", payload).orElse(null);
+            JsonNode data = postJson(AiServiceConstants.PRACTICE_GRADE_PATH, payload).orElse(null);
             if (data == null) {
                 return Optional.empty();
             }
@@ -110,7 +109,7 @@ public class PracticeAiClient {
         }
         try {
             ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
-            JsonNode data = postJson("/internal/v1/practice/discuss", payload).orElse(null);
+            JsonNode data = postJson(AiServiceConstants.PRACTICE_DISCUSS_PATH, payload).orElse(null);
             if (data == null || !data.hasNonNull("reply")) {
                 return Optional.empty();
             }
@@ -144,7 +143,7 @@ public class PracticeAiClient {
         }
         try {
             ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
-            return postEventStream("/internal/v1/practice/discuss/stream", payload, chunkConsumer);
+            return postEventStream(AiServiceConstants.PRACTICE_DISCUSS_STREAM_PATH, payload, chunkConsumer);
         } catch (RuntimeException exception) {
             LOGGER.warn("AI 服务流式讨论失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
             return Optional.empty();
@@ -164,9 +163,9 @@ public class PracticeAiClient {
                     .uri(URI.create(normalizeBaseUrl() + path))
                     .timeout(timeout())
                     .version(HttpClient.Version.HTTP_1_1)
-                    .header("Content-Type", JSON_CONTENT_TYPE)
-                    .header("Accept", JSON_CONTENT_TYPE)
-                    .header(INTERNAL_TOKEN_HEADER, properties.getToken())
+                    .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
+                    .header("Accept", AiServiceConstants.JSON_CONTENT_TYPE)
+                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken())
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -175,7 +174,7 @@ public class PracticeAiClient {
                 return Optional.empty();
             }
             JsonNode root = objectMapper.readTree(response.body());
-            if (!"SUCCESS".equals(root.path("code").asText())) {
+            if (!AiServiceConstants.SUCCESS_CODE.equals(root.path("code").asText())) {
                 LOGGER.warn("AI 服务业务响应失败，已进入本地兜底：path={} code={}", path, root.path("code").asText());
                 return Optional.empty();
             }
@@ -201,9 +200,9 @@ public class PracticeAiClient {
                     .uri(URI.create(normalizeBaseUrl() + path))
                     .timeout(timeout())
                     .version(HttpClient.Version.HTTP_1_1)
-                    .header("Content-Type", JSON_CONTENT_TYPE)
-                    .header("Accept", "text/event-stream")
-                    .header(INTERNAL_TOKEN_HEADER, properties.getToken())
+                    .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
+                    .header("Accept", AiServiceConstants.EVENT_STREAM_CONTENT_TYPE)
+                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken())
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());

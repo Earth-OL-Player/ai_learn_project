@@ -4,14 +4,14 @@ import com.earth.online.player.ailearn.answer.domain.AnswerGradingPort;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthContext;
-import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.security.AuthSupport;
 import com.earth.online.player.ailearn.growth.application.GrowthAwardService;
 import com.earth.online.player.ailearn.growth.application.GrowthService;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
+import com.earth.online.player.ailearn.practice.domain.PracticeConstants;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiClient;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiGradingResult;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
@@ -34,7 +34,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
@@ -47,19 +46,6 @@ import org.springframework.util.StringUtils;
 @Service
 public class PracticeService {
 
-    private static final String PHASE_QUESTIONING = "QUESTIONING";
-    private static final String PHASE_ANSWERING = "ANSWERING";
-    private static final String PHASE_DISCUSSING = "DISCUSSING";
-    private static final String ACTION_QUESTION = "QUESTION";
-    private static final String ACTION_GRADING = "GRADING";
-    private static final String ACTION_DISCUSSION = "DISCUSSION";
-    private static final String ACTION_TIP = "TIP";
-    private static final String FALLBACK_DISCUSSION_MESSAGE = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。";
-    private static final int MAX_STORED_ANSWER_LENGTH = 4000;
-    private static final int MAX_GRADING_SUMMARY_LENGTH = 2000;
-    private static final int MAX_DISCUSSION_HISTORY_MESSAGES = 12;
-    private static final int MAX_DISCUSSION_HISTORY_CONTENT_LENGTH = 1000;
-    private static final Set<String> UNRELATED_WORDS = Set.of("天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看", "星座");
     private static final TypeReference<List<DiscussionHistoryMessage>> DISCUSSION_HISTORY_TYPE = new TypeReference<>() {
     };
 
@@ -126,7 +112,7 @@ public class PracticeService {
             PracticeQuestionRecord record = practiceMapper.findQuestionByCode(userId, session.getQuestionCode());
             question = record == null ? null : toQuestionResponse(record);
         }
-        String phase = session == null ? PHASE_QUESTIONING : session.getPhase();
+        String phase = session == null ? PracticeConstants.PHASE_QUESTIONING : session.getPhase();
         return new PracticeStateResponse(
                 phase,
                 phaseText(phase),
@@ -147,7 +133,7 @@ public class PracticeService {
     public PracticeMessageResponse nextQuestion(PracticeActionRequest request) {
         Long userId = currentUserId();
         PracticeQuestionRecord question = selectQuestion(userId, normalizeTypes(request == null ? null : request.questionTypes()));
-        practiceMapper.upsertQuestionSession(userId, question.getCode(), PHASE_ANSWERING);
+        practiceMapper.upsertQuestionSession(userId, question.getCode(), PracticeConstants.PHASE_ANSWERING);
         return questionResponse(question, "已为你抽取一道新题，请认真作答。答完后我会给出评分和建议。");
     }
 
@@ -160,7 +146,7 @@ public class PracticeService {
     public PracticeMessageResponse retryCurrentQuestion() {
         Long userId = currentUserId();
         PracticeQuestionRecord question = currentQuestion(userId);
-        practiceMapper.upsertQuestionSession(userId, question.getCode(), PHASE_ANSWERING);
+        practiceMapper.upsertQuestionSession(userId, question.getCode(), PracticeConstants.PHASE_ANSWERING);
         return questionResponse(question, "已重新进入本题作答，请再次提交你的答案。");
     }
 
@@ -175,13 +161,13 @@ public class PracticeService {
         Long userId = currentUserId();
         String content = normalizeContent(request == null ? null : request.content());
         PracticeSessionRecord session = practiceMapper.findSession(userId);
-        String phase = session == null ? PHASE_QUESTIONING : session.getPhase();
+        String phase = session == null ? PracticeConstants.PHASE_QUESTIONING : session.getPhase();
 
         // 出题阶段只允许出题相关表达，防止刷题入口被当作通用聊天使用。
-        if (PHASE_QUESTIONING.equals(phase)) {
+        if (PracticeConstants.PHASE_QUESTIONING.equals(phase)) {
             return handleQuestioningMessage(userId, content, request);
         }
-        if (PHASE_ANSWERING.equals(phase)) {
+        if (PracticeConstants.PHASE_ANSWERING.equals(phase)) {
             return handleAnsweringMessage(userId, content);
         }
         return handleDiscussingMessage(userId, content, request);
@@ -199,13 +185,13 @@ public class PracticeService {
         Long userId = currentUserId();
         String content = normalizeContent(request == null ? null : request.content());
         PracticeSessionRecord session = practiceMapper.findSession(userId);
-        String phase = session == null ? PHASE_QUESTIONING : session.getPhase();
+        String phase = session == null ? PracticeConstants.PHASE_QUESTIONING : session.getPhase();
 
         // 出题和评分仍需要完整业务结果；讨论阶段优先使用真实模型流式输出。
-        if (PHASE_QUESTIONING.equals(phase)) {
+        if (PracticeConstants.PHASE_QUESTIONING.equals(phase)) {
             return handleQuestioningMessage(userId, content, request);
         }
-        if (PHASE_ANSWERING.equals(phase)) {
+        if (PracticeConstants.PHASE_ANSWERING.equals(phase)) {
             return handleAnsweringMessage(userId, content);
         }
         return handleDiscussingMessageStream(userId, content, request, chunkConsumer);
@@ -221,11 +207,11 @@ public class PracticeService {
      */
     private PracticeMessageResponse handleQuestioningMessage(Long userId, String content, PracticeMessageRequest request) {
         if (!isQuestionRequest(content)) {
-            return tip(PHASE_QUESTIONING, "这里专注 AI 刷题，你可以输入：请给我出一道 RAG 类型的题，或点击开始刷题。");
+            return tip(PracticeConstants.PHASE_QUESTIONING, "这里专注 AI 刷题，你可以输入：请给我出一道 RAG 类型的题，或点击开始刷题。");
         }
         List<String> requestedTypes = mergeRequestedTypes(content, request == null ? null : request.questionTypes());
         PracticeQuestionRecord question = selectQuestion(userId, requestedTypes);
-        practiceMapper.upsertQuestionSession(userId, question.getCode(), PHASE_ANSWERING);
+        practiceMapper.upsertQuestionSession(userId, question.getCode(), PracticeConstants.PHASE_ANSWERING);
         return questionResponse(question, "收到，你的出题请求已处理，请作答当前题目。");
     }
 
@@ -238,11 +224,11 @@ public class PracticeService {
      */
     private PracticeMessageResponse handleAnsweringMessage(Long userId, String content) {
         if (isRetryRequest(content) || isNextRequest(content)) {
-            return tip(PHASE_ANSWERING, "请先提交当前题答案；如果想换题，可以点击下一题按钮。");
+            return tip(PracticeConstants.PHASE_ANSWERING, "请先提交当前题答案；如果想换题，可以点击下一题按钮。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
         if (isUnrelatedToPractice(content)) {
-            return tip(PHASE_ANSWERING, "当前处于答题阶段，请先围绕本题提交你的答案。完成评分后，我再陪你分析本题细节。");
+            return tip(PracticeConstants.PHASE_ANSWERING, "当前处于答题阶段，请先围绕本题提交你的答案。完成评分后，我再陪你分析本题细节。");
         }
         return submitAnswer(userId, question, content);
     }
@@ -262,12 +248,12 @@ public class PracticeService {
         if (isNextRequest(content) || isExplicitQuestionRequest(content)) {
             List<String> requestedTypes = mergeRequestedTypes(content, request == null ? null : request.questionTypes());
             PracticeQuestionRecord question = selectQuestion(userId, requestedTypes);
-            practiceMapper.upsertQuestionSession(userId, question.getCode(), PHASE_ANSWERING);
+            practiceMapper.upsertQuestionSession(userId, question.getCode(), PracticeConstants.PHASE_ANSWERING);
             return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
         if (isUnrelatedToPractice(content)) {
-            return tip(PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
+            return tip(PracticeConstants.PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
         }
         PracticeSessionRecord session = practiceMapper.findSession(userId);
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
@@ -299,12 +285,12 @@ public class PracticeService {
         if (isNextRequest(content) || isExplicitQuestionRequest(content)) {
             List<String> requestedTypes = mergeRequestedTypes(content, request == null ? null : request.questionTypes());
             PracticeQuestionRecord question = selectQuestion(userId, requestedTypes);
-            practiceMapper.upsertQuestionSession(userId, question.getCode(), PHASE_ANSWERING);
+            practiceMapper.upsertQuestionSession(userId, question.getCode(), PracticeConstants.PHASE_ANSWERING);
             return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
         if (isUnrelatedToPractice(content)) {
-            return tip(PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
+            return tip(PracticeConstants.PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
         }
         PracticeSessionRecord session = practiceMapper.findSession(userId);
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
@@ -339,7 +325,7 @@ public class PracticeService {
         PracticeGradingResponse grading = recordSummaryAndBuildResponse(userId, question, gradingResult, fallbackUsed);
         practiceMapper.updateSessionPhase(
                 userId,
-                PHASE_DISCUSSING,
+                PracticeConstants.PHASE_DISCUSSING,
                 grading.score(),
                 limitStoredAnswer(userAnswer),
                 buildGradingSummary(grading)
@@ -348,8 +334,8 @@ public class PracticeService {
         // 评分完成后进入本题讨论阶段，并仅保存当前题最近一次答案用于后续追问上下文。
         String message = buildGradingMessage(fallbackUsed);
         return new PracticeMessageResponse(
-                ACTION_GRADING,
-                PHASE_DISCUSSING,
+                PracticeConstants.ACTION_GRADING,
+                PracticeConstants.PHASE_DISCUSSING,
                 message,
                 toQuestionResponse(question),
                 grading,
@@ -417,8 +403,8 @@ public class PracticeService {
 
         // 追问类勋章通过成长信息透传给前端，评分结果为空时仍可弹框提示。
         return new PracticeMessageResponse(
-                ACTION_DISCUSSION,
-                PHASE_DISCUSSING,
+                PracticeConstants.ACTION_DISCUSSION,
+                PracticeConstants.PHASE_DISCUSSING,
                 reply,
                 toQuestionResponse(question),
                 null,
@@ -476,7 +462,7 @@ public class PracticeService {
         appendSummaryList(builder, "建议复习", grading.reviewKnowledgePoints());
         builder.append("优化建议：").append(grading.improvementAdvice()).append("。");
         builder.append("评分来源：").append(Boolean.TRUE.equals(grading.fallbackUsed()) ? "本地兜底评分" : "AI评分").append("。");
-        return limitText(builder.toString(), MAX_GRADING_SUMMARY_LENGTH);
+        return limitText(builder.toString(), PracticeConstants.MAX_GRADING_SUMMARY_LENGTH);
     }
 
     /**
@@ -505,11 +491,11 @@ public class PracticeService {
      */
     private void saveDiscussionHistory(Long userId, String historyJson, String userMessage, String assistantReply) {
         List<DiscussionHistoryMessage> history = new ArrayList<>(readDiscussionHistory(historyJson));
-        history.add(new DiscussionHistoryMessage("user", limitText(userMessage, MAX_DISCUSSION_HISTORY_CONTENT_LENGTH)));
-        history.add(new DiscussionHistoryMessage("assistant", limitText(assistantReply, MAX_DISCUSSION_HISTORY_CONTENT_LENGTH)));
+        history.add(new DiscussionHistoryMessage("user", limitText(userMessage, PracticeConstants.MAX_DISCUSSION_HISTORY_CONTENT_LENGTH)));
+        history.add(new DiscussionHistoryMessage("assistant", limitText(assistantReply, PracticeConstants.MAX_DISCUSSION_HISTORY_CONTENT_LENGTH)));
 
         // 只保留最近若干条消息，避免上下文过长影响响应速度。
-        int fromIndex = Math.max(0, history.size() - MAX_DISCUSSION_HISTORY_MESSAGES);
+        int fromIndex = Math.max(0, history.size() - PracticeConstants.MAX_DISCUSSION_HISTORY_MESSAGES);
         List<DiscussionHistoryMessage> limitedHistory = history.subList(fromIndex, history.size());
         practiceMapper.updateDiscussionHistory(userId, writeDiscussionHistory(limitedHistory));
     }
@@ -629,7 +615,7 @@ public class PracticeService {
      * @return 出题响应
      */
     private PracticeMessageResponse questionResponse(PracticeQuestionRecord question, String message) {
-        return new PracticeMessageResponse(ACTION_QUESTION, PHASE_ANSWERING, message, toQuestionResponse(question), null, growthService.getCurrentGrowth());
+        return new PracticeMessageResponse(PracticeConstants.ACTION_QUESTION, PracticeConstants.PHASE_ANSWERING, message, toQuestionResponse(question), null, growthService.getCurrentGrowth());
     }
 
     /**
@@ -640,7 +626,7 @@ public class PracticeService {
      * @return 提示响应
      */
     private PracticeMessageResponse tip(String phase, String message) {
-        return new PracticeMessageResponse(ACTION_TIP, phase, message, null, null, growthService.getCurrentGrowth());
+        return new PracticeMessageResponse(PracticeConstants.ACTION_TIP, phase, message, null, null, growthService.getCurrentGrowth());
     }
 
     /**
@@ -779,7 +765,7 @@ public class PracticeService {
      * @return 是否无关
      */
     private boolean isObviouslyUnrelated(String content) {
-        return UNRELATED_WORDS.stream().anyMatch(content::contains);
+        return PracticeConstants.UNRELATED_WORDS.stream().anyMatch(content::contains);
     }
 
     /**
@@ -789,12 +775,12 @@ public class PracticeService {
      * @return 可保存答案
      */
     private String limitStoredAnswer(String userAnswer) {
-        if (userAnswer.length() <= MAX_STORED_ANSWER_LENGTH) {
+        if (userAnswer.length() <= PracticeConstants.MAX_STORED_ANSWER_LENGTH) {
             return userAnswer;
         }
 
         // 仅保留足够追问的上下文，避免异常长答案撑大当前会话记录。
-        return userAnswer.substring(0, MAX_STORED_ANSWER_LENGTH);
+        return userAnswer.substring(0, PracticeConstants.MAX_STORED_ANSWER_LENGTH);
     }
 
     /**
@@ -819,7 +805,7 @@ public class PracticeService {
      * @return 讨论回复
      */
     private String buildLocalDiscussionReply() {
-        return FALLBACK_DISCUSSION_MESSAGE;
+        return PracticeConstants.FALLBACK_DISCUSSION_MESSAGE;
     }
 
     /**
@@ -828,11 +814,7 @@ public class PracticeService {
      * @return 用户ID
      */
     private Long currentUserId() {
-        AuthenticatedUser authenticatedUser = AuthContext.getUser();
-        if (authenticatedUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-        return authenticatedUser.userId();
+        return AuthSupport.requireCurrentUserId();
     }
 
     /**
@@ -842,10 +824,10 @@ public class PracticeService {
      * @return 阶段文案
      */
     private String phaseText(String phase) {
-        if (PHASE_ANSWERING.equals(phase)) {
+        if (PracticeConstants.PHASE_ANSWERING.equals(phase)) {
             return "答题中";
         }
-        if (PHASE_DISCUSSING.equals(phase)) {
+        if (PracticeConstants.PHASE_DISCUSSING.equals(phase)) {
             return "本题讨论中";
         }
         return "等待出题";

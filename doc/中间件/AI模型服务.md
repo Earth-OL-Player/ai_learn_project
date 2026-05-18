@@ -1,13 +1,13 @@
 # AI模型服务配置说明
 
-版本：v1.4
+版本：v1.5
 日期：2026-05-18
 适用工程：`ai-service`、`ai-learn-backend`  
 适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
 
 ## 1. 用途
 
-AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前代码通过 LangChain `init_chat_model` 接入模型；答案评分使用 `with_structured_output(..., method="json_mode")` 返回结构化 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
+AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前代码通过 LangChain `init_chat_model` 接入模型，公共占位符与 LOCAL_RULE 常量集中在 `app/config/constants.py`；答案评分使用 `with_structured_output(..., method="json_mode")` 返回结构化 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
 
 ## 2. 推荐版本
 
@@ -77,6 +77,7 @@ AI_GRADING_TIMEOUT_SECONDS=20
 - 不得把用户完整答案和聊天记录写入日志或向量库。
 - 评分结构化输出通过 LangChain `with_structured_output(..., method="json_mode")` 解析，避免 DeepSeek reasoning 模型触发工具调用 `tool_choice` 兼容问题；仍需要保留兜底，避免模型异常输出影响刷题主流程。
 - DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
+- Java 后端内部调用路径、Header、响应码和内容类型集中在 `AiServiceConstants`，新增 AI 内部接口时需同步维护该常量类与本文档。
 
 ## 9. sprint202614 本地联调和 422 排查补充
 
