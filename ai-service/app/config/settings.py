@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     ai_grading_base_url: str = ""
     ai_grading_api_key: str = "AI_GRADING_API_KEY占位符"
     ai_grading_model: str = "LOCAL_RULE"
+    ai_grading_model_provider: str = ""
     ai_grading_timeout_seconds: int = 20
 
     # 统一读取 ai-service/.env，保证本地启动方式稳定。
@@ -23,3 +24,4 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+

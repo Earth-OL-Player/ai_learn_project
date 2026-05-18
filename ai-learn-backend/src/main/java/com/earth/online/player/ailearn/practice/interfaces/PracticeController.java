@@ -10,7 +10,10 @@ import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -105,13 +108,17 @@ public class PracticeController {
      * @return SSE 发射器
      */
     @PostMapping(value = "/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-    public SseEmitter handleMessageStream(@RequestBody PracticeMessageRequest request) {
+    public ResponseEntity<SseEmitter> handleMessageStream(@RequestBody PracticeMessageRequest request) {
         SseEmitter emitter = new SseEmitter((long) SSE_TIMEOUT_MILLIS);
         AuthenticatedUser authenticatedUser = AuthContext.getUser();
 
         // 异步线程中恢复认证上下文，保证复用原有业务服务和权限校验。
         CompletableFuture.runAsync(() -> emitMessageStream(request, emitter, authenticatedUser));
-        return emitter;
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform")
+                .header("X-Accel-Buffering", "no")
+                .contentType(MediaType.TEXT_EVENT_STREAM)
+                .body(emitter);
     }
 
     /**
@@ -123,10 +130,13 @@ public class PracticeController {
      */
     private void emitMessageStream(PracticeMessageRequest request, SseEmitter emitter, AuthenticatedUser authenticatedUser) {
         AtomicBoolean chunkSent = new AtomicBoolean(false);
+        AtomicInteger chunkCount = new AtomicInteger(0);
+        long startMillis = System.currentTimeMillis();
         try {
             AuthContext.setUser(authenticatedUser);
+            emitter.send(SseEmitter.event().comment("stream-open"));
             PracticeMessageResponse result = practiceService.handleMessageStream(request, chunk -> {
-                emitChunk(emitter, chunk);
+                emitChunk(emitter, chunk, chunkCount.incrementAndGet(), startMillis);
                 chunkSent.set(true);
             });
             if (!chunkSent.get()) {
@@ -165,12 +175,34 @@ public class PracticeController {
      * @param emitter SSE 发射器
      * @param chunk 文本片段
      */
-    private void emitChunk(SseEmitter emitter, String chunk) {
+    private void emitChunk(SseEmitter emitter, String chunk, int chunkCount, long startMillis) {
         try {
             emitter.send(SseEmitter.event().name("message").data(chunk));
+            logEmittedChunk(chunk, chunkCount, startMillis);
         } catch (IOException exception) {
             throw new IllegalStateException("流式消息发送失败", exception);
         }
+    }
+
+    /**
+     * 记录后端 SSE 片段输出情况。
+     *
+     * @param chunk 文本片段
+     * @param chunkCount 片段数量
+     * @param startMillis 开始时间
+     */
+    private void logEmittedChunk(String chunk, int chunkCount, long startMillis) {
+        if (chunkCount != 1 && chunkCount % 50 != 0) {
+            return;
+        }
+
+        // 只记录长度和耗时，不记录用户答案或模型文本正文。
+        LOGGER.info(
+                "Java 后端已发送 SSE 流式片段：count={} chars={} elapsedMs={}",
+                chunkCount,
+                chunk == null ? 0 : chunk.length(),
+                System.currentTimeMillis() - startMillis
+        );
     }
 
     /**

@@ -4,11 +4,13 @@ import json
 import logging
 import re
 import time
-import urllib.error
-import urllib.request
 import uuid
 from collections.abc import Iterator
 from typing import Any
+
+from langchain.agents import create_agent
+from langchain.chat_models import init_chat_model
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
 
 from app.config.settings import settings
 from app.schemas.practice import (
@@ -16,8 +18,6 @@ from app.schemas.practice import (
     PracticeDiscussResponse,
     PracticeGradeRequest,
     PracticeGradeResponse,
-    PracticeRelevanceRequest,
-    PracticeRelevanceResponse,
 )
 
 _SPLIT_PATTERN = re.compile(r"[\s，。、；：,.!?！？（）()\"'“”‘’]+")
@@ -27,10 +27,10 @@ _API_KEY_PLACEHOLDER = "AI_GRADING_API_KEY占位符"
 _CHAT_COMPLETIONS_PATH = "/chat/completions"
 _LLM_RESPONSE_PREVIEW_LENGTH = 200
 _FALLBACK_DISCUSS_REPLY = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。"
+_GRADE_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请使用简体中文完成面试题评分。"
+_DISCUSSION_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请只围绕当前刷题上下文回答，使用简体中文。"
 _ASCII_TERM_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+_.-]{1,}")
 _ASCII_IGNORED_TERMS = {"query", "rewrite"}
-_UNRELATED_WORDS = {"天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看", "星座"}
-_PRACTICE_RELATED_WORDS = {"题", "答案", "回答", "评分", "分数", "知识点", "技术", "概念", "原理", "为什么", "怎么", "如何"}
 _DOMAIN_TERMS = (
     "RAG",
     "Embedding",
@@ -118,7 +118,7 @@ class PracticeAgentService:
             if llm_response is not None:
                 return llm_response
 
-        # 大模型不可用时，不再伪造讨论内容，只提示当前无法探讨。
+        # 大模型不可用时，不伪造讨论内容，避免误导用户。
         logger.info(
             "未调用真实大模型，返回讨论不可用提示：model=%s baseUrlConfigured=%s",
             settings.ai_grading_model,
@@ -141,23 +141,205 @@ class PracticeAgentService:
         yield self._build_sse_event("message", {"content": _FALLBACK_DISCUSS_REPLY})
         yield self._build_sse_event("done", {})
 
-    def judge_relevance(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse:
-        """优先调用真实大模型判断输入是否与刷题上下文相关。"""
-        if self._is_llm_enabled():
-            llm_response = self._judge_relevance_by_llm(request)
-            if llm_response is not None:
-                return llm_response
-
-        # 未配置真实大模型时，使用保守本地规则兜底，避免影响正常答题。
+    def _grade_answer_by_llm(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
+        """使用 LangChain 结构化输出完成答案评分。"""
+        trace_id = self._new_trace_id()
+        messages = self._build_grade_messages(request)
+        start_time = time.perf_counter()
         logger.info(
-            "未调用真实大模型，使用本地规则判断相关性：model=%s baseUrlConfigured=%s",
+            "准备调用 LangChain 结构化评分：traceId=%s model=%s promptChars=%s",
+            trace_id,
             settings.ai_grading_model,
-            bool(settings.ai_grading_base_url),
+            sum(len(str(message.content)) for message in messages),
         )
-        return self._judge_relevance_by_local_rule(request)
+        try:
+            agent = self._grade_agent()
+            result = agent.invoke({"messages": messages})
+            grading = result.get("structured_response")
+            if grading is None:
+                raise ValueError("评分 Agent 未返回结构化结果")
+            grading = grading if isinstance(grading, PracticeGradeResponse) else PracticeGradeResponse.model_validate(grading)
+            grading.fallbackUsed = False
+
+            # LangChain 结构化输出成功后记录概要日志，不打印完整答案和密钥。
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.info(
+                "LangChain 结构化评分完成：traceId=%s model=%s durationMs=%s score=%s",
+                trace_id,
+                settings.ai_grading_model,
+                elapsed_ms,
+                grading.score,
+            )
+            return grading
+        except Exception as exc:  # noqa: BLE001 - 模型、网络和结构化解析异常统一进入兜底。
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.warning("LangChain 结构化评分失败，使用本地规则兜底：traceId=%s durationMs=%s error=%s", trace_id, elapsed_ms, exc)
+            return None
+
+    def _discuss_by_llm(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
+        """使用 LangChain Agent 生成本题讨论回复。"""
+        trace_id = self._new_trace_id()
+        start_time = time.perf_counter()
+        logger.info("准备调用 LangChain Agent 本题讨论：traceId=%s model=%s", trace_id, settings.ai_grading_model)
+        try:
+            result = self._discussion_agent().invoke({"messages": self._build_discuss_messages(request)})
+            reply = self._last_ai_reply(result).strip()
+            if not reply:
+                return None
+
+            # 讨论回复只记录预览，避免日志泄露完整用户答案。
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.info(
+                "LangChain Agent 本题讨论完成：traceId=%s durationMs=%s responsePreview=%s",
+                trace_id,
+                elapsed_ms,
+                reply[:_LLM_RESPONSE_PREVIEW_LENGTH],
+            )
+            return PracticeDiscussResponse(reply=reply)
+        except Exception as exc:  # noqa: BLE001 - 模型和图执行异常统一进入兜底。
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.warning("LangChain Agent 本题讨论失败，使用本地兜底：traceId=%s durationMs=%s error=%s", trace_id, elapsed_ms, exc)
+            return None
+
+    def _stream_discuss_by_llm(self, request: PracticeDiscussRequest) -> Iterator[str]:
+        """使用 LangChain 流式接口生成讨论回复。"""
+        trace_id = self._new_trace_id()
+        start_time = time.perf_counter()
+        messages = self._build_discuss_messages(request)
+        logger.info("准备调用 LangChain 流式讨论：traceId=%s model=%s", trace_id, settings.ai_grading_model)
+        try:
+            emitted_any = False
+
+            # 当前 create_agent 在部分 OpenAI 兼容供应商下只产出图事件，不产出可见 token。
+            # 流式接口优先走底层聊天模型，避免先等待 Agent 空流导致前端长时间“思考中”。
+            for content in self._stream_discuss_with_model(messages, trace_id, start_time):
+                emitted_any = True
+                yield self._build_sse_event("message", {"content": content})
+
+            # 模型原生 stream 不可用时，再尝试 Agent stream，保留 LangChain Agent 兜底能力。
+            if not emitted_any:
+                logger.warning("LangChain 模型原生流式未产出可见片段，切换 Agent 流式输出：traceId=%s", trace_id)
+                for content in self._stream_discuss_with_agent(messages, trace_id, start_time):
+                    emitted_any = True
+                    yield self._build_sse_event("message", {"content": content})
+
+            # 双流式链路均无输出时，最后才回退非流式，避免前端长时间空白。
+            if not emitted_any:
+                logger.warning("LangChain 流式链路均无可见片段，切换非流式兜底：traceId=%s", trace_id)
+                fallback_response = self._discuss_by_llm(request) or self._discuss_by_local_rule(request)
+                yield self._build_sse_event("message", {"content": fallback_response.reply})
+            yield self._build_sse_event("done", {})
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.info("LangChain 流式讨论完成：traceId=%s durationMs=%s", trace_id, elapsed_ms)
+        except Exception as exc:  # noqa: BLE001 - 流式模型异常统一进入兜底。
+            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            logger.warning("LangChain 流式讨论失败：traceId=%s durationMs=%s error=%s", trace_id, elapsed_ms, exc)
+            fallback_response = self._discuss_by_local_rule(request)
+            yield self._build_sse_event("message", {"content": fallback_response.reply})
+            yield self._build_sse_event("done", {})
+
+    def _stream_discuss_with_agent(self, messages: list[BaseMessage], trace_id: str, start_time: float) -> Iterator[str]:
+        """使用 LangChain Agent 流式输出讨论回复。"""
+        event_count = 0
+        content_count = 0
+        for chunk in self._discussion_agent().stream({"messages": messages}, stream_mode="messages", version="v2"):
+            event_count += 1
+            content = self._agent_stream_content(chunk)
+            if content:
+                content_count += 1
+                self._log_visible_stream_chunk(trace_id, start_time, "agent", content_count, content)
+                yield content
+
+        # 记录事件数和可见文本数，用于定位供应商是否支持 Agent token 流。
+        logger.info("LangChain Agent 流式事件统计：events=%s visibleChunks=%s", event_count, content_count)
+
+    def _stream_discuss_with_model(self, messages: list[BaseMessage], trace_id: str, start_time: float) -> Iterator[str]:
+        """使用底层聊天模型原生流式输出讨论回复。"""
+        chunk_count = 0
+        model_messages = [SystemMessage(content=_DISCUSSION_SYSTEM_PROMPT), *messages]
+
+        # 模型原生 stream 作为 Agent stream 的流式兜底，但仍保留同样的系统提示。
+        for chunk in self._chat_model().stream(model_messages):
+            content = self._chunk_content(chunk)
+            if content:
+                chunk_count += 1
+                self._log_visible_stream_chunk(trace_id, start_time, "model", chunk_count, content)
+                yield content
+
+        # 记录模型原生流式片段数，便于排查模型供应商流式能力。
+        logger.info("LangChain 模型原生流式片段统计：visibleChunks=%s", chunk_count)
+
+    def _log_visible_stream_chunk(self, trace_id: str, start_time: float, source: str, count: int, content: str) -> None:
+        """记录可见流式片段输出情况。"""
+        if count != 1 and count % 50 != 0:
+            return
+
+        # 日志只打印长度和耗时，避免用户答案或模型全文进入日志。
+        elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+        logger.info(
+            "LangChain 可见流式片段：traceId=%s source=%s count=%s chars=%s elapsedMs=%s",
+            trace_id,
+            source,
+            count,
+            len(content),
+            elapsed_ms,
+        )
+
+    def _build_grade_messages(self, request: PracticeGradeRequest) -> list[BaseMessage]:
+        """构造评分消息列表。"""
+        return [
+            HumanMessage(content=self._build_grade_prompt(request)),
+        ]
+
+    def _build_discuss_messages(self, request: PracticeDiscussRequest) -> list[BaseMessage]:
+        """构造本题讨论消息列表。"""
+        messages: list[BaseMessage] = [
+            HumanMessage(content=self._build_discuss_context_prompt(request)),
+        ]
+
+        # 历史消息由 Java 后端维护，只保留当前题短期上下文。
+        for item in request.conversationHistory:
+            content = item.content.strip()
+            if not content:
+                continue
+            if item.role == "assistant":
+                messages.append(AIMessage(content=content))
+            else:
+                messages.append(HumanMessage(content=content))
+        messages.append(HumanMessage(content=f"用户当前疑问：{request.message}"))
+        return messages
+
+    def _build_grade_prompt(self, request: PracticeGradeRequest) -> str:
+        """构造答案评分提示词。"""
+        return (
+            "请根据题目、参考答案和用户答案进行评分。\n"
+            "score 必须是 0 到 100 的整数，correct 表示是否及格。\n"
+            "hitPoints、missingPoints、problems、reviewKnowledgePoints 必须是简短数组。\n"
+            "improvementAdvice 使用一到两句话概括最优先的改进方向。\n"
+            "不要把题目分类当作必须命中的扣分项；允许用户使用同义表达。\n"
+            f"题目分类：{request.questionType}\n"
+            f"题目：{request.question}\n"
+            f"参考答案：{request.standardAnswer}\n"
+            f"用户答案：{request.userAnswer}"
+        )
+
+    def _build_discuss_context_prompt(self, request: PracticeDiscussRequest) -> str:
+        """构造本题讨论上下文提示词。"""
+        grading_summary = request.gradingSummary or "暂无评分摘要"
+        last_answer = request.lastUserAnswer or "暂无"
+        return (
+            "请基于下方当前题上下文回答后续用户疑问。\n"
+            "要求：不要复述题目原文；优先解释评分依据、知识点、用户答案缺口和可改进表达。\n"
+            f"题目分类：{request.questionType}\n"
+            f"题目：{request.question}\n"
+            f"参考答案：{request.standardAnswer}\n"
+            f"用户最近一次答案：{last_answer}\n"
+            f"AI评分结果摘要：{grading_summary}\n"
+            "下面会继续给出当前题历史追问消息和本轮最新疑问。"
+        )
 
     def _grade_answer_by_local_rule(self, request: PracticeGradeRequest) -> PracticeGradeResponse:
-        """结合 RAG 片段和本地规则给答案评分。"""
+        """结合参考答案关键词和本地规则给答案评分。"""
         keywords = self._build_keywords(request)
         answer = request.userAnswer.strip()
 
@@ -194,182 +376,13 @@ class PracticeAgentService:
         # 讨论能力不再使用本地规则伪造，避免给用户造成模型仍可追问的误解。
         return PracticeDiscussResponse(reply=_FALLBACK_DISCUSS_REPLY)
 
-    def _judge_relevance_by_local_rule(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse:
-        """使用本地规则兜底判断输入相关性。"""
-        normalized_message = self._normalize_text(request.message)
-        if any(word in request.message for word in _UNRELATED_WORDS):
-            return PracticeRelevanceResponse(relevant=False, reason="命中明显无关闲聊词")
-
-        # 命中题目、参考答案、分类或常见刷题词时视为相关。
-        related_sources = [request.question, request.standardAnswer, request.questionType]
-        if any(self._normalize_text(source) and self._normalize_text(source) in normalized_message for source in related_sources):
-            return PracticeRelevanceResponse(relevant=True, reason="命中当前题上下文")
-        if any(word in request.message for word in _PRACTICE_RELATED_WORDS):
-            return PracticeRelevanceResponse(relevant=True, reason="命中刷题相关表达")
-        return PracticeRelevanceResponse(relevant=True, reason="本地规则保守放行")
-
-    def _grade_answer_by_llm(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
-        """调用 OpenAI 兼容大模型接口完成答案评分。"""
-        trace_id = self._new_trace_id()
-        prompt = self._build_grade_prompt(request)
-        messages = self._build_messages(prompt)
-
-        # 日志会打印到 uvicorn/Python 终端，便于确认真实请求是否发出。
-        content = self._call_chat_completion(trace_id, "answer_grade", messages)
-        if not content:
-            return None
-
-        # 大模型必须返回结构化 JSON，解析失败时走本地规则兜底。
-        try:
-            data = self._extract_json_object(content)
-            score = self._normalize_score(data.get("score"))
-            return PracticeGradeResponse(
-                score=score,
-                correct=self._normalize_bool(data.get("correct"), score >= 60),
-                hitPoints=self._normalize_string_list(data.get("hitPoints")),
-                missingPoints=self._normalize_string_list(data.get("missingPoints")),
-                problems=self._normalize_string_list(data.get("problems")),
-                referenceAnswer=str(data.get("referenceAnswer") or request.standardAnswer),
-                improvementAdvice=str(data.get("improvementAdvice") or "建议对照参考答案补充关键要点。"),
-                reviewKnowledgePoints=self._normalize_string_list(data.get("reviewKnowledgePoints")) or [request.questionType],
-                fallbackUsed=False,
-            )
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            logger.warning("大模型评分结果解析失败，使用本地规则兜底：traceId=%s error=%s", trace_id, exc)
-            return None
-
-    def _discuss_by_llm(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
-        """调用 OpenAI 兼容大模型接口生成学习讨论回复。"""
-        trace_id = self._new_trace_id()
-        prompt = self._build_discuss_prompt(request)
-        messages = self._build_messages(prompt)
-
-        # 讨论回复只需要自然语言文本，空回复时走本地规则兜底。
-        content = self._call_chat_completion(trace_id, "practice_discuss", messages)
-        if not content:
-            return None
-        return PracticeDiscussResponse(reply=content.strip())
-
-    def _judge_relevance_by_llm(self, request: PracticeRelevanceRequest) -> PracticeRelevanceResponse | None:
-        """调用 OpenAI 兼容大模型接口判断输入相关性。"""
-        trace_id = self._new_trace_id()
-        prompt = self._build_relevance_prompt(request)
-        messages = self._build_messages(prompt)
-
-        # 相关性判断只要求返回短 JSON，解析失败时走本地保守规则。
-        content = self._call_chat_completion(trace_id, "practice_relevance", messages)
-        if not content:
-            return None
-        try:
-            data = self._extract_json_object(content)
-            relevant = self._normalize_bool(data.get("relevant"), True)
-            reason = str(data.get("reason") or "")[:120]
-            return PracticeRelevanceResponse(relevant=relevant, reason=reason)
-        except (TypeError, ValueError, json.JSONDecodeError) as exc:
-            logger.warning("大模型相关性判断解析失败，使用本地规则兜底：traceId=%s error=%s", trace_id, exc)
-            return None
-
-    def _stream_discuss_by_llm(self, request: PracticeDiscussRequest) -> Iterator[str]:
-        """调用 OpenAI 兼容大模型接口流式生成讨论回复。"""
-        trace_id = self._new_trace_id()
-        prompt = self._build_discuss_prompt(request)
-        messages = self._build_messages(prompt)
-        emitted_any = False
-        for content in self._call_chat_completion_stream(trace_id, "practice_discuss_stream", messages):
-            emitted_any = True
-            yield self._build_sse_event("message", {"content": content})
-
-        # 如果供应商没有返回任何可见 token，则回落为非流式调用，避免前端一直空白。
-        if not emitted_any:
-            fallback_response = self._discuss_by_llm(request) or self._discuss_by_local_rule(request)
-            yield self._build_sse_event("message", {"content": fallback_response.reply})
-        yield self._build_sse_event("done", {})
-
-    def _call_chat_completion(self, trace_id: str, scene: str, messages: list[dict[str, str]]) -> str | None:
-        """调用 OpenAI 兼容 chat completions 接口，并输出调用前后日志。"""
-        url = self._chat_completion_url()
-        start_time = time.perf_counter()
-        payload = {
-            "model": settings.ai_grading_model,
-            "messages": messages,
-            "temperature": 0.2,
-        }
-
-        # 调用前日志不打印密钥和完整提示词，避免终端泄露敏感信息。
-        logger.info(
-            "准备调用真实大模型：traceId=%s scene=%s model=%s url=%s promptChars=%s",
-            trace_id,
-            scene,
-            settings.ai_grading_model,
-            url,
-            sum(len(message["content"]) for message in messages),
-        )
-
-        try:
-            request = self._build_http_request(url, payload)
-            with urllib.request.urlopen(request, timeout=settings.ai_grading_timeout_seconds) as response:
-                raw_body = response.read().decode("utf-8")
-
-            # 调用后日志包含耗时和 usage，便于在终端确认真实模型已响应。
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            response_data = json.loads(raw_body)
-            content = self._read_chat_content(response_data)
-            logger.info(
-                "真实大模型调用完成：traceId=%s scene=%s model=%s durationMs=%s usage=%s responsePreview=%s",
-                trace_id,
-                scene,
-                settings.ai_grading_model,
-                elapsed_ms,
-                response_data.get("usage"),
-                content[:_LLM_RESPONSE_PREVIEW_LENGTH],
-            )
-            return content
-        except (TimeoutError, OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, UnicodeDecodeError) as exc:
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            logger.warning("真实大模型调用失败：traceId=%s scene=%s durationMs=%s error=%s", trace_id, scene, elapsed_ms, exc)
-            return None
-
-    def _call_chat_completion_stream(self, trace_id: str, scene: str, messages: list[dict[str, str]]) -> Iterator[str]:
-        """调用 OpenAI 兼容 chat completions 流式接口。"""
-        url = self._chat_completion_url()
-        start_time = time.perf_counter()
-        payload = {
-            "model": settings.ai_grading_model,
-            "messages": messages,
-            "temperature": 0.2,
-            "stream": True,
-        }
-
-        # 流式调用只记录概要信息，避免泄露完整提示词或用户答案。
-        logger.info(
-            "准备调用真实大模型流式接口：traceId=%s scene=%s model=%s url=%s promptChars=%s",
-            trace_id,
-            scene,
-            settings.ai_grading_model,
-            url,
-            sum(len(message["content"]) for message in messages),
-        )
-        try:
-            request = self._build_http_request(url, payload)
-            with urllib.request.urlopen(request, timeout=settings.ai_grading_timeout_seconds) as response:
-                for raw_line in response:
-                    content = self._read_stream_content(raw_line)
-                    if content:
-                        yield content
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            logger.info("真实大模型流式调用完成：traceId=%s scene=%s durationMs=%s", trace_id, scene, elapsed_ms)
-        except (TimeoutError, OSError, urllib.error.URLError, json.JSONDecodeError, KeyError, UnicodeDecodeError) as exc:
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            logger.warning("真实大模型流式调用失败：traceId=%s scene=%s durationMs=%s error=%s", trace_id, scene, elapsed_ms, exc)
-
     def _build_keywords(self, request: PracticeGradeRequest) -> list[str]:
         """只从参考答案构建必答关键词。"""
         keywords: list[str] = []
 
-        # 题目分类和检索片段不作为扣分项，避免用户答对但没复述分类名时被误扣。
+        # 题目分类不作为扣分项，避免用户答对但没复述分类名时被误扣。
         self._add_ascii_terms(keywords, request.standardAnswer)
         self._add_domain_terms(keywords, request.standardAnswer)
-
         for token in _SPLIT_PATTERN.split(request.standardAnswer):
             self._add_keyword(keywords, token)
         return self._filter_excluded_keywords(keywords, request)[:_MAX_KEYWORDS]
@@ -471,160 +484,98 @@ class PracticeAgentService:
         # LOCAL_RULE 或占位符配置表示仅使用本地规则，不发起外部模型请求。
         return bool(settings.ai_grading_base_url.strip()) and bool(api_key) and model.upper() != _LOCAL_RULE_MODEL and api_key != _API_KEY_PLACEHOLDER
 
-    def _chat_completion_url(self) -> str:
-        """根据配置生成 OpenAI 兼容 chat completions 地址。"""
+    def _grade_agent(self):
+        """创建答案评分 Agent。"""
+        return create_agent(
+            model=self._chat_model(),
+            tools=[],
+            system_prompt=_GRADE_SYSTEM_PROMPT,
+            response_format=PracticeGradeResponse,
+        )
+
+    def _discussion_agent(self):
+        """创建本题讨论 Agent。"""
+        return create_agent(
+            model=self._chat_model(),
+            tools=[],
+            system_prompt=_DISCUSSION_SYSTEM_PROMPT,
+        )
+
+    def _chat_model(self):
+        """使用 LangChain 推荐入口初始化聊天模型。"""
+        kwargs: dict[str, Any] = {
+            "temperature": 0.2,
+            "timeout": settings.ai_grading_timeout_seconds,
+        }
+        if settings.ai_grading_api_key.strip():
+            kwargs["api_key"] = settings.ai_grading_api_key
+        if settings.ai_grading_base_url.strip():
+            kwargs["base_url"] = self._normalized_base_url()
+        if settings.ai_grading_model_provider.strip():
+            kwargs["model_provider"] = settings.ai_grading_model_provider.strip()
+
+        # init_chat_model 支持通过 provider/model 抽象切换底层模型供应商。
+        return init_chat_model(settings.ai_grading_model, **kwargs)
+
+    def _normalized_base_url(self) -> str:
+        """规整 OpenAI 兼容基础地址。"""
         base_url = settings.ai_grading_base_url.strip().rstrip("/")
         if base_url.endswith(_CHAT_COMPLETIONS_PATH):
-            return base_url
-        return f"{base_url}{_CHAT_COMPLETIONS_PATH}"
+            return base_url[: -len(_CHAT_COMPLETIONS_PATH)]
+        return base_url
 
-    def _build_http_request(self, url: str, payload: dict[str, Any]) -> urllib.request.Request:
-        """构造 UTF-8 JSON 请求对象。"""
-        body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        headers = {
-            "Authorization": f"Bearer {settings.ai_grading_api_key}",
-            "Content-Type": "application/json; charset=utf-8",
-        }
+    def _message_content(self, message: Any) -> str:
+        """读取 LangChain 消息内容。"""
+        content = getattr(message, "content", "")
+        return self._normalize_content(content).strip()
 
-        # 使用标准库避免新增依赖，保持本次改动足够小。
-        return urllib.request.Request(url=url, data=body, headers=headers, method="POST")
-
-    def _build_messages(self, prompt: str) -> list[dict[str, str]]:
-        """构造大模型消息列表。"""
-        return [
-            {"role": "system", "content": "你是严谨的 AI 学习助手，请使用简体中文回答。"},
-            {"role": "user", "content": prompt},
-        ]
-
-    def _build_grade_prompt(self, request: PracticeGradeRequest) -> str:
-        """构造答案评分提示词。"""
-        return (
-            "请根据题目、参考答案和用户答案进行评分，只返回 JSON，不要返回 Markdown。\n"
-            "JSON 字段为：score、correct、hitPoints、missingPoints、problems、referenceAnswer、"
-            "improvementAdvice、reviewKnowledgePoints。\n"
-            "score 必须是 0 到 100 的整数，correct 表示是否及格。\n"
-            "hitPoints 和 missingPoints 必须返回简短的总结式数组，每项只表达一个要点。\n"
-            "improvementAdvice 使用一到两句话概括最优先的改进方向，不要输出冗长段落。\n"
-            "不要把题目分类当作必须命中的扣分项；允许用户使用同义表达，只按是否覆盖参考答案含义评分。\n"
-            f"题目分类：{request.questionType}\n"
-            f"题目：{request.question}\n"
-            f"参考答案：{request.standardAnswer}\n"
-            f"用户答案：{request.userAnswer}"
-        )
-
-    def _build_discuss_prompt(self, request: PracticeDiscussRequest) -> str:
-        """构造学习讨论提示词。"""
-        return (
-            "请围绕当前刷题内容，用简洁、清晰的中文回答用户疑问。\n"
-            "不要复述用户疑问或题目原文，直接给出解释、示例或改进建议。\n"
-            "如果用户询问刚刚的题目、刚刚提交的答案或评分依据，请优先使用下方上下文准确回答。\n"
-            f"题目分类：{request.questionType}\n"
-            f"题目：{request.question}\n"
-            f"参考答案：{request.standardAnswer}\n"
-            f"用户刚刚提交的答案：{request.lastUserAnswer or '暂无'}\n"
-            f"用户疑问：{request.message}"
-        )
-
-    def _build_relevance_prompt(self, request: PracticeRelevanceRequest) -> str:
-        """构造输入相关性判断提示词。"""
-        return (
-            "请判断用户输入是否与刷题、回答当前面试题、讨论当前题技术点、泛技术学习问题有关。\n"
-            "只返回 JSON，不要返回 Markdown。JSON 字段：relevant、reason。\n"
-            "相关示例：提交答案、问刚刚答案是什么、追问知识点、要求解释技术概念、请求重答或下一题。\n"
-            "无关示例：天气、新闻、股票、旅游、做饭、写诗、闲聊颜值、与技术学习无关的翻译或娱乐请求。\n"
-            "不确定时请返回 relevant=true，避免误伤正常学习表达。\n"
-            f"当前阶段：{request.phase}\n"
-            f"题目分类：{request.questionType}\n"
-            f"题目：{request.question}\n"
-            f"参考答案：{request.standardAnswer}\n"
-            f"用户输入：{request.message}"
-        )
-
-    def _read_chat_content(self, response_data: dict[str, Any]) -> str:
-        """读取 OpenAI 兼容响应中的文本内容。"""
-        choices = response_data.get("choices")
-        if not isinstance(choices, list) or not choices:
-            raise KeyError("choices")
-
-        # 兼容 message.content 格式，保持解析逻辑明确。
-        message = choices[0].get("message")
-        if not isinstance(message, dict):
-            raise KeyError("message")
-        content = message.get("content")
-        if not isinstance(content, str):
-            raise KeyError("content")
-        return content.strip()
-
-    def _read_stream_content(self, raw_line: bytes) -> str:
-        """读取 OpenAI 兼容流式响应中的单个文本片段。"""
-        line = raw_line.decode("utf-8").strip()
-        if not line.startswith("data:"):
-            return ""
-        data_text = line.removeprefix("data:").strip()
-        if not data_text or data_text == "[DONE]":
+    def _last_ai_reply(self, result: dict[str, Any]) -> str:
+        """从 Agent 执行结果中读取最后一条 AI 回复。"""
+        messages = result.get("messages")
+        if not isinstance(messages, list):
             return ""
 
-        # Chat Completions 流式响应通常位于 choices[0].delta.content。
-        data = json.loads(data_text)
-        choices = data.get("choices")
-        if not isinstance(choices, list) or not choices:
-            return ""
-        delta = choices[0].get("delta")
-        if not isinstance(delta, dict):
-            return ""
-        content = delta.get("content")
-        return content if isinstance(content, str) else ""
+        # create_agent 返回的状态中，最新模型回复通常位于 messages 最后一条。
+        for message in reversed(messages):
+            if isinstance(message, AIMessage) or getattr(message, "type", "") == "ai":
+                return self._message_content(message)
+        return ""
+
+    def _agent_stream_content(self, chunk: Any) -> str:
+        """读取 Agent 流式事件中的文本片段。"""
+        if isinstance(chunk, tuple) and chunk:
+            return self._chunk_content(chunk[0])
+        if isinstance(chunk, dict):
+            return self._last_ai_reply(chunk)
+        return self._chunk_content(chunk)
+
+    def _chunk_content(self, chunk: Any) -> str:
+        """读取 LangChain 流式消息片段内容。"""
+        content = getattr(chunk, "content", "")
+        normalized_content = self._normalize_content(content)
+        if normalized_content:
+            return normalized_content
+
+        # 某些模型集成会把 token 放在 text 或 content_blocks 字段中。
+        text = getattr(chunk, "text", "")
+        if isinstance(text, str):
+            return text
+        return self._normalize_content(getattr(chunk, "content_blocks", ""))
+
+    def _normalize_content(self, content: Any) -> str:
+        """规整 LangChain 消息内容。"""
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            return "".join(self._normalize_content(item) for item in content)
+        if isinstance(content, dict):
+            return str(content.get("text") or content.get("content") or content.get("input") or "")
+        return "" if content is None else str(content)
 
     def _build_sse_event(self, event: str, data: dict[str, Any]) -> str:
         """构造内部 SSE 事件文本。"""
         payload = json.dumps(data, ensure_ascii=False)
         return f"event: {event}\ndata: {payload}\n\n"
-
-    def _extract_json_object(self, content: str) -> dict[str, Any]:
-        """从大模型文本中提取 JSON 对象。"""
-        text = content.strip()
-        if text.startswith("```"):
-            text = re.sub(r"^```(?:json)?\s*", "", text)
-            text = re.sub(r"\s*```$", "", text)
-
-        # 只截取首尾大括号之间的内容，兼容模型多输出少量说明的情况。
-        start_index = text.find("{")
-        end_index = text.rfind("}")
-        if start_index < 0 or end_index < start_index:
-            raise ValueError("未找到 JSON 对象")
-        data = json.loads(text[start_index : end_index + 1])
-        if not isinstance(data, dict):
-            raise ValueError("JSON 根节点不是对象")
-        return data
-
-    def _normalize_score(self, value: Any) -> int:
-        """规范化大模型返回的分数。"""
-        try:
-            score = int(value)
-        except (TypeError, ValueError) as exc:
-            raise ValueError("score 不是有效整数") from exc
-        return min(100, max(0, score))
-
-    def _normalize_bool(self, value: Any, default: bool) -> bool:
-        """规范化大模型返回的布尔值。"""
-        if isinstance(value, bool):
-            return value
-        if isinstance(value, str):
-            return value.strip().lower() in {"true", "1", "yes", "是", "正确"}
-        return default
-
-    def _normalize_string_list(self, value: Any) -> list[str]:
-        """规范化大模型返回的字符串列表。"""
-        if not isinstance(value, list):
-            return []
-
-        # 去除空白项，并限制单项长度，避免异常长文本影响前端展示。
-        result: list[str] = []
-        for item in value:
-            text = str(item).strip()
-            if text:
-                result.append(text[:120])
-        return result
 
     def _new_trace_id(self) -> str:
         """生成单次大模型调用追踪 ID。"""

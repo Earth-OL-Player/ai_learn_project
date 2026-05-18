@@ -9,8 +9,6 @@ from app.schemas.practice import (
     PracticeDiscussResponse,
     PracticeGradeRequest,
     PracticeGradeResponse,
-    PracticeRelevanceRequest,
-    PracticeRelevanceResponse,
 )
 
 router = APIRouter(prefix="/internal/v1/practice", tags=["practice"])
@@ -32,9 +30,3 @@ def discuss(request: PracticeDiscussRequest) -> ApiResponse[PracticeDiscussRespo
 def discuss_stream(request: PracticeDiscussRequest) -> StreamingResponse:
     """围绕当前题继续流式讨论学习。"""
     return StreamingResponse(practice_agent_service.stream_discuss(request), media_type="text/event-stream")
-
-
-@router.post("/relevance", response_model=ApiResponse[PracticeRelevanceResponse], dependencies=[Depends(verify_internal_token)])
-def judge_relevance(request: PracticeRelevanceRequest) -> ApiResponse[PracticeRelevanceResponse]:
-    """判断用户输入是否与当前刷题上下文相关。"""
-    return ApiResponse(data=practice_agent_service.judge_relevance(request))

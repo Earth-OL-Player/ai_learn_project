@@ -25,7 +25,11 @@ import com.earth.online.player.ailearn.practice.interfaces.PracticeMessageRespon
 import com.earth.online.player.ailearn.practice.interfaces.PracticeQuestionResponse;
 import com.earth.online.player.ailearn.practice.interfaces.PracticeStateResponse;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
@@ -52,7 +56,12 @@ public class PracticeService {
     private static final String ACTION_TIP = "TIP";
     private static final String FALLBACK_DISCUSSION_MESSAGE = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。";
     private static final int MAX_STORED_ANSWER_LENGTH = 4000;
-    private static final Set<String> UNRELATED_WORDS = Set.of("天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看");
+    private static final int MAX_GRADING_SUMMARY_LENGTH = 2000;
+    private static final int MAX_DISCUSSION_HISTORY_MESSAGES = 12;
+    private static final int MAX_DISCUSSION_HISTORY_CONTENT_LENGTH = 1000;
+    private static final Set<String> UNRELATED_WORDS = Set.of("天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看", "星座");
+    private static final TypeReference<List<DiscussionHistoryMessage>> DISCUSSION_HISTORY_TYPE = new TypeReference<>() {
+    };
 
     private final PracticeMapper practiceMapper;
     private final GrowthMapper growthMapper;
@@ -61,6 +70,7 @@ public class PracticeService {
     private final GrowthAwardService growthAwardService;
     private final AnswerGradingPort answerGradingPort;
     private final PracticeAiClient practiceAiClient;
+    private final ObjectMapper objectMapper;
 
     /**
      * 创建 AI 智能刷题服务。
@@ -72,6 +82,7 @@ public class PracticeService {
      * @param growthAwardService 勋章发放服务
      * @param answerGradingPort 本地评分端口
      * @param practiceAiClient AI 服务客户端
+     * @param objectMapper JSON 序列化器
      */
     public PracticeService(
             PracticeMapper practiceMapper,
@@ -80,7 +91,8 @@ public class PracticeService {
             GrowthService growthService,
             GrowthAwardService growthAwardService,
             AnswerGradingPort answerGradingPort,
-            PracticeAiClient practiceAiClient) {
+            PracticeAiClient practiceAiClient,
+            ObjectMapper objectMapper) {
         this.practiceMapper = practiceMapper;
         this.growthMapper = growthMapper;
         this.userMapper = userMapper;
@@ -88,6 +100,7 @@ public class PracticeService {
         this.growthAwardService = growthAwardService;
         this.answerGradingPort = answerGradingPort;
         this.practiceAiClient = practiceAiClient;
+        this.objectMapper = objectMapper;
     }
 
     /**
@@ -228,7 +241,7 @@ public class PracticeService {
             return tip(PHASE_ANSWERING, "请先提交当前题答案；如果想换题，可以点击下一题按钮。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
-        if (isUnrelatedToPractice(question, PHASE_ANSWERING, content)) {
+        if (isUnrelatedToPractice(content)) {
             return tip(PHASE_ANSWERING, "当前处于答题阶段，请先围绕本题提交你的答案。完成评分后，我再陪你分析本题细节。");
         }
         return submitAnswer(userId, question, content);
@@ -253,12 +266,16 @@ public class PracticeService {
             return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
-        if (isUnrelatedToPractice(question, PHASE_DISCUSSING, content)) {
+        if (isUnrelatedToPractice(content)) {
             return tip(PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
         }
         PracticeSessionRecord session = practiceMapper.findSession(userId);
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
-        String reply = practiceAiClient.discuss(question, lastUserAnswer, content).orElseGet(this::buildLocalDiscussionReply);
+        String gradingSummary = session == null ? "" : session.getLastGradingSummary();
+        String historyJson = session == null ? "" : session.getDiscussionHistoryJson();
+        String reply = practiceAiClient.discuss(question, lastUserAnswer, gradingSummary, historyJson, content)
+                .orElseGet(this::buildLocalDiscussionReply);
+        saveDiscussionHistory(userId, historyJson, content, reply);
         return discussionResponse(userId, question, reply);
     }
 
@@ -286,13 +303,16 @@ public class PracticeService {
             return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
         }
         PracticeQuestionRecord question = currentQuestion(userId);
-        if (isUnrelatedToPractice(question, PHASE_DISCUSSING, content)) {
+        if (isUnrelatedToPractice(content)) {
             return tip(PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
         }
         PracticeSessionRecord session = practiceMapper.findSession(userId);
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
-        String reply = practiceAiClient.discussStream(question, lastUserAnswer, content, chunkConsumer)
+        String gradingSummary = session == null ? "" : session.getLastGradingSummary();
+        String historyJson = session == null ? "" : session.getDiscussionHistoryJson();
+        String reply = practiceAiClient.discussStream(question, lastUserAnswer, gradingSummary, historyJson, content, chunkConsumer)
                 .orElseGet(this::buildLocalDiscussionReply);
+        saveDiscussionHistory(userId, historyJson, content, reply);
         return discussionResponse(userId, question, reply);
     }
 
@@ -317,7 +337,13 @@ public class PracticeService {
                         userAnswer
                 ));
         PracticeGradingResponse grading = recordSummaryAndBuildResponse(userId, question, gradingResult, fallbackUsed);
-        practiceMapper.updateSessionPhase(userId, PHASE_DISCUSSING, grading.score(), limitStoredAnswer(userAnswer));
+        practiceMapper.updateSessionPhase(
+                userId,
+                PHASE_DISCUSSING,
+                grading.score(),
+                limitStoredAnswer(userAnswer),
+                buildGradingSummary(grading)
+        );
 
         // 评分完成后进入本题讨论阶段，并仅保存当前题最近一次答案用于后续追问上下文。
         String message = buildGradingMessage(fallbackUsed);
@@ -430,6 +456,93 @@ public class PracticeService {
             return "比上次回答多拿了 " + Math.max(0, score - previousLast) + " 分，并突破历史最高分新增 " + earnedExperience + " 经验。";
         }
         return "未能突破上次最高分 " + previousBest + " 分，本次经验不变。";
+    }
+
+    /**
+     * 构造当前题评分摘要。
+     *
+     * @param grading 评分响应
+     * @return 评分摘要
+     */
+    private String buildGradingSummary(PracticeGradingResponse grading) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("本次评分：").append(grading.score()).append("分，")
+                .append(Boolean.TRUE.equals(grading.correct()) ? "基本正确" : "仍需改进").append("。");
+
+        // 评分摘要用于后续追问上下文，不需要保留全部前端展示字段。
+        appendSummaryList(builder, "命中点", grading.hitPoints());
+        appendSummaryList(builder, "缺失点", grading.missingPoints());
+        appendSummaryList(builder, "问题点", grading.problems());
+        appendSummaryList(builder, "建议复习", grading.reviewKnowledgePoints());
+        builder.append("优化建议：").append(grading.improvementAdvice()).append("。");
+        builder.append("评分来源：").append(Boolean.TRUE.equals(grading.fallbackUsed()) ? "本地兜底评分" : "AI评分").append("。");
+        return limitText(builder.toString(), MAX_GRADING_SUMMARY_LENGTH);
+    }
+
+    /**
+     * 追加摘要列表。
+     *
+     * @param builder 摘要构造器
+     * @param title 列表标题
+     * @param values 列表值
+     */
+    private void appendSummaryList(StringBuilder builder, String title, List<String> values) {
+        if (values == null || values.isEmpty()) {
+            return;
+        }
+
+        // 列表字段使用顿号连接，减少多轮上下文长度。
+        builder.append(title).append("：").append(String.join("、", values)).append("。");
+    }
+
+    /**
+     * 保存当前题讨论历史。
+     *
+     * @param userId 用户ID
+     * @param historyJson 原始历史JSON
+     * @param userMessage 用户问题
+     * @param assistantReply AI回复
+     */
+    private void saveDiscussionHistory(Long userId, String historyJson, String userMessage, String assistantReply) {
+        List<DiscussionHistoryMessage> history = new ArrayList<>(readDiscussionHistory(historyJson));
+        history.add(new DiscussionHistoryMessage("user", limitText(userMessage, MAX_DISCUSSION_HISTORY_CONTENT_LENGTH)));
+        history.add(new DiscussionHistoryMessage("assistant", limitText(assistantReply, MAX_DISCUSSION_HISTORY_CONTENT_LENGTH)));
+
+        // 只保留最近若干条消息，避免上下文过长影响响应速度。
+        int fromIndex = Math.max(0, history.size() - MAX_DISCUSSION_HISTORY_MESSAGES);
+        List<DiscussionHistoryMessage> limitedHistory = history.subList(fromIndex, history.size());
+        practiceMapper.updateDiscussionHistory(userId, writeDiscussionHistory(limitedHistory));
+    }
+
+    /**
+     * 读取当前题讨论历史。
+     *
+     * @param historyJson 历史JSON
+     * @return 历史消息
+     */
+    private List<DiscussionHistoryMessage> readDiscussionHistory(String historyJson) {
+        if (!StringUtils.hasText(historyJson)) {
+            return Collections.emptyList();
+        }
+        try {
+            return objectMapper.readValue(historyJson, DISCUSSION_HISTORY_TYPE);
+        } catch (JsonProcessingException exception) {
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * 序列化当前题讨论历史。
+     *
+     * @param history 历史消息
+     * @return JSON字符串
+     */
+    private String writeDiscussionHistory(List<DiscussionHistoryMessage> history) {
+        try {
+            return objectMapper.writeValueAsString(history);
+        } catch (JsonProcessingException exception) {
+            return "[]";
+        }
     }
 
     /**
@@ -651,18 +764,11 @@ public class PracticeService {
     /**
      * 判断用户输入是否偏离刷题上下文。
      *
-     * @param question 当前题目
-     * @param phase 当前阶段
      * @param content 用户输入
      * @return 是否无关
      */
-    private boolean isUnrelatedToPractice(PracticeQuestionRecord question, String phase, String content) {
-        Optional<Boolean> aiRelevance = practiceAiClient.judgeRelevance(question, phase, content);
-        if (aiRelevance.isPresent()) {
-            return !aiRelevance.get();
-        }
-
-        // 大模型不可用时保留关键词兜底，避免明显闲聊进入评分或讨论。
+    private boolean isUnrelatedToPractice(String content) {
+        // 当前迭代取消大模型相关性判断，避免额外模型调用拉长用户等待时间。
         return isObviouslyUnrelated(content);
     }
 
@@ -689,6 +795,22 @@ public class PracticeService {
 
         // 仅保留足够追问的上下文，避免异常长答案撑大当前会话记录。
         return userAnswer.substring(0, MAX_STORED_ANSWER_LENGTH);
+    }
+
+    /**
+     * 限制文本长度。
+     *
+     * @param text 原始文本
+     * @param maxLength 最大长度
+     * @return 截断后的文本
+     */
+    private String limitText(String text, int maxLength) {
+        if (text == null || text.length() <= maxLength) {
+            return text;
+        }
+
+        // 截断后保留明确提示，便于模型理解上下文被压缩过。
+        return text.substring(0, maxLength) + "……";
     }
 
     /**
@@ -747,6 +869,15 @@ public class PracticeService {
      */
     private double safeDouble(BigDecimal value) {
         return value == null ? 0.0D : value.doubleValue();
+    }
+
+    /**
+     * 当前题讨论历史消息。
+     *
+     * @param role 消息角色
+     * @param content 消息内容
+     */
+    private static record DiscussionHistoryMessage(String role, String content) {
     }
 }
 

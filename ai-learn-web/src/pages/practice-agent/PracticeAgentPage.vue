@@ -161,7 +161,7 @@
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import MarkdownIt from 'markdown-it';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   fetchPracticeCategories,
@@ -197,6 +197,8 @@ interface PracticeChatSnapshot {
 const EMPTY_LIST_TEXT = '暂无';
 const GUEST_LOGIN_MESSAGE = '注册登录后即可使用该功能';
 const PRACTICE_CHAT_STORAGE_PREFIX = 'ai_learn_practice_chat_';
+const STREAM_TYPEWRITER_CHARS = 2;
+const STREAM_TYPEWRITER_INTERVAL_MILLIS = 24;
 const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
 const loading = ref(false);
 const inputText = ref('');
@@ -213,6 +215,12 @@ const authStore = useAuthStore();
 const route = useRoute();
 const router = useRouter();
 let messageId = 1;
+let streamChunkCount = 0;
+let streamTextQueue = '';
+let streamFlushTimer: number | undefined;
+let streamTargetMessage: ChatMessage | null = null;
+let pendingStreamingResult: { result: PracticeMessageResult; assistantMessage: ChatMessage } | null = null;
+let streamRenderedCount = 0;
 
 // 左侧角色卡昵称优先使用用户昵称，未设置时回退用户名。
 const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
@@ -344,6 +352,7 @@ async function sendMessage(): Promise<void> {
   const assistantMessage = buildAssistantMessage('', null, null);
   assistantMessage.streaming = true;
   messages.value.push(assistantMessage);
+  resetStreamTypewriter(assistantMessage);
   savePracticeSnapshot();
   scrollToBottom();
   loading.value = true;
@@ -357,6 +366,7 @@ async function sendMessage(): Promise<void> {
     );
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '发送失败');
+    clearStreamTypewriter();
     removeStreamingMessage(assistantMessage.id);
   } finally {
     loading.value = false;
@@ -431,6 +441,17 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
  * 应用流式接口的最终响应。
  */
 function applyStreamingResult(result: PracticeMessageResult, assistantMessage: ChatMessage): void {
+  if (streamTextQueue || streamFlushTimer) {
+    pendingStreamingResult = { result, assistantMessage };
+    return;
+  }
+  finishStreamingResult(result, assistantMessage);
+}
+
+/**
+ * 完成流式接口最终响应应用。
+ */
+function finishStreamingResult(result: PracticeMessageResult, assistantMessage: ChatMessage): void {
   const clearMessages = shouldStartNewQuestion(result);
   phase.value = result.phase;
   currentQuestion.value = result.question || currentQuestion.value;
@@ -439,7 +460,7 @@ function applyStreamingResult(result: PracticeMessageResult, assistantMessage: C
 
   // 最终事件携带完整业务数据，用于补齐题目卡片、评分卡片和阶段状态。
   assistantMessage.streaming = false;
-  assistantMessage.text = result.message || assistantMessage.text;
+  assistantMessage.text = assistantMessage.text || result.message || '';
   assistantMessage.question = result.action === 'QUESTION' ? result.question : null;
   assistantMessage.grading = result.grading;
   if (clearMessages) {
@@ -455,9 +476,120 @@ function applyStreamingResult(result: PracticeMessageResult, assistantMessage: C
  * 追加流式文本片段。
  */
 function appendStreamingChunk(message: ChatMessage, chunk: string): void {
-  message.text += chunk;
+  streamChunkCount += 1;
+  logFrontendStreamChunk(chunk);
+  streamTargetMessage = message;
+  streamTextQueue += chunk;
+  startStreamTypewriter();
+}
+
+/**
+ * 重置流式打字机状态。
+ */
+function resetStreamTypewriter(message: ChatMessage): void {
+  clearStreamTypewriter();
+  streamChunkCount = 0;
+  streamTextQueue = '';
+  streamTargetMessage = message;
+  pendingStreamingResult = null;
+  streamRenderedCount = 0;
+}
+
+/**
+ * 清理流式打字机状态。
+ */
+function clearStreamTypewriter(): void {
+  if (streamFlushTimer !== undefined) {
+    window.clearInterval(streamFlushTimer);
+    streamFlushTimer = undefined;
+  }
+  streamTextQueue = '';
+  streamTargetMessage = null;
+  pendingStreamingResult = null;
+  streamRenderedCount = 0;
+}
+
+/**
+ * 启动前端打字机，避免浏览器或代理批量吐出时页面一次性展示。
+ */
+function startStreamTypewriter(): void {
+  if (streamFlushTimer !== undefined) {
+    return;
+  }
+  streamFlushTimer = window.setInterval(flushStreamTextQueue, STREAM_TYPEWRITER_INTERVAL_MILLIS);
+}
+
+/**
+ * 按固定节奏把流式缓冲文本展示到页面。
+ */
+function flushStreamTextQueue(): void {
+  const targetMessage = streamTargetMessage;
+  if (!targetMessage) {
+    clearStreamTypewriter();
+    return;
+  }
+
+  if (!streamTextQueue) {
+    stopStreamTypewriter();
+    applyPendingStreamingResult();
+    return;
+  }
+
+  const currentText = streamTextQueue.slice(0, STREAM_TYPEWRITER_CHARS);
+  streamTextQueue = streamTextQueue.slice(STREAM_TYPEWRITER_CHARS);
+  targetMessage.text += currentText;
+  streamRenderedCount += 1;
+  logFrontendRenderedText(currentText);
   savePracticeSnapshot();
   scrollToBottom();
+}
+
+/**
+ * 停止流式打字机定时器。
+ */
+function stopStreamTypewriter(): void {
+  if (streamFlushTimer === undefined) {
+    return;
+  }
+  window.clearInterval(streamFlushTimer);
+  streamFlushTimer = undefined;
+}
+
+/**
+ * 在打字机输出完成后应用最终业务结果。
+ */
+function applyPendingStreamingResult(): void {
+  if (!pendingStreamingResult) {
+    return;
+  }
+
+  const pendingResult = pendingStreamingResult;
+  pendingStreamingResult = null;
+  finishStreamingResult(pendingResult.result, pendingResult.assistantMessage);
+}
+
+/**
+ * 记录前端打字机实际渲染片段。
+ */
+function logFrontendRenderedText(currentText: string): void {
+  if (streamRenderedCount !== 1 && streamRenderedCount % 50 !== 0) {
+    return;
+  }
+
+  // 只打印渲染长度，避免模型正文进入日志。
+  console.info('前端打字机已渲染片段', { count: streamRenderedCount, chars: currentText.length });
+}
+
+/**
+ * 记录前端收到的流式片段。
+ */
+function logFrontendStreamChunk(chunk: string): void {
+  if (streamChunkCount !== 1 && streamChunkCount % 50 !== 0) {
+    return;
+  }
+
+  // 只打印片段长度，避免用户答案或模型正文进入浏览器日志。
+  console.info('前端收到 SSE 流式片段', { count: streamChunkCount, chars: chunk.length });
 }
 
 /**
@@ -659,6 +791,10 @@ watch(
 );
 
 onMounted(initializePage);
+
+onBeforeUnmount(() => {
+  clearStreamTypewriter();
+});
 </script>
 
 <style scoped lang="scss">

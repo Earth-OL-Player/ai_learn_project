@@ -26,6 +26,13 @@ class PracticeGradeResponse(BaseModel):
     fallbackUsed: bool = False
 
 
+class PracticeConversationMessage(BaseModel):
+    """当前题短期讨论历史消息。"""
+
+    role: str
+    content: str
+
+
 class PracticeDiscussRequest(BaseModel):
     """本题讨论请求。"""
 
@@ -34,6 +41,8 @@ class PracticeDiscussRequest(BaseModel):
     questionType: str
     standardAnswer: str
     lastUserAnswer: str = ""
+    gradingSummary: str = ""
+    conversationHistory: list[PracticeConversationMessage] = Field(default_factory=list)
     message: str
 
 
@@ -41,21 +50,3 @@ class PracticeDiscussResponse(BaseModel):
     """本题讨论响应。"""
 
     reply: str
-
-
-class PracticeRelevanceRequest(BaseModel):
-    """刷题输入相关性判断请求。"""
-
-    questionCode: str
-    question: str
-    questionType: str
-    standardAnswer: str
-    phase: str
-    message: str
-
-
-class PracticeRelevanceResponse(BaseModel):
-    """刷题输入相关性判断响应。"""
-
-    relevant: bool = True
-    reason: str = ""

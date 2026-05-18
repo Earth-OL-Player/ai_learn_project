@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -93,15 +94,22 @@ public class PracticeAiClient {
      *
      * @param question 当前题目
      * @param lastUserAnswer 最近一次答案
+     * @param gradingSummary 最近一次评分摘要
+     * @param discussionHistoryJson 当前题历史讨论JSON
      * @param message 用户消息
      * @return 讨论回复
      */
-    public Optional<String> discuss(PracticeQuestionRecord question, String lastUserAnswer, String message) {
+    public Optional<String> discuss(
+            PracticeQuestionRecord question,
+            String lastUserAnswer,
+            String gradingSummary,
+            String discussionHistoryJson,
+            String message) {
         if (!isEnabled()) {
             return Optional.empty();
         }
         try {
-            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, message);
+            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
             JsonNode data = postJson("/internal/v1/practice/discuss", payload).orElse(null);
             if (data == null || !data.hasNonNull("reply")) {
                 return Optional.empty();
@@ -118,6 +126,8 @@ public class PracticeAiClient {
      *
      * @param question 当前题目
      * @param lastUserAnswer 最近一次答案
+     * @param gradingSummary 最近一次评分摘要
+     * @param discussionHistoryJson 当前题历史讨论JSON
      * @param message 用户消息
      * @param chunkConsumer 文本片段处理器
      * @return 完整讨论回复
@@ -125,49 +135,18 @@ public class PracticeAiClient {
     public Optional<String> discussStream(
             PracticeQuestionRecord question,
             String lastUserAnswer,
+            String gradingSummary,
+            String discussionHistoryJson,
             String message,
             Consumer<String> chunkConsumer) {
         if (!isEnabled()) {
             return Optional.empty();
         }
         try {
-            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, message);
+            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
             return postEventStream("/internal/v1/practice/discuss/stream", payload, chunkConsumer);
         } catch (RuntimeException exception) {
             LOGGER.warn("AI 服务流式讨论失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * 请求 AI 服务判断用户输入是否与当前刷题上下文相关。
-     *
-     * @param question 当前题目
-     * @param phase 当前阶段
-     * @param message 用户消息
-     * @return 相关性判断
-     */
-    public Optional<Boolean> judgeRelevance(PracticeQuestionRecord question, String phase, String message) {
-        if (!isEnabled()) {
-            return Optional.empty();
-        }
-        try {
-            ObjectNode payload = objectMapper.createObjectNode();
-            payload.put("questionCode", question.getCode());
-            payload.put("question", question.getQuestion());
-            payload.put("questionType", question.getQuestionType());
-            payload.put("standardAnswer", question.getStandardAnswer());
-            payload.put("phase", phase);
-            payload.put("message", message);
-
-            // AI 服务不可用时返回空，由后端保留关键词兜底拦截。
-            JsonNode data = postJson("/internal/v1/practice/relevance", payload).orElse(null);
-            if (data == null || !data.hasNonNull("relevant")) {
-                return Optional.empty();
-            }
-            return Optional.of(data.get("relevant").asBoolean(true));
-        } catch (RuntimeException exception) {
-            LOGGER.warn("AI 服务相关性判断失败，已切换关键词兜底：questionCode={}", question.getCode(), exception);
             return Optional.empty();
         }
     }
@@ -217,6 +196,7 @@ public class PracticeAiClient {
      */
     private Optional<String> postEventStream(String path, JsonNode payload, Consumer<String> chunkConsumer) {
         try {
+            long startMillis = System.currentTimeMillis();
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(normalizeBaseUrl() + path))
                     .timeout(timeout())
@@ -231,7 +211,7 @@ public class PracticeAiClient {
                 LOGGER.warn("AI 服务流式调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
                 return Optional.empty();
             }
-            return readEventStream(response, chunkConsumer);
+            return readEventStream(response, chunkConsumer, startMillis);
         } catch (IOException exception) {
             LOGGER.warn("AI 服务流式调用 IO 异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
@@ -250,15 +230,19 @@ public class PracticeAiClient {
      * @return 完整文本
      * @throws IOException 读取异常
      */
-    private Optional<String> readEventStream(HttpResponse<java.io.InputStream> response, Consumer<String> chunkConsumer) throws IOException {
+    private Optional<String> readEventStream(
+            HttpResponse<java.io.InputStream> response,
+            Consumer<String> chunkConsumer,
+            long startMillis) throws IOException {
         StringBuilder replyBuilder = new StringBuilder();
         String eventName = "message";
         StringBuilder dataBuilder = new StringBuilder();
+        AtomicInteger chunkCount = new AtomicInteger(0);
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
-                    processStreamEvent(eventName, dataBuilder.toString(), replyBuilder, chunkConsumer);
+                    processStreamEvent(eventName, dataBuilder.toString(), replyBuilder, chunkConsumer, chunkCount, startMillis);
                     eventName = "message";
                     dataBuilder.setLength(0);
                     continue;
@@ -270,6 +254,7 @@ public class PracticeAiClient {
                 }
             }
         }
+        LOGGER.info("Java 后端读取 AI 服务流式响应完成：chunks={} chars={} elapsedMs={}", chunkCount.get(), replyBuilder.length(), System.currentTimeMillis() - startMillis);
         return replyBuilder.isEmpty() ? Optional.empty() : Optional.of(replyBuilder.toString());
     }
 
@@ -280,8 +265,16 @@ public class PracticeAiClient {
      * @param data 事件数据
      * @param replyBuilder 完整回复构造器
      * @param chunkConsumer 文本片段处理器
+     * @param chunkCount 片段计数
+     * @param startMillis 开始时间
      */
-    private void processStreamEvent(String eventName, String data, StringBuilder replyBuilder, Consumer<String> chunkConsumer) {
+    private void processStreamEvent(
+            String eventName,
+            String data,
+            StringBuilder replyBuilder,
+            Consumer<String> chunkConsumer,
+            AtomicInteger chunkCount,
+            long startMillis) {
         if (!"message".equals(eventName) || !StringUtils.hasText(data)) {
             return;
         }
@@ -290,6 +283,7 @@ public class PracticeAiClient {
             String content = node.path("content").asText("");
             if (!content.isEmpty()) {
                 replyBuilder.append(content);
+                logReceivedChunk(content, chunkCount.incrementAndGet(), startMillis);
                 chunkConsumer.accept(content);
             }
         } catch (IOException exception) {
@@ -298,22 +292,71 @@ public class PracticeAiClient {
     }
 
     /**
+     * 记录从 AI 服务收到的流式片段。
+     *
+     * @param content 文本片段
+     * @param chunkCount 片段数量
+     * @param startMillis 开始时间
+     */
+    private void logReceivedChunk(String content, int chunkCount, long startMillis) {
+        if (chunkCount != 1 && chunkCount % 50 != 0) {
+            return;
+        }
+
+        // 只记录片段长度和耗时，避免模型回答正文进入日志。
+        LOGGER.info(
+                "Java 后端收到 AI 服务流式片段：count={} chars={} elapsedMs={}",
+                chunkCount,
+                content.length(),
+                System.currentTimeMillis() - startMillis
+        );
+    }
+
+    /**
      * 构造讨论请求体。
      *
      * @param question 当前题目
      * @param lastUserAnswer 最近一次答案
+     * @param gradingSummary 最近一次评分摘要
+     * @param discussionHistoryJson 当前题历史讨论JSON
      * @param message 用户消息
      * @return 请求体
      */
-    private ObjectNode buildDiscussPayload(PracticeQuestionRecord question, String lastUserAnswer, String message) {
+    private ObjectNode buildDiscussPayload(
+            PracticeQuestionRecord question,
+            String lastUserAnswer,
+            String gradingSummary,
+            String discussionHistoryJson,
+            String message) {
         ObjectNode payload = objectMapper.createObjectNode();
         payload.put("questionCode", question.getCode());
         payload.put("question", question.getQuestion());
         payload.put("questionType", question.getQuestionType());
         payload.put("standardAnswer", question.getStandardAnswer());
         payload.put("lastUserAnswer", lastUserAnswer == null ? "" : lastUserAnswer);
+        payload.put("gradingSummary", gradingSummary == null ? "" : gradingSummary);
+        payload.set("conversationHistory", readDiscussionHistory(discussionHistoryJson));
         payload.put("message", message);
         return payload;
+    }
+
+    /**
+     * 读取当前题讨论历史。
+     *
+     * @param discussionHistoryJson 讨论历史JSON
+     * @return JSON数组节点
+     */
+    private JsonNode readDiscussionHistory(String discussionHistoryJson) {
+        if (!StringUtils.hasText(discussionHistoryJson)) {
+            return objectMapper.createArrayNode();
+        }
+        try {
+            JsonNode history = objectMapper.readTree(discussionHistoryJson);
+            return history != null && history.isArray() ? history : objectMapper.createArrayNode();
+        } catch (IOException exception) {
+            LOGGER.warn("当前题讨论历史解析失败，已忽略历史上下文", exception);
+            return objectMapper.createArrayNode();
+        }
     }
 
     /**

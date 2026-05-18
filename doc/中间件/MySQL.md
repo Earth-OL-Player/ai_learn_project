@@ -1,9 +1,9 @@
 # MySQL 中间件说明
 
-版本：v1.13
+版本：v1.14
 日期：2026-05-18  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化、`sprint2617` 成长等级与修仙境界段位重构、`sprint2619` 建议评论区评论流重构、`sprint2620` 刷题勋章强联动、`sprint2621` 用户管理与容量限制
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202612` 系统题库管理与AI智能刷题重构、`sprint2616` 答题上下文记忆优化、`sprint2617` 成长等级与修仙境界段位重构、`sprint2619` 建议评论区评论流重构、`sprint2620` 刷题勋章强联动、`sprint2621` 用户管理与容量限制、`sprint2622` AI刷题多轮短期记忆
 
 ## 1. 用途
 
@@ -15,7 +15,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、建议�
 - Flyway 负责自动执行用户、建议、评论、题目、刷题汇总、RAG 任务和成长体系相关表 migration。
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
 - `sprint2619` 后，建议区不再保存处理状态和标题；建议与评论均通过点赞明细表记录用户点赞状态，评论支持一级父子评论。
-- `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。
+- `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。
 - 系统题库通过 migration 初始化 `AI面试题Top300.csv` 中的真实题目数据，供热门面经和 AI 智能刷题使用。
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
 - Redis、Qdrant 等中间件不参与建议评论区最小闭环。
@@ -159,7 +159,7 @@ SELECT id, username, super_admin FROM users WHERE username = '本地用户名占
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行 `V1` 到 `V18` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动和系统设置表。
+3. 确认 Flyway 已执行 `V1` 到 `V19` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表和当前题多轮讨论记忆字段。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -402,3 +402,48 @@ DELETE /api/v1/admin/system-questions/clear
 - 管理员删除用户采用逻辑删除，避免误删后影响历史互动展示；如需物理清理必须另走数据治理流程。
 - 生产环境调整最大用户数时，需要同步评估应用服务器、MySQL 连接池和 AI 服务容量。
 
+
+## 14. sprint2622 AI刷题多轮短期记忆说明
+
+本迭代新增 `V19__add_practice_discussion_memory.sql`，用于增强 AI 智能刷题当前题级别短期记忆。
+
+新增或调整内容：
+
+| 表 | 字段 | 用途 |
+| --- | --- | --- |
+| `user_practice_sessions` | `last_grading_summary` | 保存当前题最近一次 AI/本地评分摘要，用于后续追问时让大模型知道评分结论。 |
+| `user_practice_sessions` | `discussion_history_json` | 保存当前题多轮讨论短历史 JSON，包含用户疑问和 AI 回复。 |
+
+本地验证 SQL：
+
+```sql
+DESC user_practice_sessions;
+SELECT version, description, success FROM flyway_schema_history WHERE version = '19';
+SELECT user_id,
+       question_code,
+       phase,
+       LEFT(last_grading_summary, 120) AS grading_summary_preview,
+       LEFT(discussion_history_json, 200) AS discussion_history_preview
+FROM user_practice_sessions
+WHERE user_id = 用户ID占位符;
+```
+
+本地联调场景：
+
+```text
+POST /api/v1/practice/messages
+POST /api/v1/practice/messages/stream
+```
+
+联调关注点：
+
+- 用户完成当前题评分后，`last_grading_summary` 写入评分摘要。
+- 用户在当前题讨论阶段连续追问时，`discussion_history_json` 追加用户疑问和 AI 回复。
+- 点击下一题或重答本题时，当前题评分摘要和讨论历史会被清空，避免串题污染。
+- 当前实现最多保留最近若干条讨论消息，避免异常长上下文拖慢 AI 服务。
+
+部署注意事项：
+
+- `last_grading_summary` 和 `discussion_history_json` 属于学习上下文数据，生产排查时禁止全量打印到日志。
+- 如需临时查询，只能查询明确用户和明确题目，并尽量使用 `LEFT` 截断预览。
+- 发布前仍需先备份 MySQL，并确认 Flyway 自动执行 V19 成功。

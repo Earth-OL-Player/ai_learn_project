@@ -164,6 +164,8 @@ async function readEventStream(stream: ReadableStream<Uint8Array>, onEvent: (eve
   const reader = stream.getReader();
   const decoder = new TextDecoder('utf-8');
   let buffer = '';
+  let readCount = 0;
+  const startTime = performance.now();
 
   // 持续解析服务端推送的事件块，直到流结束。
   while (true) {
@@ -171,6 +173,8 @@ async function readEventStream(stream: ReadableStream<Uint8Array>, onEvent: (eve
     if (done) {
       break;
     }
+    readCount += 1;
+    logStreamReadChunk(readCount, value.byteLength, startTime);
     buffer += decoder.decode(value, { stream: true });
     buffer = dispatchBufferedEvents(buffer, onEvent);
   }
@@ -178,6 +182,22 @@ async function readEventStream(stream: ReadableStream<Uint8Array>, onEvent: (eve
   // 处理流结束后残留的最后一个事件块。
   buffer += decoder.decode();
   dispatchFinalEvent(buffer, onEvent);
+}
+
+/**
+ * 记录浏览器底层读取到的流式字节片段。
+ */
+function logStreamReadChunk(readCount: number, byteLength: number, startTime: number): void {
+  if (readCount !== 1 && readCount % 50 !== 0) {
+    return;
+  }
+
+  // 只记录字节长度和耗时，避免日志泄露用户输入或模型正文。
+  console.info('浏览器读取到 SSE 字节片段', {
+    count: readCount,
+    bytes: byteLength,
+    elapsedMs: Math.round(performance.now() - startTime),
+  });
 }
 
 /**

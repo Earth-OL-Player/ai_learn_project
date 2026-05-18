@@ -11,6 +11,8 @@ public class PracticeSessionRecord {
     private String phase;
     private Integer lastScore;
     private String lastAnswerText;
+    private String lastGradingSummary;
+    private String discussionHistoryJson;
     private Integer discussionFollowUpCount;
 
     /** 获取状态ID。 */
@@ -48,6 +50,18 @@ public class PracticeSessionRecord {
 
     /** 设置最近一次答案原文。 */
     public void setLastAnswerText(String lastAnswerText) { this.lastAnswerText = lastAnswerText; }
+
+    /** 获取最近一次评分摘要。 */
+    public String getLastGradingSummary() { return lastGradingSummary; }
+
+    /** 设置最近一次评分摘要。 */
+    public void setLastGradingSummary(String lastGradingSummary) { this.lastGradingSummary = lastGradingSummary; }
+
+    /** 获取当前题讨论历史JSON。 */
+    public String getDiscussionHistoryJson() { return discussionHistoryJson; }
+
+    /** 设置当前题讨论历史JSON。 */
+    public void setDiscussionHistoryJson(String discussionHistoryJson) { this.discussionHistoryJson = discussionHistoryJson; }
 
     /** 获取当前题评分后的连续追问次数。 */
     public Integer getDiscussionFollowUpCount() { return discussionFollowUpCount; }

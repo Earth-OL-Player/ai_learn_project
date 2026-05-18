@@ -87,7 +87,8 @@ public interface PracticeMapper {
      * @return 刷题状态
      */
     @Select("""
-            SELECT id, user_id, question_code, phase, last_score, last_answer_text, discussion_follow_up_count
+            SELECT id, user_id, question_code, phase, last_score, last_answer_text,
+                   last_grading_summary, discussion_history_json, discussion_follow_up_count
             FROM user_practice_sessions
             WHERE user_id = #{userId}
             """)
@@ -103,12 +104,15 @@ public interface PracticeMapper {
      */
     @Insert("""
             INSERT INTO user_practice_sessions(user_id, question_code, phase, last_score, last_answer_text,
+                                               last_grading_summary, discussion_history_json,
                                                discussion_follow_up_count, started_at, answered_at)
-            VALUES(#{userId}, #{questionCode}, #{phase}, NULL, NULL, 0, NOW(), NULL)
+            VALUES(#{userId}, #{questionCode}, #{phase}, NULL, NULL, NULL, NULL, 0, NOW(), NULL)
             ON DUPLICATE KEY UPDATE question_code = VALUES(question_code),
                                     phase = VALUES(phase),
                                     last_score = NULL,
                                     last_answer_text = NULL,
+                                    last_grading_summary = NULL,
+                                    discussion_history_json = NULL,
                                     discussion_follow_up_count = 0,
                                     started_at = NOW(),
                                     answered_at = NULL
@@ -126,6 +130,7 @@ public interface PracticeMapper {
      * @param phase 阶段
      * @param lastScore 最近得分
      * @param lastAnswerText 最近一次答案原文
+     * @param lastGradingSummary 最近一次评分摘要
      * @return 影响行数
      */
     @Update("""
@@ -133,6 +138,8 @@ public interface PracticeMapper {
             SET phase = #{phase},
                 last_score = #{lastScore},
                 last_answer_text = #{lastAnswerText},
+                last_grading_summary = #{lastGradingSummary},
+                discussion_history_json = NULL,
                 discussion_follow_up_count = 0,
                 answered_at = NOW()
             WHERE user_id = #{userId}
@@ -141,7 +148,25 @@ public interface PracticeMapper {
             @Param("userId") Long userId,
             @Param("phase") String phase,
             @Param("lastScore") Integer lastScore,
-            @Param("lastAnswerText") String lastAnswerText
+            @Param("lastAnswerText") String lastAnswerText,
+            @Param("lastGradingSummary") String lastGradingSummary
+    );
+
+    /**
+     * 更新当前题讨论历史。
+     *
+     * @param userId 用户ID
+     * @param discussionHistoryJson 讨论历史JSON
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE user_practice_sessions
+            SET discussion_history_json = #{discussionHistoryJson}
+            WHERE user_id = #{userId}
+            """)
+    int updateDiscussionHistory(
+            @Param("userId") Long userId,
+            @Param("discussionHistoryJson") String discussionHistoryJson
     );
 
     /**
