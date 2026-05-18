@@ -60,12 +60,7 @@
             </section>
             <div v-if="badgeGroups.length === 0" class="badge-empty">完成一次刷题后即可点亮第一枚勋章</div>
           </div>
-        </section>
-        <section v-if="growth.recentEvents.length > 0" class="event-list">
-          <h3>成长明细</h3>
-          <p v-for="event in growth.recentEvents" :key="event.id">{{ event.title }} · {{ event.experienceDelta }} 经验</p>
-        </section>
-      </div>
+        </section>      </div>
       <el-empty v-else description="暂无成长数据，完成一次刷题后即可点亮成长概览" />
     </el-skeleton>
   </el-card>
@@ -270,8 +265,7 @@ onMounted(loadGrowth);
 }
 
 
-.badge-wall h3,
-.event-list h3 {
+.badge-wall h3 {
   margin: 0 0 12px;
   color: #1f2a44;
 }
@@ -359,11 +353,6 @@ onMounted(loadGrowth);
   background: #f8fbff;
 }
 
-.event-list p {
-  margin: 6px 0;
-  color: #475467;
-}
-
 @media (max-width: 900px) {
   .growth-hero {
     grid-template-columns: 1fr;
@@ -378,3 +367,4 @@ onMounted(loadGrowth);
   }
 }
 </style>
+

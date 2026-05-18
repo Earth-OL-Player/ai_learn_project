@@ -1,24 +1,26 @@
 <template>
-  <el-dialog v-model="visible" title="注册账号" width="460px" class="auth-dialog" destroy-on-close>
-    <el-form :model="form" label-position="top" @submit.prevent>
-      <el-form-item label="用户名">
-        <el-input v-model.trim="form.username" placeholder="3-32位字母、数字、下划线" maxlength="32" />
-      </el-form-item>
-      <el-form-item label="密码">
-        <el-input v-model="form.password" placeholder="8-64位密码" type="password" maxlength="64" show-password />
-      </el-form-item>
+  <el-dialog v-model="visible" width="500px" class="auth-dialog modern-auth-dialog" destroy-on-close align-center>
+    <el-form :model="form" label-position="top" class="auth-form" @submit.prevent>
+      <div class="auth-form-grid">
+        <el-form-item label="用户名">
+          <el-input v-model.trim="form.username" placeholder="3-32位字母、数字、下划线" maxlength="32" size="large" clearable />
+        </el-form-item>
+        <el-form-item label="密码">
+          <el-input v-model="form.password" placeholder="8-64位密码" type="password" maxlength="64" size="large" show-password />
+        </el-form-item>
+      </div>
       <el-form-item label="昵称">
-        <el-input v-model.trim="form.nickname" placeholder="必填，1-64位且不可重复" maxlength="64" />
+        <el-input v-model.trim="form.nickname" placeholder="必填，1-64位且不可重复" maxlength="64" size="large" clearable />
       </el-form-item>
       <el-form-item label="邮箱">
-        <el-input v-model.trim="form.email" placeholder="必填，例如 demo@example.com，且不可重复" maxlength="128" />
+        <el-input v-model.trim="form.email" placeholder="必填，例如 demo@example.com，且不可重复" maxlength="128" size="large" clearable />
       </el-form-item>
     </el-form>
 
     <template #footer>
-      <div class="auth-dialog-footer">
-        <el-button @click="visible = false">取消</el-button>
-        <el-button type="primary" :loading="submitting" @click="submitRegister">注册并登录</el-button>
+      <div class="auth-dialog-footer modern-auth-footer">
+        <el-button round size="large" @click="visible = false">取消</el-button>
+        <el-button type="primary" round size="large" :loading="submitting" @click="submitRegister">注册并登录</el-button>
       </div>
     </template>
   </el-dialog>

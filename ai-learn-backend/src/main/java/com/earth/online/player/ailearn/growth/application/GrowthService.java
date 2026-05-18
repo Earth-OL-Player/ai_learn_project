@@ -102,8 +102,8 @@ public class GrowthService {
                 Math.max(0, nextLevelExperience - experience),
                 growthAwardService.calculateLearningDays(user.getId()),
                 growthAwardService.findBadgeWall(user.getId()),
-                newBadges,
-                growthAwardService.findRecentEvents(user.getId())
+                newBadges
         );
     }
 }
+

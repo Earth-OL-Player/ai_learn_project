@@ -11,7 +11,7 @@
 }
 
 body {
-  min-width: 1180px;
+  min-width: 320px;
   min-height: 100vh;
   margin: 0;
   background: linear-gradient(135deg, #f7fbff 0%, #eef4ff 46%, #f9fbff 100%);
@@ -900,5 +900,385 @@ a {
   .admin-filter-form,
   .dialog-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* sprint2621 登录注册弹框升级为轻量圆角卡片，兼容窄屏和常见桌面浏览器。 */
+.modern-auth-dialog .el-dialog {
+  overflow: hidden;
+  border: 1px solid rgba(219, 234, 254, 0.95);
+  border-radius: 34px;
+  box-shadow: 0 28px 80px rgba(36, 76, 130, 0.18);
+}
+
+.modern-auth-dialog .el-dialog__header {
+  display: none;
+}
+
+.modern-auth-dialog .el-dialog__body {
+  padding: 34px 44px 8px;
+}
+
+.modern-auth-dialog .el-dialog__footer {
+  padding: 10px 44px 36px;
+}
+
+.auth-form .el-form-item__label {
+  color: #344054;
+  font-weight: 800;
+}
+
+.auth-form .el-input__wrapper {
+  border-radius: 16px;
+  box-shadow: 0 0 0 1px #dbeafe inset;
+}
+
+.auth-form .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px #3a86ff inset, 0 10px 24px rgba(58, 134, 255, 0.12);
+}
+
+.auth-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.modern-auth-footer {
+  align-items: center;
+}
+
+.modern-auth-footer .el-button {
+  min-width: 112px;
+}
+
+/* sprint2621 管理员用户管理页面样式，延续系统清新简约风格。 */
+.user-manage-hero {
+  align-items: center;
+}
+
+.user-limit-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-top: 18px;
+  border: 0;
+  border-radius: 24px;
+  box-shadow: 0 12px 32px rgba(61, 91, 132, 0.08);
+}
+
+.user-limit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-limit-copy span {
+  color: #667085;
+  font-weight: 700;
+}
+
+.user-limit-copy strong {
+  color: #17233d;
+  font-size: 28px;
+}
+
+.user-limit-copy small {
+  color: #7a8aa0;
+}
+
+.user-limit-action,
+.admin-user-cell {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-user-filter-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-user-cell strong,
+.admin-user-cell span {
+  display: block;
+}
+
+.admin-user-cell strong {
+  color: #17233d;
+}
+
+.admin-user-cell span {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.admin-user-dialog .el-dialog {
+  border-radius: 24px;
+}
+
+@media (max-width: 760px) {
+  body {
+    min-width: 320px;
+  }
+
+  .auth-form-grid,
+  .user-limit-card,
+  .admin-user-filter-form {
+    grid-template-columns: 1fr;
+  }
+
+  .user-limit-card {
+    align-items: stretch;
+  }
+
+  .user-limit-action {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+
+.user-limit-card .el-card__body {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .user-limit-card .el-card__body {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+
+/* sprint2621 按反馈将作者信息改为 by 并移到品牌标题右侧。 */
+.brand-title-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.brand-title-row h1 {
+  margin: 0;
+  font-size: 20px;
+  color: #17233d;
+  letter-spacing: -0.02em;
+}
+
+.brand-title-row span {
+  color: #7a8aa0;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+
+/* sprint2621 顶部栏按最新反馈升级：标题去掉重复 AI，并增强清新简约大气的品牌视觉。 */
+.layout-header {
+  height: 82px;
+  padding: 0 34px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 252, 255, 0.92) 100%);
+  border-bottom: 1px solid rgba(219, 234, 254, 0.9);
+  box-shadow: 0 14px 36px rgba(47, 84, 128, 0.08);
+}
+
+.brand-block {
+  gap: 16px;
+  min-width: 360px;
+}
+
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  font-size: 18px;
+  font-weight: 900;
+  border-radius: 18px;
+  box-shadow: 0 14px 28px rgba(47, 125, 246, 0.18);
+}
+
+.brand-title-row {
+  gap: 14px;
+  align-items: center;
+}
+
+.brand-title-row h1 {
+  font-size: 27px;
+  font-weight: 900;
+  letter-spacing: -0.035em;
+}
+
+.brand-title-row span {
+  padding: 5px 10px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+  background: rgba(239, 246, 255, 0.9);
+  border: 1px solid rgba(207, 227, 255, 0.9);
+  border-radius: 999px;
+}
+
+.layout-menu {
+  max-width: 720px;
+  padding: 6px;
+  background: rgba(248, 251, 255, 0.72);
+  border: 1px solid rgba(219, 234, 254, 0.72);
+  border-radius: 999px;
+}
+
+.layout-menu .el-menu-item {
+  height: 42px;
+  padding: 0 22px;
+  margin: 0 2px;
+  color: #344054;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.layout-menu .el-menu-item.is-active {
+  color: #0f63d6;
+  background: #ffffff;
+  box-shadow: 0 8px 20px rgba(47, 125, 246, 0.12);
+}
+
+.header-action-area {
+  min-width: 230px;
+}
+
+.header-user .el-avatar {
+  width: 38px;
+  height: 38px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #d7e7ff 0%, #eef6ff 100%);
+}
+
+.user-dropdown-button {
+  min-height: 40px;
+  padding: 8px 16px;
+  color: #17233d;
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(207, 227, 255, 0.95);
+  box-shadow: 0 8px 20px rgba(47, 84, 128, 0.06);
+}
+
+@media (max-width: 1180px) {
+  .brand-block {
+    min-width: auto;
+  }
+
+  .brand-title-row h1 {
+    font-size: 23px;
+  }
+
+  .brand-title-row span {
+    display: none;
+  }
+
+  .layout-menu .el-menu-item {
+    padding: 0 14px;
+  }
+}
+
+
+/* sprint2621 顶部栏二次优化：导航独立成块、头像可见、用户名箭头规整。 */
+.layout-menu {
+  justify-content: center;
+  max-width: none;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.layout-menu .el-menu-item {
+  height: 44px;
+  min-width: 112px;
+  justify-content: center;
+  padding: 0 22px;
+  margin: 0 7px;
+  color: #344054;
+  font-size: 15px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(219, 234, 254, 0.92);
+  border-radius: 999px;
+  box-shadow: 0 8px 20px rgba(47, 84, 128, 0.045);
+  transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.layout-menu .el-menu-item:hover {
+  color: #0f63d6;
+  background: #f8fbff;
+  box-shadow: 0 10px 24px rgba(47, 125, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.layout-menu .el-menu-item.is-active {
+  color: #0f63d6;
+  background: linear-gradient(135deg, #ffffff 0%, #eef6ff 100%);
+  border-color: rgba(166, 206, 255, 0.96);
+  box-shadow: 0 12px 26px rgba(47, 125, 246, 0.14);
+}
+
+.header-user {
+  gap: 10px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(219, 234, 254, 0.86);
+  border-radius: 999px;
+  box-shadow: 0 8px 22px rgba(47, 84, 128, 0.055);
+}
+
+.header-user .el-avatar {
+  width: 40px;
+  height: 40px;
+  color: #2f7df6;
+  font-size: 15px;
+  font-weight: 900;
+  background: linear-gradient(135deg, #eef6ff 0%, #dcecff 100%);
+  border: 1px solid rgba(207, 227, 255, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.user-dropdown-button {
+  min-height: 40px;
+  gap: 8px;
+  padding: 8px 14px 8px 12px;
+  color: #17233d;
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.user-dropdown-button:hover {
+  color: #0f63d6;
+}
+
+.user-dropdown-arrow {
+  position: relative;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.72;
+  transform: rotate(45deg);
+}
+
+@media (max-width: 1180px) {
+  .layout-menu .el-menu-item {
+    min-width: auto;
+    padding: 0 14px;
+    margin: 0 4px;
   }
 }

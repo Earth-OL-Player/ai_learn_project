@@ -115,6 +115,18 @@ public class SystemQuestionAdminController {
         return ApiResponse.success(systemQuestionAdminService.delete(id));
     }
 
+
+
+    /**
+     * 一键清空系统题库。
+     *
+     * @return 是否成功
+     */
+    @DeleteMapping("/clear")
+    public ApiResponse<Boolean> clearAll() {
+        return ApiResponse.success(systemQuestionAdminService.clearAll());
+    }
+
     /**
      * 下载 CSV 导入模板。
      *

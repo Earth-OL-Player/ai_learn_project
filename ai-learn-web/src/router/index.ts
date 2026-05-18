@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router';
 import AdminCenterPage from '../pages/admin/AdminCenterPage.vue';
 import SystemQuestionBankManagePage from '../pages/admin/SystemQuestionBankManagePage.vue';
+import UserManagePage from '../pages/admin/UserManagePage.vue';
 import AppLayout from '../layout/AppLayout.vue';
 import InterviewQuestionsPage from '../pages/interview-questions/InterviewQuestionsPage.vue';
 import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
@@ -60,7 +61,13 @@ const router = createRouter({
           children: [
             {
               path: '',
-              redirect: '/admin/system-question-bank',
+              redirect: '/admin/users',
+            },
+            {
+              path: 'users',
+              name: 'admin-users',
+              component: UserManagePage,
+              meta: { title: '用户管理', requiresAuth: true, requiresSuperAdmin: true },
             },
             {
               path: 'system-question-bank',

@@ -14,7 +14,6 @@ export interface GrowthInfo {
   streakDays: number;
   badges: BadgeInfo[];
   newBadges: BadgeInfo[];
-  recentEvents: GrowthEventInfo[];
 }
 
 export interface BadgeInfo {
@@ -28,13 +27,4 @@ export interface BadgeInfo {
   hidden: boolean;
   acquired: boolean;
   acquiredAt: string | null;
-}
-
-export interface GrowthEventInfo {
-  id: string;
-  eventType: string;
-  title: string;
-  description: string | null;
-  experienceDelta: number;
-  createdAt: string;
 }

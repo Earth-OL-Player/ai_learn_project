@@ -357,7 +357,7 @@ public class PracticeService {
         GrowthLevel level = GrowthLevel.resolveByExperience(totalExperience);
         GrowthRank rank = GrowthRank.resolveByExperience(totalExperience);
         userMapper.updateGrowth(userId, totalExperience, level.code(), rank.code());
-        List<BadgeResponse> newBadges = growthAwardService.awardAfterAnswer(userId, score, earnedExperience);
+        List<BadgeResponse> newBadges = growthAwardService.awardAfterAnswer(userId, score);
         return new PracticeGradingResponse(
                 score,
                 gradingResult.isCorrect(),
@@ -749,3 +749,4 @@ public class PracticeService {
         return value == null ? 0.0D : value.doubleValue();
     }
 }
+

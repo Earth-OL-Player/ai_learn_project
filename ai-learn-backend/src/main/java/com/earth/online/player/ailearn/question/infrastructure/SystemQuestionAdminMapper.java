@@ -154,4 +154,34 @@ public interface SystemQuestionAdminMapper {
      */
     @Update("UPDATE questions SET deleted = 1 WHERE id = #{id} AND deleted = 0")
     int deleteById(@Param("id") Long id);
+
+    /**
+     * 删除全部用户题目汇总。
+     *
+     * @return 影响行数
+     */
+    @Update("DELETE FROM user_question_stats")
+    int deleteAllQuestionStats();
+
+    /**
+     * 重置用户当前刷题状态。
+     *
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE user_practice_sessions
+            SET question_code = NULL,
+                phase = 'QUESTIONING',
+                last_score = NULL,
+                started_at = NULL,
+                answered_at = NULL
+            """)
+    int resetAllPracticeSessions();
+
+    /**
+     * 真实清空系统题库。
+     */
+    @Update("TRUNCATE TABLE questions")
+    void truncateQuestions();
+
 }

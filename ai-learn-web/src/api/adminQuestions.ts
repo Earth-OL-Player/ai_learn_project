@@ -43,6 +43,13 @@ export function deleteSystemQuestion(id: string): Promise<boolean> {
 }
 
 /**
+ * 一键清空当前系统题库。
+ */
+export function clearSystemQuestions(): Promise<boolean> {
+  return del<boolean>('/admin/system-questions/clear');
+}
+
+/**
  * 下载系统题库 CSV 模板。
  */
 export function downloadSystemQuestionTemplate(): Promise<Blob> {

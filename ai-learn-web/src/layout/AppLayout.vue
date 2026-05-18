@@ -4,8 +4,9 @@
       <!-- 顶部左侧保留平台品牌信息，替代原来的侧边栏品牌区。 -->
       <div class="brand-block">
         <div class="brand-logo">AI</div>
-        <div>
-          <h1>AI应用开发学习平台</h1>
+        <div class="brand-title-row">
+          <h1>Agent学习平台</h1>
+          <span>by 地球OL初级玩家</span>
         </div>
       </div>
 
@@ -29,7 +30,7 @@
           <el-dropdown trigger="click" @command="handleUserCommand">
             <button class="user-dropdown-button" type="button">
               {{ displayName }}
-              <span class="user-dropdown-arrow">⌄</span>
+              <span class="user-dropdown-arrow" aria-hidden="true"></span>
             </button>
             <template #dropdown>
               <el-dropdown-menu>
@@ -103,7 +104,7 @@ async function handleUserCommand(command: string): Promise<void> {
     return;
   }
   if (command === 'admin') {
-    await router.push('/admin/system-question-bank');
+    await router.push('/admin/users');
     return;
   }
   if (command === 'logout') {

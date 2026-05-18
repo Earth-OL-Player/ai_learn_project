@@ -20,7 +20,6 @@ import java.util.List;
  * @param streakDays 总学习天数，沿用历史字段名
  * @param badges 徽章墙
  * @param newBadges 本次新获得徽章
- * @param recentEvents 最近成长事件
  */
 public record GrowthResponse(
         int earnedExperience,
@@ -37,7 +36,7 @@ public record GrowthResponse(
         int experienceToNextLevel,
         int streakDays,
         List<BadgeResponse> badges,
-        List<BadgeResponse> newBadges,
-        List<GrowthEventResponse> recentEvents
+        List<BadgeResponse> newBadges
 ) {
 }
+

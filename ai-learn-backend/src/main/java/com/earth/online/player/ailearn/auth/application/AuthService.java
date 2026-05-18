@@ -9,6 +9,7 @@ import com.earth.online.player.ailearn.common.security.JwtTokenService;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
+import com.earth.online.player.ailearn.system.infrastructure.SystemSettingMapper;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.domain.UserSummary;
 import com.earth.online.player.ailearn.user.domain.UserSummaryConverter;
@@ -29,9 +30,13 @@ public class AuthService {
     private static final String DEFAULT_LEVEL_CODE = "LV1";
     private static final String DEFAULT_RANK_CODE = "QI_REFINING";
     private static final boolean DEFAULT_SUPER_ADMIN = false;
+    private static final int DEFAULT_MAX_USERS = 10000;
+    private static final String MAX_USERS_SETTING_KEY = "MAX_USERS";
+    private static final String USER_LIMIT_REACHED_MESSAGE = "当前系统用户数量已达上限，等待管理员升级服务器并扩容";
 
     private final UserMapper userMapper;
     private final GrowthMapper growthMapper;
+    private final SystemSettingMapper systemSettingMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
 
@@ -40,16 +45,19 @@ public class AuthService {
      *
      * @param userMapper 用户仓储
      * @param growthMapper 成长仓储
+     * @param systemSettingMapper 系统设置仓储
      * @param passwordEncoder 密码编码器
      * @param jwtTokenService JWT 服务
      */
     public AuthService(
             UserMapper userMapper,
             GrowthMapper growthMapper,
+            SystemSettingMapper systemSettingMapper,
             PasswordEncoder passwordEncoder,
             JwtTokenService jwtTokenService) {
         this.userMapper = userMapper;
         this.growthMapper = growthMapper;
+        this.systemSettingMapper = systemSettingMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
     }
@@ -65,15 +73,16 @@ public class AuthService {
         String username = request.username().trim();
         String nickname = request.nickname().trim();
         String email = request.email().trim();
-        if (userMapper.findByUsername(username) != null) {
+        if (userMapper.findByUsernameAny(username) != null) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "用户名已存在，请更换后重试");
         }
-        if (userMapper.findByNickname(nickname) != null) {
+        if (userMapper.findByNicknameAny(nickname) != null) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "昵称已被使用，请更换后重试");
         }
-        if (userMapper.findByEmail(email) != null) {
+        if (userMapper.findByEmailAny(email) != null) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "邮箱已被使用，请更换后重试");
         }
+        ensureUserCapacityAvailable();
 
         // 新用户默认写入成长体系占位数据，便于个人中心直接展示。
         User user = new User();
@@ -103,6 +112,34 @@ public class AuthService {
             throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "用户名或密码错误");
         }
         return buildAuthResponse(user);
+    }
+
+
+    /**
+     * 校验系统用户容量是否仍可注册。
+     */
+    private void ensureUserCapacityAvailable() {
+        long currentUsers = userMapper.countActiveUsers();
+        if (currentUsers >= resolveMaxUsers()) {
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), USER_LIMIT_REACHED_MESSAGE);
+        }
+    }
+
+    /**
+     * 读取最大用户数设置。
+     *
+     * @return 最大用户数
+     */
+    private int resolveMaxUsers() {
+        String value = systemSettingMapper.findValue(MAX_USERS_SETTING_KEY);
+        if (value == null || value.isBlank()) {
+            return DEFAULT_MAX_USERS;
+        }
+        try {
+            return Math.max(1, Integer.parseInt(value));
+        } catch (NumberFormatException exception) {
+            return DEFAULT_MAX_USERS;
+        }
     }
 
     /**

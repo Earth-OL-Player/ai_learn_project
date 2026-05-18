@@ -5,6 +5,7 @@
         <h2>系统题库管理</h2>
       </div>
       <div class="system-question-actions">
+        <el-button round type="danger" plain :loading="clearing" @click="handleClearAll">一键清除当前题库</el-button>
         <el-button round @click="downloadTemplate">下载CSV模板</el-button>
         <el-upload :show-file-list="false" accept=".csv,text/csv" :before-upload="handleImportFile">
           <el-button round :loading="importing">上传CSV</el-button>
@@ -102,6 +103,7 @@
 import { ElMessage, ElMessageBox, type UploadRawFile } from 'element-plus';
 import { onMounted, reactive, ref } from 'vue';
 import {
+  clearSystemQuestions,
   createSystemQuestion,
   deleteSystemQuestion,
   downloadSystemQuestionTemplate,
@@ -116,6 +118,7 @@ const PAGE_SIZE = 10;
 const loading = ref(false);
 const saving = ref(false);
 const importing = ref(false);
+const clearing = ref(false);
 const dialogVisible = ref(false);
 const editingId = ref<string | null>(null);
 const questions = ref<SystemQuestionItem[]>([]);
@@ -229,6 +232,28 @@ async function handleDelete(row: SystemQuestionItem): Promise<void> {
   await deleteSystemQuestion(row.id);
   ElMessage.success('题目已删除');
   await loadQuestions();
+}
+
+
+/**
+ * 一键清空系统题库。
+ */
+async function handleClearAll(): Promise<void> {
+  await ElMessageBox.confirm('该操作会真实清空当前题库数据并重置自增ID，确认继续吗？', '清空题库确认', {
+    type: 'warning',
+    confirmButtonText: '确认清空',
+    cancelButtonText: '取消',
+  });
+  clearing.value = true;
+  try {
+    await clearSystemQuestions();
+    ElMessage.success('当前题库已清空');
+    await Promise.all([loadQuestionTypes(), searchQuestions()]);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '清空题库失败');
+  } finally {
+    clearing.value = false;
+  }
 }
 
 /**

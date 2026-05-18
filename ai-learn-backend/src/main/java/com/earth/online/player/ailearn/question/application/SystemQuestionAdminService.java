@@ -169,6 +169,23 @@ public class SystemQuestionAdminService {
         return true;
     }
 
+
+
+    /**
+     * 一键清空系统题库。
+     *
+     * @return 是否清空成功
+     */
+    public boolean clearAll() {
+        requireSuperAdmin();
+        systemQuestionAdminMapper.deleteAllQuestionStats();
+        systemQuestionAdminMapper.resetAllPracticeSessions();
+
+        // 按需求对题库主表执行 TRUNCATE，确保题库数据被真实清空并重置自增ID。
+        systemQuestionAdminMapper.truncateQuestions();
+        return true;
+    }
+
     /**
      * 查询系统题目分类。
      *

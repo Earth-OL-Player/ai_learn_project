@@ -59,44 +59,6 @@ public interface GrowthMapper {
     int insertUserBadge(@Param("userId") Long userId, @Param("ruleCode") String ruleCode);
 
     /**
-     * 新增成长事件。
-     *
-     * @param userId 用户ID
-     * @param eventType 事件类型
-     * @param title 标题
-     * @param description 说明
-     * @param experienceDelta 经验变化
-     * @return 影响行数
-     */
-    @Insert("""
-            INSERT INTO growth_events(user_id, event_type, title, description, experience_delta)
-            VALUES(#{userId}, #{eventType}, #{title}, #{description}, #{experienceDelta})
-            """)
-    int insertGrowthEvent(
-            @Param("userId") Long userId,
-            @Param("eventType") String eventType,
-            @Param("title") String title,
-            @Param("description") String description,
-            @Param("experienceDelta") int experienceDelta
-    );
-
-    /**
-     * 查询最近成长事件。
-     *
-     * @param userId 用户ID
-     * @param limit 数量
-     * @return 事件列表
-     */
-    @Select("""
-            SELECT id, event_type, title, description, experience_delta, created_at
-            FROM growth_events
-            WHERE user_id = #{userId}
-            ORDER BY created_at DESC, id DESC
-            LIMIT #{limit}
-            """)
-    List<GrowthEventRecord> findRecentEvents(@Param("userId") Long userId, @Param("limit") int limit);
-
-    /**
      * 统计刷题评分完成次数。
      *
      * @param userId 用户ID
@@ -114,10 +76,6 @@ public interface GrowthMapper {
     @Select("""
             SELECT COUNT(1)
             FROM (
-                SELECT DATE(created_at) AS learning_day
-                FROM growth_events
-                WHERE user_id = #{userId} AND event_type = 'ANSWER'
-                UNION
                 SELECT DATE(first_answered_at) AS learning_day
                 FROM user_question_stats
                 WHERE user_id = #{userId} AND first_answered_at IS NOT NULL
@@ -147,3 +105,4 @@ public interface GrowthMapper {
     @Select("SELECT COALESCE(SUM(best_score), 0) FROM user_question_stats WHERE user_id = #{userId}")
     int sumBestScores(@Param("userId") Long userId);
 }
+

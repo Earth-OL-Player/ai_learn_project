@@ -2,10 +2,8 @@ package com.earth.online.player.ailearn.growth.application;
 
 import com.earth.online.player.ailearn.growth.domain.BadgeRule;
 import com.earth.online.player.ailearn.growth.infrastructure.BadgeRecord;
-import com.earth.online.player.ailearn.growth.infrastructure.GrowthEventRecord;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
-import com.earth.online.player.ailearn.growth.interfaces.GrowthEventResponse;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -37,23 +35,14 @@ public class GrowthAwardService {
     }
 
     /**
-     * 答题后发放经验事件和徽章。
+     * 答题后发放徽章。
      *
      * @param userId 用户ID
      * @param score 本次得分
-     * @param earnedExperience 本次经验
      * @return 本次新获得徽章
      */
-    public List<BadgeResponse> awardAfterAnswer(Long userId, int score, int earnedExperience) {
-        growthMapper.insertGrowthEvent(
-                userId,
-                "ANSWER",
-                "完成一次刷题",
-                "本次得分 " + score + " 分，获得 " + earnedExperience + " 经验",
-                earnedExperience
-        );
-
-        // 刷题评分完成后统一按最新汇总数据判断所有非追问类勋章。
+    public List<BadgeResponse> awardAfterAnswer(Long userId, int score) {
+        // 刷题评分完成后统一按最新汇总数据判断所有非追问类勋章，不再写入成长明细流水。
         List<String> candidateRules = new ArrayList<>();
         appendAnswerCountRules(candidateRules, growthMapper.countCompletedAnswers(userId));
         appendLearningDayRules(candidateRules, calculateLearningDays(userId));
@@ -93,18 +82,6 @@ public class GrowthAwardService {
     }
 
     /**
-     * 查询最近成长事件。
-     *
-     * @param userId 用户ID
-     * @return 成长事件
-     */
-    public List<GrowthEventResponse> findRecentEvents(Long userId) {
-        return growthMapper.findRecentEvents(userId, 8).stream()
-                .map(this::toEventResponse)
-                .toList();
-    }
-
-    /**
      * 计算总学习天数。
      *
      * @param userId 用户ID
@@ -132,7 +109,6 @@ public class GrowthAwardService {
                 }
                 BadgeResponse response = toBadgeResponse(badge);
                 newBadges.add(response);
-                growthMapper.insertGrowthEvent(userId, "BADGE", "获得徽章：" + response.name(), response.description(), 0);
             }
         }
         return newBadges;
@@ -249,21 +225,5 @@ public class GrowthAwardService {
                 record.getAcquiredAt() == null ? null : record.getAcquiredAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
         );
     }
-
-    /**
-     * 转换成长事件响应。
-     *
-     * @param record 事件记录
-     * @return 事件响应
-     */
-    private GrowthEventResponse toEventResponse(GrowthEventRecord record) {
-        return new GrowthEventResponse(
-                String.valueOf(record.getId()),
-                record.getEventType(),
-                record.getTitle(),
-                record.getDescription(),
-                record.getExperienceDelta() == null ? 0 : record.getExperienceDelta(),
-                record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
-        );
-    }
 }
+

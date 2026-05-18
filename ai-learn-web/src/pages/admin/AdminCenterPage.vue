@@ -10,6 +10,9 @@
 
       <!-- 左侧菜单仅承载当前迭代已规划的管理功能入口。 -->
       <el-menu class="admin-menu" :default-active="route.path" router>
+        <el-menu-item index="/admin/users">
+          <span>用户管理</span>
+        </el-menu-item>
         <el-menu-item index="/admin/system-question-bank">
           <span>系统题库管理</span>
         </el-menu-item>
