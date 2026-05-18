@@ -1,14 +1,18 @@
 import { createRouter, createWebHistory } from 'vue-router';
-import AdminCenterPage from '../pages/admin/AdminCenterPage.vue';
-import SystemQuestionBankManagePage from '../pages/admin/SystemQuestionBankManagePage.vue';
-import UserManagePage from '../pages/admin/UserManagePage.vue';
 import AppLayout from '../layout/AppLayout.vue';
-import InterviewQuestionsPage from '../pages/interview-questions/InterviewQuestionsPage.vue';
-import LearningRoadmapPage from '../pages/learning-roadmap/LearningRoadmapPage.vue';
-import PracticeAgentPage from '../pages/practice-agent/PracticeAgentPage.vue';
-import ProfilePage from '../pages/profile/ProfilePage.vue';
-import SuggestionsCommentsPage from '../pages/suggestions-comments/SuggestionsCommentsPage.vue';
 import { useAuthStore } from '../stores/auth';
+
+// 页面组件按路由懒加载，避免所有业务页面打进首屏入口包。
+const LearningRoadmapPage = () => import('../pages/learning-roadmap/LearningRoadmapPage.vue');
+const SuggestionsCommentsPage = () => import('../pages/suggestions-comments/SuggestionsCommentsPage.vue');
+const InterviewQuestionsPage = () => import('../pages/interview-questions/InterviewQuestionsPage.vue');
+const PracticeAgentPage = () => import('../pages/practice-agent/PracticeAgentPage.vue');
+const ProfilePage = () => import('../pages/profile/ProfilePage.vue');
+
+// 管理后台访问频率较低，单独懒加载可减少普通用户首屏体积。
+const AdminCenterPage = () => import('../pages/admin/AdminCenterPage.vue');
+const UserManagePage = () => import('../pages/admin/UserManagePage.vue');
+const SystemQuestionBankManagePage = () => import('../pages/admin/SystemQuestionBankManagePage.vue');
 
 /**
  * 创建前端路由实例。

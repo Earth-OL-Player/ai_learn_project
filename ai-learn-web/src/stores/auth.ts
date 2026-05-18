@@ -1,4 +1,4 @@
-import { ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { login, logout, register, type LoginPayload, type RegisterPayload } from '../api/auth';

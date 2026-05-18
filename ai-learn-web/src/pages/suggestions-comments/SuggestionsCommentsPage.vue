@@ -158,7 +158,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { createComment, fetchComments, toggleCommentLike } from '../../api/comments';
@@ -317,11 +317,11 @@ async function submitSuggestion(): Promise<void> {
   // 建议不再需要标题和处理状态，只提交类型和正文。
   suggestionSubmitting.value = true;
   try {
-    await createSuggestion({ type: suggestionForm.type, content });
+    const createdSuggestion = await createSuggestion({ type: suggestionForm.type, content });
     ElMessage.success('建议发布成功');
     suggestionForm.content = '';
     suggestionPage.pageNo = 1;
-    await loadSuggestions();
+    prependCreatedSuggestion(createdSuggestion);
   } catch (error) {
     ElMessage.error(resolveErrorMessage(error));
   } finally {
@@ -345,11 +345,11 @@ async function submitComment(): Promise<void> {
   // 父评论不携带 parentId，回复入口单独处理。
   commentSubmitting.value = true;
   try {
-    await createComment({ content });
+    const createdComment = await createComment({ content });
     ElMessage.success('评论发布成功');
     commentForm.content = '';
     commentPage.pageNo = 1;
-    await loadComments();
+    prependCreatedComment(createdComment);
   } catch (error) {
     ElMessage.error(resolveErrorMessage(error));
   } finally {
@@ -394,10 +394,10 @@ async function submitReply(): Promise<void> {
   // 回复统一挂在父评论下，不产生孙级评论。
   replySubmitting.value = true;
   try {
-    await createComment({ content, parentId: replyTarget.value.id });
+    const createdReply = await createComment({ content, parentId: replyTarget.value.id });
     ElMessage.success('回复发布成功');
+    appendCreatedReply(replyTarget.value.id, createdReply);
     cancelReply();
-    await loadComments();
   } catch (error) {
     ElMessage.error(resolveErrorMessage(error));
   } finally {
@@ -413,8 +413,8 @@ async function handleSuggestionLike(id: string): Promise<void> {
     return;
   }
   await runLikeAction('suggestion', id, async () => {
-    await toggleSuggestionLike(id);
-    await loadSuggestions();
+    const latestSuggestion = await toggleSuggestionLike(id);
+    updateSuggestionInList(latestSuggestion);
   });
 }
 
@@ -426,8 +426,8 @@ async function handleCommentLike(id: string): Promise<void> {
     return;
   }
   await runLikeAction('comment', id, async () => {
-    await toggleCommentLike(id);
-    await loadComments();
+    const latestComment = await toggleCommentLike(id);
+    updateCommentInList(latestComment);
   });
 }
 
@@ -440,7 +440,7 @@ async function runLikeAction(kind: LikeKind, id: string, action: () => Promise<v
     return;
   }
 
-  // 点赞后刷新当前列表，让最热排序和子评论数据保持一致。
+  // 点赞后只更新当前条目，避免整块列表骨架屏造成页面闪烁。
   likeLoadingKey.value = loadingKey;
   try {
     await action();
@@ -456,6 +456,79 @@ async function runLikeAction(kind: LikeKind, id: string, action: () => Promise<v
  */
 function isLikeLoading(kind: LikeKind, id: string): boolean {
   return likeLoadingKey.value === `${kind}-${id}`;
+}
+
+/**
+ * 将新建议插入当前列表顶部。
+ */
+function prependCreatedSuggestion(item: SuggestionItem): void {
+  // 本地即时展示发布结果，避免重新拉取列表导致视觉闪烁。
+  suggestions.value = [item, ...suggestions.value.filter((suggestion) => suggestion.id !== item.id)];
+  suggestionPage.total += 1;
+}
+
+/**
+ * 更新当前列表中的建议点赞状态。
+ */
+function updateSuggestionInList(item: SuggestionItem): void {
+  suggestions.value = suggestions.value.map((suggestion) => (suggestion.id === item.id ? item : suggestion));
+}
+
+/**
+ * 将新父评论插入当前列表顶部。
+ */
+function prependCreatedComment(item: CommentItem): void {
+  // 后端新建父评论通常不带子评论，这里兜底为空数组保证模板稳定。
+  const createdComment = normalizeCommentChildren(item);
+  comments.value = [createdComment, ...comments.value.filter((comment) => comment.id !== item.id)];
+  commentPage.total += 1;
+}
+
+/**
+ * 将新回复追加到对应父评论下。
+ */
+function appendCreatedReply(parentId: string, item: CommentItem): void {
+  comments.value = comments.value.map((comment) => {
+    if (comment.id !== parentId) {
+      return comment;
+    }
+
+    // 仅更新命中的父评论，保持其他评论 DOM 不重建。
+    const children = comment.children.filter((child) => child.id !== item.id);
+    return {
+      ...comment,
+      children: [...children, normalizeCommentChildren(item)],
+      replyCount: comment.replyCount + 1,
+    };
+  });
+}
+
+/**
+ * 更新当前列表中的评论点赞状态。
+ */
+function updateCommentInList(item: CommentItem): void {
+  const latestComment = normalizeCommentChildren(item);
+  comments.value = comments.value.map((comment) => {
+    if (comment.id === latestComment.id) {
+      return { ...latestComment, children: comment.children };
+    }
+
+    // 子评论点赞时只替换命中的子评论。
+    return {
+      ...comment,
+      children: comment.children.map((child) => (child.id === latestComment.id ? latestComment : child)),
+    };
+  });
+}
+
+/**
+ * 规范化评论子列表为空数组。
+ */
+function normalizeCommentChildren(item: CommentItem): CommentItem {
+  return {
+    ...item,
+    children: item.children || [],
+  };
 }
 
 /**

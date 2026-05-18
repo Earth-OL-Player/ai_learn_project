@@ -68,7 +68,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import MarkdownIt from 'markdown-it';
 import { onMounted, ref } from 'vue';
 import { fetchInterviewQuestionDocument, fetchPublicQuestionTypes } from '../../api/questions';

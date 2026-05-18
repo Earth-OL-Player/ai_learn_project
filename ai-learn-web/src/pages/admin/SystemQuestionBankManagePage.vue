@@ -100,7 +100,9 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage, ElMessageBox, type UploadRawFile } from 'element-plus';
+import { ElMessage } from 'element-plus/es/components/message/index.mjs';
+import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
+import type { UploadRawFile } from 'element-plus/es/components/upload';
 import { onMounted, reactive, ref } from 'vue';
 import {
   clearSystemQuestions,

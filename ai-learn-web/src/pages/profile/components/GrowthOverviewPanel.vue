@@ -67,7 +67,7 @@
 </template>
 
 <script setup lang="ts">
-import { ElMessage } from 'element-plus';
+import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { computed, onMounted, ref } from 'vue';
 import { fetchMyGrowth } from '../../../api/practice';
 import RealmCharacterCard from '../../../components/growth/RealmCharacterCard.vue';
