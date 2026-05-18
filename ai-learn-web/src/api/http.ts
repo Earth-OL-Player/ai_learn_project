@@ -14,7 +14,7 @@ export const AUTH_TOKEN_STORAGE_KEY = 'ai_learn_access_token';
 
 const SUCCESS_CODE = 'SUCCESS';
 const REFRESH_TOKEN_HEADER = 'X-Refresh-Token';
-const DEFAULT_API_BASE_URL = 'http://localhost:8080/api/v1';
+const DEFAULT_API_BASE_URL = '/api/v1';
 
 /**
  * 获取接口基础地址。

@@ -3,8 +3,8 @@ package com.earth.online.player.ailearn.common.config;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.common.security.JwtProperties;
 import java.util.List;
-import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
@@ -23,6 +23,10 @@ public class WebConfig {
 
     private static final String API_PATH_PATTERN = "/api/v1/**";
     private static final long CORS_MAX_AGE_SECONDS = 3600L;
+    private static final String LOCALHOST_ORIGIN_PATTERN = "http://localhost:[*]";
+    private static final String LOCAL_IP_ORIGIN_PATTERN = "http://127.0.0.1:[*]";
+    private static final String CPOLAR_HTTP_ORIGIN_PATTERN = "http://*.cpolar.cn";
+    private static final String CPOLAR_HTTPS_ORIGIN_PATTERN = "https://*.cpolar.cn";
 
     /**
      * 配置本地开发跨域访问过滤器。
@@ -33,8 +37,13 @@ public class WebConfig {
     public FilterRegistrationBean<CorsFilter> corsFilterRegistration() {
         CorsConfiguration configuration = new CorsConfiguration();
 
-        // Vite 本地端口可能被占用后自动切换，按 localhost/127.0.0.1 放开任意本地端口。
-        configuration.setAllowedOriginPatterns(List.of("http://localhost:[*]", "http://127.0.0.1:[*]"));
+        // Vite 本地端口可能被占用后自动切换，cpolar 隧道用于临时公网体验。
+        configuration.setAllowedOriginPatterns(List.of(
+                LOCALHOST_ORIGIN_PATTERN,
+                LOCAL_IP_ORIGIN_PATTERN,
+                CPOLAR_HTTP_ORIGIN_PATTERN,
+                CPOLAR_HTTPS_ORIGIN_PATTERN
+        ));
         configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
         configuration.setAllowedHeaders(List.of("*"));
 
