@@ -1,17 +1,19 @@
 # AI模型服务配置说明
 
-版本：v1.2
+版本：v1.4
 日期：2026-05-18
 适用工程：`ai-service`、`ai-learn-backend`  
 适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
 
 ## 1. 用途
 
-AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前代码通过 LangChain `init_chat_model` 与 `create_agent` 接入模型；本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
+AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前代码通过 LangChain `init_chat_model` 接入模型；答案评分使用 `with_structured_output(..., method="json_mode")` 返回结构化 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
 
 ## 2. 推荐版本
 
 本仓库不绑定具体模型供应商版本。生产接入时建议选择 LangChain 支持的稳定聊天模型供应商，并在私有部署文档中记录供应商、模型名、上下文长度、价格、限流和 SLA。默认不强制指定 `AI_GRADING_MODEL_PROVIDER`，优先让 LangChain 根据模型名推断；无法推断或需要指定供应商时再显式配置，例如 OpenAI 兼容服务可使用 `openai`。
+
+接入 DeepSeek 时，本地示例可使用 `AI_GRADING_BASE_URL=https://api.deepseek.com` 或供应商官方文档要求的兼容基础地址；如果 LangChain 无法根据模型名推断供应商，可显式配置 `AI_GRADING_MODEL_PROVIDER=deepseek`。当前代码识别到 DeepSeek 供应商、DeepSeek 模型名或 DeepSeek 官方域名后，会通过 LangChain `extra_body` 传入 `{"thinking":{"type":"disabled"}}`，关闭 DeepSeek V4 默认思考模式。评分链路禁止依赖真实 Key 入库，真实 Key 只允许放在本地 `.env`、服务器环境变量或密钥系统中。
 
 ## 3. 本地安装方式
 
@@ -73,7 +75,8 @@ AI_GRADING_TIMEOUT_SECONDS=20
 - 真实模型 Key、生产模型地址和供应商账号信息不得提交仓库。
 - 生产环境应配置超时、限流、重试、成本监控和日志脱敏。
 - 不得把用户完整答案和聊天记录写入日志或向量库。
-- 评分结构化输出通过 LangChain `create_agent(..., response_format=PracticeGradeResponse)` 解析，仍需要保留兜底，避免模型异常输出影响刷题主流程。
+- 评分结构化输出通过 LangChain `with_structured_output(..., method="json_mode")` 解析，避免 DeepSeek reasoning 模型触发工具调用 `tool_choice` 兼容问题；仍需要保留兜底，避免模型异常输出影响刷题主流程。
+- DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
 
 ## 9. sprint202614 本地联调和 422 排查补充
 

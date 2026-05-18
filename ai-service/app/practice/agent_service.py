@@ -29,6 +29,16 @@ _CHAT_COMPLETIONS_PATH = "/chat/completions"
 _FALLBACK_DISCUSS_REPLY = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。"
 _GRADE_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请使用简体中文完成面试题评分。"
 _DISCUSSION_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请只围绕当前刷题上下文回答，使用简体中文。"
+_DEEPSEEK_THINKING_DISABLED_BODY = {"thinking": {"type": "disabled"}}
+_GRADE_JSON_INSTRUCTION = (
+    "请只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外解释。"
+    "JSON 字段必须包含 score、correct、hitPoints、missingPoints、problems、"
+    "referenceAnswer、improvementAdvice、reviewKnowledgePoints、fallbackUsed。"
+    "referenceAnswer 必须使用参考答案原文，fallbackUsed 固定为 false。"
+    "示例 JSON：{\"score\":0,\"correct\":false,\"hitPoints\":[],\"missingPoints\":[],"
+    "\"problems\":[],\"referenceAnswer\":\"参考答案原文\",\"improvementAdvice\":\"优先补充核心要点。\","
+    "\"reviewKnowledgePoints\":[],\"fallbackUsed\":false}。"
+)
 _ASCII_TERM_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+_.-]{1,}")
 _ASCII_IGNORED_TERMS = {"query", "rewrite"}
 _DOMAIN_TERMS = (
@@ -177,17 +187,13 @@ class PracticeAgentService:
         )
         self._log_llm_request(trace_id, "答案评分", _GRADE_SYSTEM_PROMPT, messages, stream=False)
         try:
-            agent = self._grade_agent()
-            result = agent.invoke({"messages": messages})
-            grading = result.get("structured_response")
-            if grading is None:
-                raise ValueError("评分 Agent 未返回结构化结果")
+            grading = self._grade_model().invoke([SystemMessage(content=_GRADE_SYSTEM_PROMPT), *messages])
             grading = grading if isinstance(grading, PracticeGradeResponse) else PracticeGradeResponse.model_validate(grading)
             grading.fallbackUsed = False
 
             # LangChain 结构化输出成功后记录完整评分结果，便于按 traceId 复盘模型返回。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            self._log_llm_response(trace_id, "答案评分", {"grading": grading, "rawResult": result}, elapsed_ms)
+            self._log_llm_response(trace_id, "答案评分", {"grading": grading}, elapsed_ms)
             logger.info(
                 "【AI智能刷题流程-评分】大模型结构化评分完成：traceId=%s model=%s durationMs=%s score=%s",
                 trace_id,
@@ -435,6 +441,7 @@ class PracticeAgentService:
             "hitPoints、missingPoints、problems、reviewKnowledgePoints 必须是简短数组。\n"
             "improvementAdvice 使用一到两句话概括最优先的改进方向。\n"
             "不要把题目分类当作必须命中的扣分项；允许用户使用同义表达。\n"
+            f"{_GRADE_JSON_INSTRUCTION}\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
             f"参考答案：{request.standardAnswer}\n"
@@ -607,14 +614,11 @@ class PracticeAgentService:
             and api_key != _API_KEY_PLACEHOLDER
         )
 
-    def _grade_agent(self):
-        """创建答案评分 Agent。"""
-        return create_agent(
-            model=self._chat_model(),
-            tools=[],
-            system_prompt=_GRADE_SYSTEM_PROMPT,
-            response_format=PracticeGradeResponse,
-        )
+    def _grade_model(self):
+        """创建答案评分结构化聊天模型。"""
+        # DeepSeek reasoning 模型不支持 Agent 结构化输出触发的 tool_choice。
+        # JSON mode 只使用 response_format，不绑定工具，兼容 OpenAI 与 DeepSeek。
+        return self._chat_model().with_structured_output(PracticeGradeResponse, method="json_mode")
 
     def _discussion_agent(self):
         """创建本题讨论 Agent。"""
@@ -636,9 +640,20 @@ class PracticeAgentService:
             kwargs["base_url"] = self._normalized_base_url()
         if settings.ai_grading_model_provider.strip():
             kwargs["model_provider"] = settings.ai_grading_model_provider.strip()
+        if self._is_deepseek_provider():
+            kwargs["extra_body"] = _DEEPSEEK_THINKING_DISABLED_BODY
 
         # init_chat_model 支持通过 provider/model 抽象切换底层模型供应商。
         return init_chat_model(settings.ai_grading_model, **kwargs)
+
+    def _is_deepseek_provider(self) -> bool:
+        """判断当前模型配置是否指向 DeepSeek 服务。"""
+        provider = settings.ai_grading_model_provider.strip().lower()
+        model = settings.ai_grading_model.strip().lower()
+        base_url = settings.ai_grading_base_url.strip().lower()
+
+        # DeepSeek V4 默认开启思考模式，这里按供应商、模型名或官方域名识别后统一关闭。
+        return provider == "deepseek" or model.startswith("deepseek-") or "deepseek.com" in base_url
 
     def _normalized_base_url(self) -> str:
         """规整 OpenAI 兼容基础地址。"""
