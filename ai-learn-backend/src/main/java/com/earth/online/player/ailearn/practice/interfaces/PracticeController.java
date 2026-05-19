@@ -1,8 +1,10 @@
 package com.earth.online.player.ailearn.practice.interfaces;
 
+import com.earth.online.player.ailearn.common.exception.ClientStreamClosedException;
 import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.security.AuthContext;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.ClientDisconnectUtils;
 import com.earth.online.player.ailearn.practice.application.PracticeService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,11 +13,11 @@ import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -119,20 +121,25 @@ public class PracticeController {
      */
     private void emitMessageStream(PracticeMessageRequest request, SseEmitter emitter, AuthenticatedUser authenticatedUser) {
         AtomicBoolean chunkSent = new AtomicBoolean(false);
+        AtomicBoolean streamClosed = new AtomicBoolean(false);
         AtomicInteger chunkCount = new AtomicInteger(0);
         long startMillis = System.currentTimeMillis();
+        registerEmitterLifecycle(emitter, streamClosed);
         try {
             AuthContext.setUser(authenticatedUser);
-            emitter.send(SseEmitter.event().comment("stream-open"));
+            sendEvent(emitter, SseEmitter.event().comment("stream-open"), streamClosed);
             PracticeMessageResponse result = practiceService.handleMessageStream(request, chunk -> {
-                emitChunk(emitter, chunk, chunkCount.incrementAndGet(), startMillis);
+                emitChunk(emitter, chunk, chunkCount.incrementAndGet(), startMillis, streamClosed);
                 chunkSent.set(true);
             });
             if (!chunkSent.get()) {
-                emitTextChunks(emitter, result.message());
+                emitTextChunks(emitter, result.message(), streamClosed);
             }
-            emitter.send(SseEmitter.event().name("result").data(toJson(result)));
+            sendEvent(emitter, SseEmitter.event().name("result").data(toJson(result)), streamClosed);
             emitter.complete();
+        } catch (ClientStreamClosedException exception) {
+            LOGGER.info("SSE 客户端连接已断开，停止本次流式输出：{}", exception.getMessage());
+            completeSilently(emitter);
         } catch (IOException | RuntimeException exception) {
             emitError(emitter, exception.getMessage());
         } finally {
@@ -141,17 +148,52 @@ public class PracticeController {
     }
 
     /**
+     * 注册 SSE 生命周期回调。
+     *
+     * @param emitter SSE 发射器
+     * @param streamClosed 流关闭标记
+     */
+    private void registerEmitterLifecycle(SseEmitter emitter, AtomicBoolean streamClosed) {
+        emitter.onCompletion(() -> streamClosed.set(true));
+        emitter.onTimeout(() -> {
+            streamClosed.set(true);
+            LOGGER.debug("SSE 连接超时，已标记流式输出结束");
+        });
+
+        // 客户端关闭浏览器时也会进入错误回调，此时不打印 ERROR 堆栈。
+        emitter.onError(exception -> handleEmitterError(exception, streamClosed));
+    }
+
+    /**
+     * 处理 SSE 生命周期错误。
+     *
+     * @param exception 生命周期异常
+     * @param streamClosed 流关闭标记
+     */
+    private void handleEmitterError(Throwable exception, AtomicBoolean streamClosed) {
+        streamClosed.set(true);
+        if (ClientDisconnectUtils.isClientDisconnected(exception)) {
+            LOGGER.debug("SSE 客户端连接已断开，生命周期错误已忽略：{}", exception.getMessage());
+            return;
+        }
+
+        // 非客户端断开错误仍保留告警，便于发现服务端异常。
+        LOGGER.warn("SSE 连接发生异常，已标记流式输出结束", exception);
+    }
+
+    /**
      * 分片输出回复文本。
      *
      * @param emitter SSE 发射器
      * @param message 回复文本
+     * @param streamClosed 流关闭标记
      * @throws IOException SSE 输出异常
      */
-    private void emitTextChunks(SseEmitter emitter, String message) throws IOException {
+    private void emitTextChunks(SseEmitter emitter, String message, AtomicBoolean streamClosed) throws IOException {
         String safeMessage = message == null ? "" : message;
         for (int index = 0; index < safeMessage.length(); index += STREAM_CHUNK_SIZE) {
             int endIndex = Math.min(index + STREAM_CHUNK_SIZE, safeMessage.length());
-            emitter.send(SseEmitter.event().name("message").data(safeMessage.substring(index, endIndex)));
+            sendEvent(emitter, SseEmitter.event().name("message").data(safeMessage.substring(index, endIndex)), streamClosed);
             if (!pauseBetweenChunks()) {
                 break;
             }
@@ -163,14 +205,61 @@ public class PracticeController {
      *
      * @param emitter SSE 发射器
      * @param chunk 文本片段
+     * @param chunkCount 已发送片段数
+     * @param startMillis 开始时间
+     * @param streamClosed 流关闭标记
      */
-    private void emitChunk(SseEmitter emitter, String chunk, int chunkCount, long startMillis) {
+    private void emitChunk(SseEmitter emitter, String chunk, int chunkCount, long startMillis, AtomicBoolean streamClosed) {
         try {
-            emitter.send(SseEmitter.event().name("message").data(chunk));
+            sendEvent(emitter, SseEmitter.event().name("message").data(chunk), streamClosed);
             logEmittedChunk(chunk, chunkCount, startMillis);
         } catch (IOException exception) {
             throw new IllegalStateException("流式消息发送失败", exception);
         }
+    }
+
+    /**
+     * 安全发送 SSE 事件。
+     *
+     * @param emitter SSE 发射器
+     * @param event SSE 事件
+     * @param streamClosed 流关闭标记
+     * @throws IOException 非客户端断开的发送异常
+     */
+    private void sendEvent(SseEmitter emitter, SseEmitter.SseEventBuilder event, AtomicBoolean streamClosed) throws IOException {
+        if (streamClosed.get()) {
+            throw new ClientStreamClosedException("客户端连接已关闭", null);
+        }
+        try {
+            emitter.send(event);
+        } catch (IOException | IllegalStateException exception) {
+            handleSendFailure(exception, streamClosed);
+        }
+    }
+
+    /**
+     * 处理 SSE 发送失败。
+     *
+     * @param exception 发送异常
+     * @param streamClosed 流关闭标记
+     * @throws IOException 非客户端断开的 IO 异常
+     */
+    private void handleSendFailure(Exception exception, AtomicBoolean streamClosed) throws IOException {
+        if (ClientDisconnectUtils.isClientDisconnected(exception)) {
+            streamClosed.set(true);
+            throw new ClientStreamClosedException("客户端连接已关闭", exception);
+        }
+        if (exception instanceof IOException ioException) {
+            throw ioException;
+        }
+
+        // 非客户端断开的非法状态继续向上抛出，交由原有异常流程处理。
+        if (exception instanceof IllegalStateException illegalStateException) {
+            throw illegalStateException;
+        }
+
+        // 理论上不会进入该分支，兜底保留原始异常链路。
+        throw new IllegalStateException("SSE 发送失败", exception);
     }
 
     /**
@@ -222,6 +311,19 @@ public class PracticeController {
             LOGGER.debug("SSE 错误事件发送失败，客户端可能已断开", exception);
         } finally {
             emitter.complete();
+        }
+    }
+
+    /**
+     * 静默完成 SSE 连接。
+     *
+     * @param emitter SSE 发射器
+     */
+    private void completeSilently(SseEmitter emitter) {
+        try {
+            emitter.complete();
+        } catch (RuntimeException exception) {
+            LOGGER.debug("SSE 连接完成时客户端已断开，忽略完成异常", exception);
         }
     }
 

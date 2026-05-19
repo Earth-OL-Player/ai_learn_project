@@ -2,11 +2,13 @@ package com.earth.online.player.ailearn.common.exception;
 
 import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
+import com.earth.online.player.ailearn.common.util.ClientDisconnectUtils;
 import jakarta.validation.ConstraintViolationException;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -79,10 +81,17 @@ public class GlobalExceptionHandler {
      * @return 统一失败响应
      */
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public ApiResponse<Void> handleException(Exception exception) {
+    public ResponseEntity<?> handleException(Exception exception) {
+        if (ClientDisconnectUtils.isClientDisconnected(exception)) {
+            LOGGER.debug("客户端连接已断开，忽略响应写出异常：{}", exception.getMessage());
+            return ResponseEntity.noContent().build();
+        }
+
+        // 非客户端断开异常仍按系统异常记录完整堆栈，方便定位真实服务端问题。
         LOGGER.error("系统处理请求时发生异常", exception);
-        return ApiResponse.failure(ResponseCode.SYSTEM_ERROR.code(), "系统繁忙，请稍后重试");
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(ApiResponse.failure(ResponseCode.SYSTEM_ERROR.code(), "系统繁忙，请稍后重试"));
     }
 
     /**

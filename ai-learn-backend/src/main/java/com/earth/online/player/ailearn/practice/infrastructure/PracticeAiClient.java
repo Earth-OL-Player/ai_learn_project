@@ -3,6 +3,7 @@ package com.earth.online.player.ailearn.practice.infrastructure;
 import com.earth.online.player.ailearn.ai.AiServiceConstants;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
+import com.earth.online.player.ailearn.common.exception.ClientStreamClosedException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -112,6 +113,8 @@ public class PracticeAiClient {
         try {
             ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
             return postEventStream(AiServiceConstants.PRACTICE_DISCUSS_STREAM_PATH, payload, chunkConsumer);
+        } catch (ClientStreamClosedException exception) {
+            throw exception;
         } catch (RuntimeException exception) {
             LOGGER.warn("AI 服务流式讨论失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
             return Optional.empty();
