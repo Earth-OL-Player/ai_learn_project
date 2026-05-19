@@ -3,6 +3,7 @@ import AppLayout from '../layout/AppLayout.vue';
 import { useAuthStore } from '../stores/auth';
 
 // 页面组件按路由懒加载，避免所有业务页面打进首屏入口包。
+const HomePage = () => import('../pages/home/HomePage.vue');
 const LearningRoadmapPage = () => import('../pages/learning-roadmap/LearningRoadmapPage.vue');
 const SuggestionsCommentsPage = () => import('../pages/suggestions-comments/SuggestionsCommentsPage.vue');
 const InterviewQuestionsPage = () => import('../pages/interview-questions/InterviewQuestionsPage.vue');
@@ -26,7 +27,13 @@ const router = createRouter({
       children: [
         {
           path: '',
-          redirect: '/learning-roadmap',
+          redirect: '/home',
+        },
+        {
+          path: 'home',
+          name: 'home',
+          component: HomePage,
+          meta: { title: '首页' },
         },
         {
           path: 'learning-roadmap',
@@ -93,7 +100,7 @@ router.beforeEach(async (to) => {
   // 受保护页面统一阻止游客进入，并通过查询参数触发布局层登录引导。
   if (to.meta.requiresAuth && !authStore.isLoggedIn) {
     return {
-      path: '/learning-roadmap',
+      path: '/home',
       query: {
         loginGuide: '1',
         redirect: to.fullPath,
@@ -101,7 +108,7 @@ router.beforeEach(async (to) => {
     };
   }
   if (to.meta.requiresSuperAdmin && !authStore.isSuperAdmin) {
-    return '/learning-roadmap';
+    return '/home';
   }
   return true;
 });

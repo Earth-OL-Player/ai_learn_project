@@ -437,11 +437,30 @@ a {
   box-shadow: 0 12px 32px rgba(61, 91, 132, 0.12);
 }
 
+// Markdown 内联重点词只保留系统蓝色文字，不额外增加背景和边框。
 .markdown-body code {
-  padding: 2px 6px;
-  color: #d6336c;
-  background: #fff0f5;
-  border-radius: 6px;
+  padding: 0;
+  color: #1f6feb;
+  font-family: inherit;
+  font-weight: 800;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+// 如果后续 Markdown 增加真实代码块，块级代码仍保留等宽字体和常规矩形容器。
+.markdown-body pre code {
+  display: block;
+  padding: 12px 14px;
+  color: #17233d;
+  font-family: "Consolas", "SFMono-Regular", "Menlo", monospace;
+  font-weight: 600;
+  overflow-x: auto;
+  white-space: pre;
+  background: #f6f9ff;
+  border-color: #dbeafe;
+  border-radius: 14px;
 }
 
 .markdown-body ul,
@@ -590,6 +609,11 @@ a {
 
 .markdown-figure img {
   margin-bottom: 10px;
+}
+
+// AI 应用开发学习路线图按需求缩小到正文宽度的 67%。
+.markdown-figure.is-learning-roadmap-image img {
+  width: 67%;
 }
 
 .markdown-figure figcaption {
@@ -1276,6 +1300,36 @@ a {
 }
 
 @media (max-width: 1180px) {
+  .layout-menu .el-menu-item {
+    min-width: auto;
+    padding: 0 14px;
+    margin: 0 4px;
+  }
+}
+
+/* 首页入口加入后压缩顶部导航单项宽度，保证“首页”位于“路线和资料”左侧且大屏不拥挤。 */
+.layout-header {
+  gap: 20px;
+}
+
+.brand-block {
+  min-width: 320px;
+}
+
+.layout-menu .el-menu-item {
+  min-width: 96px;
+  padding: 0 18px;
+}
+
+.header-action-area {
+  min-width: 190px;
+}
+
+@media (max-width: 1320px) {
+  .brand-block {
+    min-width: 280px;
+  }
+
   .layout-menu .el-menu-item {
     min-width: auto;
     padding: 0 14px;

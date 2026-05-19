@@ -89,38 +89,6 @@ public class PracticeAiClient {
     }
 
     /**
-     * 请求 AI 服务进行本题讨论。
-     *
-     * @param question 当前题目
-     * @param lastUserAnswer 最近一次答案
-     * @param gradingSummary 最近一次评分摘要
-     * @param discussionHistoryJson 当前题历史讨论JSON
-     * @param message 用户消息
-     * @return 讨论回复
-     */
-    public Optional<String> discuss(
-            PracticeQuestionRecord question,
-            String lastUserAnswer,
-            String gradingSummary,
-            String discussionHistoryJson,
-            String message) {
-        if (!isEnabled()) {
-            return Optional.empty();
-        }
-        try {
-            ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
-            JsonNode data = postJson(AiServiceConstants.PRACTICE_DISCUSS_PATH, payload).orElse(null);
-            if (data == null || !data.hasNonNull("reply")) {
-                return Optional.empty();
-            }
-            return Optional.of(data.get("reply").asText());
-        } catch (RuntimeException exception) {
-            LOGGER.warn("AI 服务讨论结果转换失败，已切换后端本地讨论：questionCode={}", question.getCode(), exception);
-            return Optional.empty();
-        }
-    }
-
-    /**
      * 请求 AI 服务进行本题流式讨论。
      *
      * @param question 当前题目

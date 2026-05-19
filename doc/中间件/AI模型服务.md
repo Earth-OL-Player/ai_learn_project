@@ -1,13 +1,13 @@
 # AI模型服务配置说明
 
-版本：v1.5
-日期：2026-05-18
+版本：v1.6
+日期：2026-05-19
 适用工程：`ai-service`、`ai-learn-backend`  
 适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
 
 ## 1. 用途
 
-AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前代码通过 LangChain `init_chat_model` 接入模型，公共占位符与 LOCAL_RULE 常量集中在 `app/config/constants.py`；答案评分使用 `with_structured_output(..., method="json_mode")` 返回结构化 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
+AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前 AI 智能刷题、评分和讨论不依赖 Qdrant，未接入主业务的 RAG/Qdrant 预留代码、配置和依赖已移除。当前代码通过 LangChain `init_chat_model` 接入模型，公共占位符与 LOCAL_RULE 常量集中在 `app/config/constants.py`；答案评分使用 `with_structured_output(..., method="json_mode")` 返回结构化 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
 
 ## 2. 推荐版本
 
@@ -51,8 +51,6 @@ AI_GRADING_TIMEOUT_SECONDS=20
 
 ```dotenv
 AI_SERVICE_TOKEN=AI_SERVICE_TOKEN占位符
-QDRANT_URL=http://127.0.0.1:6333
-QDRANT_COLLECTION=ai_learn_knowledge
 AI_GRADING_BASE_URL=https://模型服务地址占位符/v1
 AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
 AI_GRADING_MODEL=LOCAL_RULE
@@ -62,7 +60,7 @@ AI_GRADING_TIMEOUT_SECONDS=20
 
 ## 7. 验证方式
 
-1. 启动 MySQL、Qdrant、`ai-service`、后端和前端。
+1. 启动 MySQL、`ai-service`、后端和前端；当前无需启动 Qdrant。
 2. 登录平台并进入 AI 智能刷题页面。
 3. 点击“开始刷题”，提交一段答案。
 4. 页面应展示评分、参考答案、命中点、缺失点和优化建议。
@@ -74,7 +72,7 @@ AI_GRADING_TIMEOUT_SECONDS=20
 
 - 真实模型 Key、生产模型地址和供应商账号信息不得提交仓库。
 - 生产环境应配置超时、限流、重试、成本监控和日志脱敏。
-- 不得把用户完整答案和聊天记录写入日志或向量库。
+- 不得把用户完整答案和聊天记录写入日志。
 - 评分结构化输出通过 LangChain `with_structured_output(..., method="json_mode")` 解析，避免 DeepSeek reasoning 模型触发工具调用 `tool_choice` 兼容问题；仍需要保留兜底，避免模型异常输出影响刷题主流程。
 - DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
 - Java 后端内部调用路径、Header、响应码和内容类型集中在 `AiServiceConstants`，新增 AI 内部接口时需同步维护该常量类与本文档。
@@ -103,8 +101,7 @@ AI_GRADING_TIMEOUT_SECONDS=20
 
 | 内部接口 | 用途 |
 | --- | --- |
-| `POST /internal/v1/practice/discuss` | 请求字段新增 `lastUserAnswer`，用于本题讨论阶段让模型记住当前题最近一次用户答案 |
-| `POST /internal/v1/practice/discuss/stream` | 优先使用 LangChain Agent 流式输出；如 Agent 包装层无可见 token，则切换到底层聊天模型原生 stream，并把文本片段以 SSE 返回给 Java 后端 |
+| `POST /internal/v1/practice/discuss/stream` | 当前唯一讨论接口；优先使用 LangChain Agent 流式输出，如 Agent 包装层无可见 token，则切换到底层聊天模型原生 stream，并把文本片段以 SSE 返回给 Java 后端 |
 | `POST /internal/v1/practice/relevance` | 已在 sprint2622 下线；明显无关问题改由 Java 后端本地关键词拦截 |
 
 本地联调注意事项：
@@ -114,4 +111,4 @@ AI_GRADING_TIMEOUT_SECONDS=20
 3. 讨论阶段流式输出依赖 LangChain 对应模型集成支持流式消息。
 4. 模型不可用、Key 使用占位符、模型名为 `LOCAL_RULE` 或解析失败时，AI 服务回退到本地保守规则。
 5. 日志只能记录 traceId、场景、模型名、耗时和响应预览，禁止打印真实 Key、完整用户答案或完整提示词。
-6. 生产部署时如接入第三方模型，需要确认供应商的数据使用、留存和脱敏策略符合项目要求。
+6. 生产部署时如接入第三方模型，需要确认供应商的数据使用、留存和脱敏策略符合项目要求。Qdrant 当前不是项目运行依赖，无需部署。

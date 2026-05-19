@@ -18,7 +18,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、建议�
 - `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。
 - 系统题库通过 migration 初始化 `AI面试题Top300.csv` 中的真实题目数据，供热门面经和 AI 智能刷题使用。
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
-- Redis 当前未接入运行代码；Qdrant 由 `ai-service` 访问，不直接参与 MySQL 业务主表写入。
+- Redis 当前未接入运行代码；Qdrant 预留代码、配置和依赖已移除，不直接参与 MySQL 业务主表写入。
 - `system_settings` 保存系统最大用户数等轻量配置，当前使用 `MAX_USERS` 控制开放注册容量。
 
 ## 2. 推荐版本
@@ -346,7 +346,6 @@ SELECT ub.user_id, b.rule_code, b.name, ub.acquired_at FROM user_badges ub JOIN 
 
 ```text
 GET  /api/v1/growth/me
-POST /api/v1/practice/messages
 POST /api/v1/practice/messages/stream
 ```
 
@@ -433,7 +432,6 @@ WHERE user_id = 用户ID占位符;
 本地联调场景：
 
 ```text
-POST /api/v1/practice/messages
 POST /api/v1/practice/messages/stream
 ```
 

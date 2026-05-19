@@ -91,17 +91,6 @@ public class PracticeController {
     }
 
     /**
-     * 处理用户聊天输入。
-     *
-     * @param request 聊天请求
-     * @return 聊天结果
-     */
-    @PostMapping("/messages")
-    public ApiResponse<PracticeMessageResponse> handleMessage(@RequestBody PracticeMessageRequest request) {
-        return ApiResponse.success(practiceService.handleMessage(request));
-    }
-
-    /**
      * 以 SSE 流式处理用户聊天输入。
      *
      * @param request 聊天请求

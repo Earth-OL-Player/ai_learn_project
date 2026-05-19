@@ -17,6 +17,7 @@
         mode="horizontal"
         router
       >
+        <el-menu-item index="/home">首页</el-menu-item>
         <el-menu-item index="/learning-roadmap">路线和资料</el-menu-item>
         <el-menu-item index="/practice-agent">AI智能刷题</el-menu-item>
         <el-menu-item index="/interview-questions">热门面经</el-menu-item>
@@ -109,7 +110,7 @@ async function handleUserCommand(command: string): Promise<void> {
   }
   if (command === 'logout') {
     await authStore.logoutAccount();
-    await router.push('/learning-roadmap');
+    await router.push('/home');
   }
 }
 </script>

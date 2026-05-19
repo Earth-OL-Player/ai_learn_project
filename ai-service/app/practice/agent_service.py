@@ -127,29 +127,6 @@ class PracticeAgentService:
         )
         return self._grade_answer_by_local_rule(request)
 
-    def discuss(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse:
-        """优先调用真实大模型生成讨论回复，失败或未配置时使用本地规则兜底。"""
-        logger.info(
-            "【AI智能刷题流程-讨论】收到非流式讨论请求：questionCode=%s historySize=%s llmEnabled=%s",
-            request.questionCode,
-            len(request.conversationHistory),
-            self._is_llm_enabled(),
-        )
-
-        # 非流式接口用于普通追问，完整入参和完整返回会在模型调用处打印。
-        if self._is_llm_enabled():
-            llm_response = self._discuss_by_llm(request)
-            if llm_response is not None:
-                return llm_response
-
-        # 大模型不可用时，不伪造讨论内容，避免误导用户。
-        logger.info(
-            "【AI智能刷题流程-讨论】未调用真实大模型，返回讨论不可用提示：model=%s baseUrlConfigured=%s",
-            settings.ai_grading_model,
-            bool(settings.ai_grading_base_url),
-        )
-        return self._discuss_by_local_rule(request)
-
     def stream_discuss(self, request: PracticeDiscussRequest) -> Iterator[str]:
         """流式生成本题讨论回复。"""
         logger.info(
@@ -211,28 +188,28 @@ class PracticeAgentService:
             )
             return None
 
-    def _discuss_by_llm(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
-        """使用 LangChain Agent 生成本题讨论回复。"""
+    def _generate_discuss_reply_by_llm(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
+        """使用 LangChain Agent 为流式链路兜底生成完整讨论回复。"""
         trace_id = self._new_trace_id()
         start_time = time.perf_counter()
         messages = self._build_discuss_messages(request)
         logger.info(
-            "【AI智能刷题流程-讨论】准备调用大模型非流式讨论：traceId=%s model=%s",
+            "【AI智能刷题流程-讨论】准备调用大模型完整讨论兜底：traceId=%s model=%s",
             trace_id,
             settings.ai_grading_model,
         )
-        self._log_llm_request(trace_id, "本题讨论-非流式", _DISCUSSION_SYSTEM_PROMPT, messages, stream=False)
+        self._log_llm_request(trace_id, "本题讨论-流式兜底", _DISCUSSION_SYSTEM_PROMPT, messages, stream=False)
         try:
             result = self._discussion_agent().invoke({"messages": messages})
             reply = self._last_ai_reply(result).strip()
             if not reply:
                 return None
 
-            # 非流式讨论记录完整模型返回，排查时可直接看到最终回复内容。
+            # 流式无可见片段时记录完整模型返回，排查时可直接看到最终回复内容。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            self._log_llm_response(trace_id, "本题讨论-非流式", {"reply": reply, "rawResult": result}, elapsed_ms)
+            self._log_llm_response(trace_id, "本题讨论-流式兜底", {"reply": reply, "rawResult": result}, elapsed_ms)
             logger.info(
-                "【AI智能刷题流程-讨论】大模型非流式讨论完成：traceId=%s durationMs=%s replyChars=%s",
+                "【AI智能刷题流程-讨论】大模型完整讨论兜底完成：traceId=%s durationMs=%s replyChars=%s",
                 trace_id,
                 elapsed_ms,
                 len(reply),
@@ -241,7 +218,7 @@ class PracticeAgentService:
         except Exception as exc:  # noqa: BLE001 - 模型和图执行异常统一进入兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning(
-                "【AI智能刷题流程-讨论】大模型非流式讨论失败，使用本地兜底：traceId=%s durationMs=%s error=%s",
+                "【AI智能刷题流程-讨论】大模型完整讨论兜底失败，使用本地兜底：traceId=%s durationMs=%s error=%s",
                 trace_id,
                 elapsed_ms,
                 exc,
@@ -281,7 +258,7 @@ class PracticeAgentService:
             # 双流式链路均无输出时，最后才回退非流式，避免前端长时间空白。
             if not emitted_any:
                 logger.warning("LangChain 流式链路均无可见片段，切换非流式兜底：traceId=%s", trace_id)
-                fallback_response = self._discuss_by_llm(request) or self._discuss_by_local_rule(request)
+                fallback_response = self._generate_discuss_reply_by_llm(request) or self._discuss_by_local_rule(request)
                 full_reply_parts.append(fallback_response.reply)
                 yield self._build_sse_event("message", {"content": fallback_response.reply})
             yield self._build_sse_event("done", {})

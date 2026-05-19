@@ -151,29 +151,6 @@ public class PracticeService {
     }
 
     /**
-     * 处理聊天消息。
-     *
-     * @param request 聊天请求
-     * @return 聊天响应
-     */
-    @Transactional
-    public PracticeMessageResponse handleMessage(PracticeMessageRequest request) {
-        Long userId = currentUserId();
-        String content = normalizeContent(request == null ? null : request.content());
-        PracticeSessionRecord session = practiceMapper.findSession(userId);
-        String phase = session == null ? PracticeConstants.PHASE_QUESTIONING : session.getPhase();
-
-        // 出题阶段只允许出题相关表达，防止刷题入口被当作通用聊天使用。
-        if (PracticeConstants.PHASE_QUESTIONING.equals(phase)) {
-            return handleQuestioningMessage(userId, content, request);
-        }
-        if (PracticeConstants.PHASE_ANSWERING.equals(phase)) {
-            return handleAnsweringMessage(userId, content);
-        }
-        return handleDiscussingMessage(userId, content, request);
-    }
-
-    /**
      * 处理聊天消息并尽可能流式输出讨论回复。
      *
      * @param request 聊天请求
@@ -231,38 +208,6 @@ public class PracticeService {
             return tip(PracticeConstants.PHASE_ANSWERING, "当前处于答题阶段，请先围绕本题提交你的答案。完成评分后，我再陪你分析本题细节。");
         }
         return submitAnswer(userId, question, content);
-    }
-
-    /**
-     * 处理讨论阶段消息。
-     *
-     * @param userId 用户ID
-     * @param content 消息内容
-     * @param request 原始请求
-     * @return 响应
-     */
-    private PracticeMessageResponse handleDiscussingMessage(Long userId, String content, PracticeMessageRequest request) {
-        if (isRetryRequest(content)) {
-            return retryCurrentQuestion();
-        }
-        if (isNextRequest(content) || isExplicitQuestionRequest(content)) {
-            List<String> requestedTypes = mergeRequestedTypes(content, request == null ? null : request.questionTypes());
-            PracticeQuestionRecord question = selectQuestion(userId, requestedTypes);
-            practiceMapper.upsertQuestionSession(userId, question.getCode(), PracticeConstants.PHASE_ANSWERING);
-            return questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
-        }
-        PracticeQuestionRecord question = currentQuestion(userId);
-        if (isUnrelatedToPractice(content)) {
-            return tip(PracticeConstants.PHASE_DISCUSSING, "当前是本题讨论阶段，请围绕本题的技术概念、解题思路或答案细节提问。");
-        }
-        PracticeSessionRecord session = practiceMapper.findSession(userId);
-        String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
-        String gradingSummary = session == null ? "" : session.getLastGradingSummary();
-        String historyJson = session == null ? "" : session.getDiscussionHistoryJson();
-        String reply = practiceAiClient.discuss(question, lastUserAnswer, gradingSummary, historyJson, content)
-                .orElseGet(this::buildLocalDiscussionReply);
-        saveDiscussionHistory(userId, historyJson, content, reply);
-        return discussionResponse(userId, question, reply);
     }
 
     /**

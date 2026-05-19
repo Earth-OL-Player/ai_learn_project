@@ -1,5 +1,5 @@
 <template>
-  <section class="roadmap-page">
+  <section class="roadmap-page home-page">
     <div :class="['markdown-layout', { 'is-toc-collapsed': isTocCollapsed }]">
       <nav
         v-if="tocItems.length"
@@ -31,7 +31,7 @@
       </nav>
 
       <article class="markdown-card">
-        <div class="markdown-body" v-html="roadmapHtml"></div>
+        <div class="markdown-body" v-html="homeHtml"></div>
       </article>
     </div>
   </section>
@@ -40,7 +40,7 @@
 <script setup lang="ts">
 import MarkdownIt from 'markdown-it';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
-import roadmapMarkdown from '../../content/learning-roadmap/AI应用开发学习路线和资料集.md?raw';
+import homeMarkdown from '../../content/learning-roadmap/首页.md?raw';
 
 interface TocItem {
   id: string;
@@ -52,31 +52,6 @@ let tocObserver: IntersectionObserver | null = null;
 const activeTocId = ref('');
 const isTocCollapsed = ref(false);
 
-const roadmapAssetModules = import.meta.glob(
-  '../../content/learning-roadmap/AI应用开发学习路线和资料集.assets/*',
-  {
-    eager: true,
-    import: 'default',
-    query: '?url',
-  }
-) as Record<string, string>;
-
-// 将 Markdown 附带图片资源映射成 Vite 可访问地址。
-const roadmapAssetUrlMap = Object.entries(roadmapAssetModules).reduce<Record<string, string>>(
-  (assetMap, [assetPath, assetUrl]) => {
-    const assetName = assetPath.substring(assetPath.lastIndexOf('/') + 1);
-    const relativePath = `AI应用开发学习路线和资料集.assets/${assetName}`;
-
-    // 同时支持原始路径、URL 编码路径和文件名兜底匹配。
-    assetMap[relativePath] = assetUrl;
-    assetMap[encodeURI(relativePath)] = assetUrl;
-    assetMap[assetName] = assetUrl;
-    assetMap[encodeURI(assetName)] = assetUrl;
-    return assetMap;
-  },
-  {}
-);
-
 const markdown = new MarkdownIt({
   html: true,
   linkify: true,
@@ -84,28 +59,8 @@ const markdown = new MarkdownIt({
 });
 
 let headingIdGenerator = createHeadingIdGenerator();
-let imageCaptionNumber = 0;
-const defaultImageRenderer = markdown.renderer.rules.image;
 const defaultLinkOpenRenderer = markdown.renderer.rules.link_open;
 const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
-
-markdown.renderer.rules.image = (tokens, index, options, env, self) => {
-  const source = tokens[index].attrGet('src');
-  const resolvedSource = resolveAssetUrl(source);
-
-  // 本地图片交给 Vite 资源系统处理，外部图片保持原始地址。
-  if (resolvedSource) {
-    tokens[index].attrSet('src', resolvedSource);
-  }
-
-  imageCaptionNumber += 1;
-  const imageHtml = defaultImageRenderer
-    ? defaultImageRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-  const imageTitle = resolveImageTitle(tokens[index].content, imageCaptionNumber);
-  const figureClass = resolveImageFigureClass(tokens[index].content);
-  return `<figure class="${figureClass}">${imageHtml}<figcaption>${imageTitle}</figcaption></figure>`;
-};
 
 markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
   const targetIndex = tokens[index].attrIndex('target');
@@ -129,47 +84,6 @@ markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
     ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
     : self.renderToken(tokens, index, options);
 };
-
-/**
- * 解析 Markdown 本地图片资源地址。
- */
-function resolveAssetUrl(source: string | null): string | undefined {
-  if (!source || /^https?:\/\//i.test(source)) {
-    return undefined;
-  }
-
-  // 兼容浏览器编码、Markdown 原始相对路径和文件名匹配。
-  const normalizedSource = source.replace(/^\.\//, '');
-  const decodedSource = decodeURIComponent(normalizedSource);
-  const assetName = decodedSource.substring(decodedSource.lastIndexOf('/') + 1);
-  return roadmapAssetUrlMap[normalizedSource]
-    || roadmapAssetUrlMap[decodedSource]
-    || roadmapAssetUrlMap[assetName]
-    || roadmapAssetUrlMap[encodeURI(decodedSource)]
-    || roadmapAssetUrlMap[encodeURI(assetName)];
-}
-
-/**
- * 根据图片替代文本生成图注。
- */
-function resolveImageTitle(altText: string, imageIndex: number): string {
-  const safeTitle = markdown.utils.escapeHtml(altText.trim() || '图片');
-  return `图${imageIndex}-${safeTitle}`;
-}
-
-/**
- * 根据图片替代文本生成图片容器样式类。
- */
-function resolveImageFigureClass(altText: string): string {
-  const normalizedAltText = altText.trim();
-
-  // 首张 AI 应用开发学习路线图单独缩放，避免影响其他资料插图。
-  if (normalizedAltText === 'AI应用开发学习路线') {
-    return 'markdown-figure is-learning-roadmap-image';
-  }
-
-  return 'markdown-figure';
-}
 
 /**
  * 创建标题锚点生成器，重复标题自动追加序号。
@@ -210,12 +124,11 @@ function buildTocItems(markdownText: string): TocItem[] {
 }
 
 /**
- * 渲染 Markdown 原文为页面 HTML。
+ * 渲染首页 Markdown 原文为页面 HTML。
  */
-function renderRoadmapMarkdown(): string {
+function renderHomeMarkdown(): string {
   headingIdGenerator = createHeadingIdGenerator();
-  imageCaptionNumber = 0;
-  return markdown.render(roadmapMarkdown);
+  return markdown.render(homeMarkdown);
 }
 
 /**
@@ -258,9 +171,9 @@ function observeTocHeadings(): void {
   headings.forEach((heading) => tocObserver?.observe(heading));
 }
 
-// Markdown 内容由前端项目内 md 文件直接渲染，修改 md 后开发环境会热更新。
-const roadmapHtml = computed(() => renderRoadmapMarkdown());
-const tocItems = computed(() => buildTocItems(roadmapMarkdown));
+// 首页内容直接读取首页.md，展示方式与路线和资料页保持一致。
+const homeHtml = computed(() => renderHomeMarkdown());
+const tocItems = computed(() => buildTocItems(homeMarkdown));
 
 onMounted(async () => {
   await nextTick();
@@ -271,3 +184,15 @@ onBeforeUnmount(() => {
   tocObserver?.disconnect();
 });
 </script>
+
+<style scoped>
+/* 首页正文标题间距单独放大，避免说明类内容在视觉上过于密集。 */
+.home-page :deep(.markdown-body h2:not(:first-child)) {
+  margin-top: 58px;
+}
+
+/* 三级标题也增加一行左右的呼吸感，但不影响正文列表和段落样式。 */
+.home-page :deep(.markdown-body h3) {
+  margin-top: 42px;
+}
+</style>

@@ -45,7 +45,6 @@ public class AuthFilter extends OncePerRequestFilter {
     );
     private final List<String> alwaysProtectedPrefixes = List.of(
             "/api/v1/questions",
-            "/api/v1/rag",
             "/api/v1/admin",
             "/api/v1/practice"
     );

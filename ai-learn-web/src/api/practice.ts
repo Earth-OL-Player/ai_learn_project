@@ -92,13 +92,6 @@ export function retryPracticeQuestion(): Promise<PracticeMessageResult> {
 }
 
 /**
- * 发送刷题聊天消息。
- */
-export function sendPracticeMessage(payload: PracticeMessagePayload): Promise<PracticeMessageResult> {
-  return post<PracticeMessageResult, PracticeMessagePayload>('/practice/messages', payload);
-}
-
-/**
  * 发送刷题聊天消息并接收流式回复。
  */
 export function sendPracticeMessageStream(

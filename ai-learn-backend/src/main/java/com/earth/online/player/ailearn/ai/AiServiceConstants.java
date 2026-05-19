@@ -20,9 +20,6 @@ public final class AiServiceConstants {
     /** AI 服务答案评分接口。 */
     public static final String PRACTICE_GRADE_PATH = "/internal/v1/practice/answer/grade";
 
-    /** AI 服务本题讨论接口。 */
-    public static final String PRACTICE_DISCUSS_PATH = "/internal/v1/practice/discuss";
-
     /** AI 服务本题流式讨论接口。 */
     public static final String PRACTICE_DISCUSS_STREAM_PATH = "/internal/v1/practice/discuss/stream";
 
