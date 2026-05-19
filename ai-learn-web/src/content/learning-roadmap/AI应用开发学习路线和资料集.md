@@ -1,6 +1,7 @@
-| 版本 | 日期     | 变更人         | 变更说明       |
-| ---- | -------- | -------------- | -------------- |
-| V1.0 | 20260510 | 地球OL初级玩家 | 初始化首版教程 |
+| 版本 | 日期       | 变更人         | 变更说明                          |
+| ---- | ---------- | -------------- | --------------------------------- |
+| V1.0 | 2026-05-10 | 地球OL初级玩家 | 初始化首版教程                    |
+| V1.1 | 2026-05-18 | 地球OL初级玩家 | 添加HelloAgent和Learn-claude-code |
 
 > 附：大家注意看题头的版本修订日期，我会选取截止修订日期时刻最新版本的教程。下文反复提及截止当前，即截止最新版本的修订日期。
 >
@@ -191,15 +192,33 @@ Github地址：https://github.com/qdrant/qdrant
 
 ## 7. 其他
 
-其他暂未并入路线的资料将在这里补充。
+其他暂未并入路线的资料将在这里补充，学完路线上的知识之后，可以从这里的资料进行学习补充。
 
-### 7.1 RagFlow
+### 7.1 Hello Agent
+
+Github地址：https://github.com/datawhalechina/hello-agents
+
+这是 Datawhale 开源的 智能体 Agent 系统学习教程，项目名叫 Hello-Agents 。
+
+适合系统入门Agent，当前我在纠结要不要排进主路线里面，如果排进去，合适的位置是插入在1.Python和2.Langchain之间，基础普通且学Langchain感觉比较吃力的人可以放入路线中学习。
+
+
+
+### 7.2 RagFlow
 
 RAGFlow 是一款开源的企业级 RAG 知识库与智能问答平台，核心能力是把 PDF、Word、Excel、网页、图片、扫描件等复杂文档解析成可检索的知识内容。
 
 RAGFlow 是一个“开箱即用的 RAG 平台”，适合希望少写代码、快速落地知识库问答系统的团队。
 
 Github地址：https://github.com/infiniflow/ragflow
+
+
+
+### 7.3 learn-claude-code
+
+当前最牛逼的写代码Agent之一claude code的学习项目。
+
+Github地址：https://github.com/shareAI-lab/learn-claude-code
 
 
 

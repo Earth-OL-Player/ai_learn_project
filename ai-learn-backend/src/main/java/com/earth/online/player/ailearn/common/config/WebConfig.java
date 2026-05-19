@@ -25,8 +25,8 @@ public class WebConfig {
     private static final long CORS_MAX_AGE_SECONDS = 3600L;
     private static final String LOCALHOST_ORIGIN_PATTERN = "http://localhost:[*]";
     private static final String LOCAL_IP_ORIGIN_PATTERN = "http://127.0.0.1:[*]";
-    private static final String CPOLAR_HTTP_ORIGIN_PATTERN = "http://*.cpolar.cn";
-    private static final String CPOLAR_HTTPS_ORIGIN_PATTERN = "https://*.cpolar.cn";
+    private static final String CPOLAR_HTTP_ORIGIN_PATTERN = "http://*.cpolar.top";
+    private static final String CPOLAR_HTTPS_ORIGIN_PATTERN = "https://*.cpolar.top";
 
     /**
      * 配置本地开发跨域访问过滤器。
