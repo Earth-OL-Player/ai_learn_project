@@ -43,6 +43,12 @@ public final class PracticeConstants {
     /** 讨论历史单条内容最大长度。 */
     public static final int MAX_DISCUSSION_HISTORY_CONTENT_LENGTH = 1000;
 
+    /** 合格答案最低分。 */
+    public static final int PASS_SCORE = 60;
+
+    /** 优秀答案最低分。 */
+    public static final int EXCELLENT_SCORE = 80;
+
     /** 明显偏离刷题上下文的常见词。 */
     public static final Set<String> UNRELATED_WORDS = Set.of("天气", "新闻", "股票", "旅游", "做饭", "写诗", "翻译", "笑话", "帅", "好看", "星座");
 

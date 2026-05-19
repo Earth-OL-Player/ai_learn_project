@@ -317,7 +317,6 @@ public class PracticeService {
         List<BadgeResponse> newBadges = growthAwardService.awardAfterAnswer(userId, score);
         return new PracticeGradingResponse(
                 score,
-                gradingResult.isCorrect(),
                 gradingResult.hitPoints(),
                 gradingResult.missingPoints(),
                 gradingResult.problems(),
@@ -398,7 +397,7 @@ public class PracticeService {
     private String buildGradingSummary(PracticeGradingResponse grading) {
         StringBuilder builder = new StringBuilder();
         builder.append("本次评分：").append(grading.score()).append("分，")
-                .append(Boolean.TRUE.equals(grading.correct()) ? "基本正确" : "仍需改进").append("。");
+                .append(scoreLevelText(grading.score())).append("。");
 
         // 评分摘要用于后续追问上下文，不需要保留全部前端展示字段。
         appendSummaryList(builder, "命中点", grading.hitPoints());
@@ -408,6 +407,23 @@ public class PracticeService {
         builder.append("优化建议：").append(grading.improvementAdvice()).append("。");
         builder.append("评分来源：").append(Boolean.TRUE.equals(grading.fallbackUsed()) ? "本地兜底评分" : "AI评分").append("。");
         return limitText(builder.toString(), PracticeConstants.MAX_GRADING_SUMMARY_LENGTH);
+    }
+
+    /**
+     * 根据分数转换评分等级文案。
+     *
+     * @param score 分数
+     * @return 等级文案
+     */
+    private String scoreLevelText(Integer score) {
+        int safeScore = score == null ? 0 : score;
+        if (safeScore < PracticeConstants.PASS_SCORE) {
+            return "继续加油";
+        }
+        if (safeScore < PracticeConstants.EXCELLENT_SCORE) {
+            return "合格答案";
+        }
+        return "非常棒";
     }
 
     /**

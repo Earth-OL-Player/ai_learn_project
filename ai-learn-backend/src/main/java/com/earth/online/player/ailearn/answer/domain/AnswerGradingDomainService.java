@@ -20,7 +20,6 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
 
     private static final int MAX_KEYWORD_COUNT = 8;
     private static final int SHORT_ANSWER_LENGTH = 20;
-    private static final int CORRECT_SCORE = 60;
     private static final int MAX_SCORE = 100;
     private static final int CONTENT_BASE_SCORE = 20;
     private static final int KEYWORD_SCORE_WEIGHT = 80;
@@ -81,7 +80,6 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
 
         return new GradingResult(
                 score,
-                score >= CORRECT_SCORE,
                 hitPoints,
                 missingPoints,
                 problems,

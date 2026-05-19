@@ -335,7 +335,6 @@ public class PracticeAiClient {
     private PracticeAiGradingResult toPracticeAiGradingResult(JsonNode data) {
         GradingResult gradingResult = new GradingResult(
                 clampScore(data.path("score").asInt(0)),
-                data.path("correct").asBoolean(false),
                 readStringList(data.get("hitPoints")),
                 readStringList(data.get("missingPoints")),
                 readStringList(data.get("problems")),
@@ -344,8 +343,8 @@ public class PracticeAiClient {
                 readStringList(data.get("reviewKnowledgePoints"))
         );
 
-        // AI 服务会显式告诉后端本次评分是否来自本地规则兜底。
-        return new PracticeAiGradingResult(gradingResult, data.path("fallbackUsed").asBoolean(false));
+        // 只要 AI 服务返回成功，就表示本次未使用 Java 后端本地兜底评分。
+        return new PracticeAiGradingResult(gradingResult, false);
     }
 
     /**

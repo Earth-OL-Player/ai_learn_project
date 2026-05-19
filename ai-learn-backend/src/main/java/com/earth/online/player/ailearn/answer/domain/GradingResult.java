@@ -6,7 +6,6 @@ import java.util.List;
  * 答案评分结果。
  *
  * @param score 得分
- * @param isCorrect 是否基本正确
  * @param hitPoints 命中点
  * @param missingPoints 缺失点
  * @param problems 问题点
@@ -16,7 +15,6 @@ import java.util.List;
  */
 public record GradingResult(
         int score,
-        boolean isCorrect,
         List<String> hitPoints,
         List<String> missingPoints,
         List<String> problems,

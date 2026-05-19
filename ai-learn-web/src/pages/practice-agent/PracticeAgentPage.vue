@@ -71,8 +71,8 @@
             <div v-if="item.grading" class="grading-bubble-card">
               <div class="grading-score-row">
                 <strong>{{ item.grading.score }} 分</strong>
-                <el-tag :type="item.grading.correct ? 'success' : 'warning'" effect="light">
-                  {{ item.grading.correct ? '基本正确' : '继续加油' }}
+                <el-tag :type="scoreTagType(item.grading.score)" effect="light">
+                  {{ scoreLevelText(item.grading.score) }}
                 </el-tag>
                 <el-tag v-if="item.grading.fallbackUsed" type="info" effect="plain">本地兜底评分</el-tag>
                 <el-tooltip :content="experienceTooltip(item.grading)" placement="top" effect="light">
@@ -82,7 +82,7 @@
                   </div>
                 </el-tooltip>
               </div>
-              <p class="grading-advice"><strong>优化建议：</strong>{{ item.grading.improvementAdvice }}</p>
+              <p class="grading-advice">{{ formatGradingAdvice(item.grading) }}</p>
               <el-collapse>
                 <el-collapse-item title="查看评分详情" name="detail">
                   <section class="grading-detail-grid">
@@ -757,6 +757,47 @@ function scrollMessagePanelToBottom(): void {
  */
 function normalizeList(values: string[]): string[] {
   return values.length > 0 ? values : [EMPTY_LIST_TEXT];
+}
+
+/**
+ * 根据评分生成等级文案。
+ */
+function scoreLevelText(score: number): string {
+  if (score < 60) {
+    return '继续加油';
+  }
+  if (score < 80) {
+    return '合格答案';
+  }
+  return '非常棒';
+}
+
+/**
+ * 根据评分生成标签样式。
+ */
+function scoreTagType(score: number): 'success' | 'warning' | 'info' {
+  if (score < 60) {
+    return 'warning';
+  }
+  return score < 80 ? 'info' : 'success';
+}
+
+/**
+ * 格式化评分建议，先说明问题再给出优化方向。
+ */
+function formatGradingAdvice(grading: PracticeGrading): string {
+  const problemText = grading.problems.map((item) => item.trim()).filter(Boolean).join('；');
+  const adviceText = grading.improvementAdvice.trim();
+
+  // 没有问题点时保持原建议文案，避免引入空前缀。
+  if (!problemText) {
+    return adviceText || '暂无优化建议';
+  }
+
+  // 有问题点时先展示当前问题，再承接具体优化建议。
+  return adviceText
+    ? `当前存在的问题：${problemText}。建议：${adviceText}`
+    : `当前存在的问题：${problemText}。`;
 }
 
 /**

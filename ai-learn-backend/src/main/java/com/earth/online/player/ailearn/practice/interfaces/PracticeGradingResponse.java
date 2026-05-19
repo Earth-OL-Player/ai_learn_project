@@ -7,7 +7,6 @@ import java.util.List;
  * 刷题评分响应。
  *
  * @param score 得分
- * @param correct 是否基本正确
  * @param hitPoints 命中点
  * @param missingPoints 缺失点
  * @param problems 问题点
@@ -24,7 +23,6 @@ import java.util.List;
  */
 public record PracticeGradingResponse(
         Integer score,
-        Boolean correct,
         List<String> hitPoints,
         List<String> missingPoints,
         List<String> problems,

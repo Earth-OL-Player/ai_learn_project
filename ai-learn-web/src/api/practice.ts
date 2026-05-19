@@ -25,7 +25,6 @@ export type PracticeAction = 'QUESTION' | 'GRADING' | 'DISCUSSION' | 'TIP';
 
 export interface PracticeGrading {
   score: number;
-  correct: boolean;
   hitPoints: string[];
   missingPoints: string[];
   problems: string[];

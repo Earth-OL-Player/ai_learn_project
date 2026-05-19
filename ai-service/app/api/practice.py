@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import StreamingResponse
 
 from app.api.dependencies import verify_internal_token
@@ -16,7 +16,10 @@ router = APIRouter(prefix="/internal/v1/practice", tags=["practice"])
 @router.post("/answer/grade", response_model=ApiResponse[PracticeGradeResponse], dependencies=[Depends(verify_internal_token)])
 def grade_answer(request: PracticeGradeRequest) -> ApiResponse[PracticeGradeResponse]:
     """对用户答案进行结构化评分。"""
-    return ApiResponse(data=practice_agent_service.grade_answer(request))
+    grading = practice_agent_service.grade_answer(request)
+    if grading is None:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="大模型评分暂不可用")
+    return ApiResponse(data=grading)
 
 
 @router.post("/discuss/stream", dependencies=[Depends(verify_internal_token)])

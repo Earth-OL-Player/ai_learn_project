@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import re
 import time
 import uuid
 from collections.abc import Iterator
@@ -22,76 +21,14 @@ from app.schemas.practice import (
     PracticeGradeResponse,
 )
 
-_SPLIT_PATTERN = re.compile(r"[\s，。、；：,.!?！？（）()\"'“”‘’]+")
-_MAX_KEYWORDS = 10
 _FALLBACK_DISCUSS_REPLY = "抱歉，当前大模型调用异常，仅保留兜底策略评分功能，无法和您进行探讨。"
-_GRADE_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请使用简体中文完成面试题评分。"
-_DISCUSSION_SYSTEM_PROMPT = "你是严谨的 AI 学习助手，请只围绕当前刷题上下文回答，使用简体中文。"
+_GRADE_SYSTEM_PROMPT = (
+    "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，我将提交一段题目、参考答案、用户答案给你。\n"
+    "请你进行评分，并且使用我要求的Json结构化输出。\n"
+    "允许用户使用同义表达，结合你自身和知识和参考答案一起点评，不能强求用户答案和参考答案一模一样，意义相同即得分。\n"
+)
+_DISCUSSION_SYSTEM_PROMPT = "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，请围绕当前刷题上下文为用户解答疑惑。"
 _DEEPSEEK_THINKING_DISABLED_BODY = {"thinking": {"type": "disabled"}}
-_GRADE_JSON_INSTRUCTION = (
-    "请只输出一个合法 JSON 对象，不要输出 Markdown、代码块或额外解释。"
-    "JSON 字段必须包含 score、correct、hitPoints、missingPoints、problems、"
-    "referenceAnswer、improvementAdvice、reviewKnowledgePoints、fallbackUsed。"
-    "referenceAnswer 必须使用参考答案原文，fallbackUsed 固定为 false。"
-    "示例 JSON：{\"score\":0,\"correct\":false,\"hitPoints\":[],\"missingPoints\":[],"
-    "\"problems\":[],\"referenceAnswer\":\"参考答案原文\",\"improvementAdvice\":\"优先补充核心要点。\","
-    "\"reviewKnowledgePoints\":[],\"fallbackUsed\":false}。"
-)
-_ASCII_TERM_PATTERN = re.compile(r"[A-Za-z][A-Za-z0-9+_.-]{1,}")
-_ASCII_IGNORED_TERMS = {"query", "rewrite"}
-_DOMAIN_TERMS = (
-    "RAG",
-    "Embedding",
-    "Chunk",
-    "Query Rewrite",
-    "BM25",
-    "Rerank",
-    "Prompt",
-    "Fine-tuning",
-    "检索增强生成",
-    "离线建库",
-    "在线问答",
-    "文档解析",
-    "权限过滤",
-    "查询改写",
-    "问题理解",
-    "向量检索",
-    "混合检索",
-    "关键词检索",
-    "向量库",
-    "向量化",
-    "召回",
-    "重排",
-    "精排",
-    "证据",
-    "引用",
-    "拒答",
-    "上下文压缩",
-    "评测闭环",
-    "反馈闭环",
-    "可追溯",
-    "知识更新",
-    "微调",
-    "输出风格",
-    "格式遵循",
-)
-_KEYWORD_ALIASES = {
-    "rag": ("检索增强生成", "检索增强", "外部知识", "知识库问答"),
-    "检索增强生成": ("RAG", "检索增强", "外部知识", "知识库问答"),
-    "embedding": ("向量化", "向量表示", "嵌入模型", "转成向量"),
-    "chunk": ("切分", "分块", "切片", "文本块", "知识片段"),
-    "query rewrite": ("查询改写", "问题改写", "改写问题"),
-    "bm25": ("关键词检索", "稀疏检索", "混合检索"),
-    "rerank": ("重排", "精排", "重新排序"),
-    "prompt": ("提示词", "上下文"),
-    "fine-tuning": ("微调", "模型微调"),
-    "向量化": ("Embedding", "嵌入", "向量表示"),
-    "重排": ("Rerank", "精排", "排序"),
-    "查询改写": ("Query Rewrite", "问题改写", "改写问题"),
-    "离线建库": ("文档解析", "清洗", "切分", "向量库", "入库"),
-    "在线问答": ("用户提问", "检索召回", "召回", "生成答案"),
-}
-
 logger = logging.getLogger("ai_service.practice.llm")
 logger.setLevel(logging.INFO)
 if not logger.handlers:
@@ -104,8 +41,8 @@ logger.propagate = False
 class PracticeAgentService:
     """AI 智能刷题 Agent 服务。"""
 
-    def grade_answer(self, request: PracticeGradeRequest) -> PracticeGradeResponse:
-        """优先调用真实大模型评分，失败或未配置时使用本地规则兜底。"""
+    def grade_answer(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
+        """调用真实大模型评分，失败时交由 Java 后端本地兜底。"""
         logger.info(
             "【AI智能刷题流程-评分】收到答案评分请求：userId=%s questionCode=%s llmEnabled=%s",
             request.userId,
@@ -113,19 +50,15 @@ class PracticeAgentService:
             self._is_llm_enabled(),
         )
 
-        # 优先走真实大模型，确保线上评分链路可通过 traceId 追踪。
         if self._is_llm_enabled():
-            llm_response = self._grade_answer_by_llm(request)
-            if llm_response is not None:
-                return llm_response
+            return self._grade_answer_by_llm(request)
 
-        # 未启用大模型或大模型异常时，保留本地规则评分能力。
         logger.info(
-            "【AI智能刷题流程-评分】未调用真实大模型，使用本地规则评分：model=%s baseUrlConfigured=%s",
+            "【AI智能刷题流程-评分】未启用真实大模型，返回失败并交由 Java 后端本地兜底：model=%s baseUrlConfigured=%s",
             settings.ai_grading_model,
             bool(settings.ai_grading_base_url),
         )
-        return self._grade_answer_by_local_rule(request)
+        return None
 
     def stream_discuss(self, request: PracticeDiscussRequest) -> Iterator[str]:
         """流式生成本题讨论回复。"""
@@ -164,7 +97,6 @@ class PracticeAgentService:
         try:
             grading = self._grade_model().invoke([SystemMessage(content=_GRADE_SYSTEM_PROMPT), *messages])
             grading = grading if isinstance(grading, PracticeGradeResponse) else PracticeGradeResponse.model_validate(grading)
-            grading.fallbackUsed = False
 
             # LangChain 结构化输出成功后记录完整评分结果，便于按 traceId 复盘模型返回。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
@@ -177,10 +109,10 @@ class PracticeAgentService:
                 grading.score,
             )
             return grading
-        except Exception as exc:  # noqa: BLE001 - 模型、网络和结构化解析异常统一进入兜底。
+        except Exception as exc:  # noqa: BLE001 - 模型、网络和结构化解析异常统一交由 Java 后端兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning(
-                "【AI智能刷题流程-评分】大模型结构化评分失败，使用本地规则兜底：traceId=%s durationMs=%s error=%s",
+                "【AI智能刷题流程-评分】大模型结构化评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s error=%s",
                 trace_id,
                 elapsed_ms,
                 exc,
@@ -409,14 +341,8 @@ class PracticeAgentService:
         return messages
 
     def _build_grade_prompt(self, request: PracticeGradeRequest) -> str:
-        """构造答案评分提示词。"""
+        """构造答案评分用户输入。"""
         return (
-            "请根据题目、参考答案和用户答案进行评分。\n"
-            "score 必须是 0 到 100 的整数，correct 表示是否及格。\n"
-            "hitPoints、missingPoints、problems、reviewKnowledgePoints 必须是简短数组。\n"
-            "improvementAdvice 使用一到两句话概括最优先的改进方向。\n"
-            "不要把题目分类当作必须命中的扣分项；允许用户使用同义表达。\n"
-            f"{_GRADE_JSON_INSTRUCTION}\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
             f"参考答案：{request.standardAnswer}\n"
@@ -428,45 +354,12 @@ class PracticeAgentService:
         grading_summary = request.gradingSummary or "暂无评分摘要"
         last_answer = request.lastUserAnswer or "暂无"
         return (
-            "请基于下方当前题上下文回答后续用户疑问。\n"
-            "要求：不要复述题目原文；优先解释评分依据、知识点、用户答案缺口和可改进表达。\n"
             f"题目分类：{request.questionType}\n"
             f"题目：{request.question}\n"
             f"参考答案：{request.standardAnswer}\n"
             f"用户最近一次答案：{last_answer}\n"
             f"AI评分结果摘要：{grading_summary}\n"
             "下面会继续给出当前题历史追问消息和本轮最新疑问。"
-        )
-
-    def _grade_answer_by_local_rule(self, request: PracticeGradeRequest) -> PracticeGradeResponse:
-        """结合参考答案关键词和本地规则给答案评分。"""
-        keywords = self._build_keywords(request)
-        answer = request.userAnswer.strip()
-
-        # 命中判断保持大小写和空白不敏感，兼容英文技术名词及中文同义表达。
-        normalized_answer = self._normalize_text(answer)
-        hit_points: list[str] = []
-        missing_points: list[str] = []
-        for keyword in keywords:
-            if self._keyword_hit(keyword, normalized_answer):
-                hit_points.append(f"已覆盖「{keyword}」相关核心要点")
-            else:
-                missing_points.append(f"待补充「{keyword}」相关说明")
-
-        # 分数由关键词覆盖度和内容完整度共同决定。
-        score = self._calculate_score(len(hit_points), len(keywords), len(answer))
-        problems = self._build_problems(answer, not hit_points)
-        advice = self._build_advice(score, missing_points, problems)
-        return PracticeGradeResponse(
-            score=score,
-            correct=score >= 60,
-            hitPoints=hit_points,
-            missingPoints=missing_points,
-            problems=problems,
-            referenceAnswer=request.standardAnswer,
-            improvementAdvice=advice,
-            reviewKnowledgePoints=self._review_points(request.questionType, missing_points),
-            fallbackUsed=True,
         )
 
     def _discuss_by_local_rule(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse:
@@ -476,112 +369,12 @@ class PracticeAgentService:
         # 讨论能力不再使用本地规则伪造，避免给用户造成模型仍可追问的误解。
         return PracticeDiscussResponse(reply=_FALLBACK_DISCUSS_REPLY)
 
-    def _build_keywords(self, request: PracticeGradeRequest) -> list[str]:
-        """只从参考答案构建必答关键词。"""
-        keywords: list[str] = []
-
-        # 题目分类不作为扣分项，避免用户答对但没复述分类名时被误扣。
-        self._add_ascii_terms(keywords, request.standardAnswer)
-        self._add_domain_terms(keywords, request.standardAnswer)
-        for token in _SPLIT_PATTERN.split(request.standardAnswer):
-            self._add_keyword(keywords, token)
-        return self._filter_excluded_keywords(keywords, request)[:_MAX_KEYWORDS]
-
-    def _add_ascii_terms(self, keywords: list[str], source: str) -> None:
-        """提取英文技术词。"""
-        for match in _ASCII_TERM_PATTERN.finditer(source):
-            term = match.group()
-            if term.lower() not in _ASCII_IGNORED_TERMS:
-                self._add_keyword(keywords, term)
-
-    def _add_domain_terms(self, keywords: list[str], source: str) -> None:
-        """从参考答案中提取常见领域短语。"""
-        normalized_source = self._normalize_text(source)
-        for term in _DOMAIN_TERMS:
-            if self._normalize_text(term) in normalized_source:
-                self._add_keyword(keywords, term)
-
-    def _add_keyword(self, keywords: list[str], value: str | None) -> None:
-        """追加单个关键词。"""
-        if not value:
-            return
-        keyword = value.strip()
-        if 2 <= len(keyword) <= 24 and keyword not in keywords:
-            keywords.append(keyword)
-
-    def _filter_excluded_keywords(self, keywords: list[str], request: PracticeGradeRequest) -> list[str]:
-        """过滤题目和分类中已经包含的宽泛词。"""
-        excluded_sources = [request.question, request.questionType]
-        return [keyword for keyword in keywords if not self._is_excluded_keyword(keyword, excluded_sources)]
-
-    def _is_excluded_keyword(self, keyword: str, excluded_sources: list[str]) -> bool:
-        """判断关键词是否属于非扣分来源。"""
-        normalized_keyword = self._normalize_text(keyword)
-        for source in excluded_sources:
-            normalized_source = self._normalize_text(source)
-            if normalized_source and (normalized_keyword in normalized_source or normalized_source in normalized_keyword):
-                return True
-        return False
-
-    def _keyword_hit(self, keyword: str, normalized_answer: str) -> bool:
-        """判断答案是否覆盖关键词或同义表达。"""
-        if self._normalize_text(keyword) in normalized_answer:
-            return True
-
-        # 同义表达只用于放宽命中，不额外增加必答项。
-        aliases = _KEYWORD_ALIASES.get(keyword.lower(), ())
-        return any(self._normalize_text(alias) in normalized_answer for alias in aliases)
-
-    def _normalize_text(self, value: str | None) -> str:
-        """规整文本用于大小写和空白不敏感匹配。"""
-        if not value:
-            return ""
-        return re.sub(r"\s+", "", value).lower()
-
-    def _calculate_score(self, hit_count: int, total_count: int, answer_length: int) -> int:
-        """计算百分制得分。"""
-        if total_count <= 0:
-            return min(100, max(0, answer_length))
-        keyword_score = round(hit_count / total_count * 80)
-        content_score = 20 if answer_length >= 20 else answer_length
-        return min(100, max(0, keyword_score + content_score))
-
-    def _build_problems(self, answer: str, no_keyword_hit: bool) -> list[str]:
-        """生成问题点。"""
-        problems: list[str] = []
-        if len(answer) < 20:
-            problems.append("回答较简略，建议补充关键流程和原因说明")
-        if no_keyword_hit:
-            problems.append("未明显覆盖参考答案中的核心关键词")
-        return problems
-
-    def _build_advice(self, score: int, missing_points: list[str], problems: list[str]) -> str:
-        """生成优化建议。"""
-        if score >= 90 and not missing_points:
-            return "回答已经很完整，继续保持这种结构化表达。"
-        if missing_points:
-            advice_points = [self._missing_point_to_advice(item) for item in missing_points]
-            return "建议优先补充：" + "；".join(advice_points) + "。"
-        if problems:
-            return "；".join(problems) + "。"
-        return "整体回答不错，可以再补充一个工程实践案例。"
-
-    def _missing_point_to_advice(self, missing_point: str) -> str:
-        """把缺失点转换为简短建议。"""
-        point = missing_point.replace("待补充「", "").replace("」相关说明", "")
-        return f"补充「{point}」"
-
-    def _review_points(self, question_type: str, missing_points: list[str]) -> list[str]:
-        """提取建议复习点。"""
-        points = [item.replace("待补充「", "").replace("」相关说明", "") for item in missing_points]
-        return points or [question_type]
-
     def _is_llm_enabled(self) -> bool:
         """判断是否具备真实大模型调用配置。"""
         model = settings.ai_grading_model.strip()
         api_key = settings.ai_grading_api_key.strip()
 
-        # LOCAL_RULE 或占位符配置表示仅使用本地规则，不发起外部模型请求。
+        # LOCAL_RULE 或占位符配置表示 ai-service 不发起外部模型请求。
         return (
             bool(settings.ai_grading_base_url.strip())
             and bool(api_key)
