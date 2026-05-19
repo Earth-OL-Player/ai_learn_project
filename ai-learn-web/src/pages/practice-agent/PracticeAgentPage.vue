@@ -55,7 +55,7 @@
           <div class="message-bubble">
             <p v-if="item.streaming" class="message-text streaming-message-text">
               <span v-if="item.text">{{ item.text }}</span>
-              <span v-else class="streaming-placeholder">AI 正在组织答案</span>
+              <span v-else class="streaming-placeholder">{{ streamingPlaceholderText(item) }}</span>
               <span class="stream-cursor" aria-hidden="true"></span>
             </p>
             <div v-else-if="item.text" class="message-text message-markdown" v-html="renderMessageText(item)"></div>
@@ -82,7 +82,14 @@
                   </div>
                 </el-tooltip>
               </div>
-              <p class="grading-advice">{{ formatGradingAdvice(item.grading) }}</p>
+              <p class="grading-advice">
+                <span v-if="gradingProblemText(item.grading)" class="grading-advice-line">
+                  <strong>当前问题：</strong>{{ gradingProblemText(item.grading) }}
+                </span>
+                <span class="grading-advice-line">
+                  <strong>优化建议：</strong>{{ gradingAdviceText(item.grading) }}
+                </span>
+              </p>
               <el-collapse>
                 <el-collapse-item title="查看评分详情" name="detail">
                   <section class="grading-detail-grid">
@@ -194,6 +201,7 @@ interface ChatMessage {
   question?: PracticeQuestion | null;
   grading?: PracticeGrading | null;
   streaming?: boolean;
+  loadingText?: string;
 }
 
 interface PracticeChatSnapshot {
@@ -207,6 +215,8 @@ const EMPTY_LIST_TEXT = '暂无';
 const GUEST_LOGIN_MESSAGE = '注册登录后即可使用该功能';
 const PRACTICE_CHAT_STORAGE_PREFIX = 'ai_learn_practice_chat_';
 const STREAM_SNAPSHOT_SAVE_INTERVAL_MILLIS = 800;
+const MARKDOWN_CODE_FENCE_PATTERN = /^\s*(```|~~~)/;
+const MARKDOWN_HEADING_WITHOUT_SPACE_PATTERN = /^(#{1,6})([^\s#].*)$/;
 const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
 const loading = ref(false);
 const inputText = ref('');
@@ -366,7 +376,7 @@ async function sendMessage(): Promise<void> {
   }
   inputText.value = '';
   messages.value.push({ id: messageId++, role: 'user', text: content });
-  const assistantMessage = appendStreamingAssistantMessage();
+  const assistantMessage = appendStreamingAssistantMessage(buildStreamingLoadingText());
   resetStreamTypewriter(assistantMessage);
   savePracticeSnapshot();
   scrollToBottom();
@@ -573,13 +583,33 @@ function removeStreamingMessage(messageIdValue: number): void {
 /**
  * 新增一个响应式的助手流式消息。
  */
-function appendStreamingAssistantMessage(): ChatMessage {
+function appendStreamingAssistantMessage(loadingText: string): ChatMessage {
   const assistantMessage = buildAssistantMessage('', null, null);
   assistantMessage.streaming = true;
+  assistantMessage.loadingText = loadingText;
   messages.value.push(assistantMessage);
 
   // 取回数组中的响应式代理对象，确保后续逐批修改能被 Vue 捕获。
   return messages.value[messages.value.length - 1];
+}
+
+/**
+ * 生成当前轮次的流式加载文案。
+ */
+function buildStreamingLoadingText(): string {
+  if (phase.value === 'ANSWERING') {
+    return 'AI 正在智能评分';
+  }
+
+  // 非评分阶段继续使用通用组织答案提示。
+  return 'AI 正在组织答案';
+}
+
+/**
+ * 获取流式消息占位文案。
+ */
+function streamingPlaceholderText(message: ChatMessage): string {
+  return message.loadingText || 'AI 正在组织答案';
 }
 
 /**
@@ -783,28 +813,49 @@ function scoreTagType(score: number): 'success' | 'warning' | 'info' {
 }
 
 /**
- * 格式化评分建议，先说明问题再给出优化方向。
+ * 提取评分问题文案。
  */
-function formatGradingAdvice(grading: PracticeGrading): string {
-  const problemText = grading.problems.map((item) => item.trim()).filter(Boolean).join('；');
+function gradingProblemText(grading: PracticeGrading): string {
+  // 过滤空问题点，避免页面出现多余分号。
+  return grading.problems.map((item) => item.trim()).filter(Boolean).join('；');
+}
+
+/**
+ * 提取评分优化建议文案。
+ */
+function gradingAdviceText(grading: PracticeGrading): string {
   const adviceText = grading.improvementAdvice.trim();
 
-  // 没有问题点时保持原建议文案，避免引入空前缀。
-  if (!problemText) {
-    return adviceText || '暂无优化建议';
-  }
-
-  // 有问题点时先展示当前问题，再承接具体优化建议。
-  return adviceText
-    ? `当前存在的问题：${problemText}。建议：${adviceText}`
-    : `当前存在的问题：${problemText}。`;
+  // 建议为空时给出稳定占位，保持评分卡片信息完整。
+  return adviceText || '暂无优化建议';
 }
 
 /**
  * 渲染聊天 Markdown 文本。
  */
 function renderMessageText(item: ChatMessage): string {
-  return markdownParser.render(item.text);
+  return markdownParser.render(normalizeMessageMarkdown(item.text));
+}
+
+/**
+ * 规范化完整消息中的 Markdown 标题。
+ */
+function normalizeMessageMarkdown(text: string): string {
+  let inCodeFence = false;
+
+  // 逐行处理，避免把代码块里的 #include 或注释误转成标题。
+  return text.split('\n').map((line) => {
+    if (MARKDOWN_CODE_FENCE_PATTERN.test(line)) {
+      inCodeFence = !inCodeFence;
+      return line;
+    }
+    if (inCodeFence) {
+      return line;
+    }
+
+    // 部分模型会输出“###标题”，补齐空格后交给 markdown-it 正常渲染。
+    return line.replace(MARKDOWN_HEADING_WITHOUT_SPACE_PATTERN, '$1 $2');
+  }).join('\n');
 }
 
 /**
@@ -1051,16 +1102,23 @@ onBeforeUnmount(() => {
 
 .message-markdown :deep(h1),
 .message-markdown :deep(h2),
-.message-markdown :deep(h3) {
-  // 讨论阶段支持 Markdown 标题，间距保持轻量清爽。
+.message-markdown :deep(h3),
+.message-markdown :deep(h4),
+.message-markdown :deep(h5),
+.message-markdown :deep(h6) {
+  // 讨论阶段支持多级 Markdown 标题，间距保持轻量清爽。
   margin: 0 0 10px;
   color: #17233d;
+  font-weight: 700;
   line-height: 1.45;
 }
 
 .practice-message.user .message-markdown :deep(h1),
 .practice-message.user .message-markdown :deep(h2),
 .practice-message.user .message-markdown :deep(h3),
+.practice-message.user .message-markdown :deep(h4),
+.practice-message.user .message-markdown :deep(h5),
+.practice-message.user .message-markdown :deep(h6),
 .practice-message.user .message-markdown :deep(strong) {
   color: #ffffff;
 }
@@ -1167,6 +1225,12 @@ onBeforeUnmount(() => {
 
 .grading-advice {
   color: #344054;
+}
+
+.grading-advice-line {
+  // 当前问题与优化建议分行展示，强化信息层级。
+  display: block;
+  line-height: 1.85;
 }
 
 .grading-advice strong {

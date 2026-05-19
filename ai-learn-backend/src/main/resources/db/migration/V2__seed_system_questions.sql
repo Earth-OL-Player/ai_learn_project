@@ -1,47 +1,4 @@
--- sprint202613 兼容已初始化数据库：移除历史外键和知识点相关表。
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'suggestions' AND CONSTRAINT_NAME = 'fk_suggestions_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `suggestions` DROP FOREIGN KEY `fk_suggestions_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'comments' AND CONSTRAINT_NAME = 'fk_comments_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `comments` DROP FOREIGN KEY `fk_comments_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'question_knowledge_points' AND CONSTRAINT_NAME = 'fk_question_knowledge_points_question_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `question_knowledge_points` DROP FOREIGN KEY `fk_question_knowledge_points_question_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'question_knowledge_points' AND CONSTRAINT_NAME = 'fk_question_knowledge_points_knowledge_point_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `question_knowledge_points` DROP FOREIGN KEY `fk_question_knowledge_points_knowledge_point_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'rag_index_tasks' AND CONSTRAINT_NAME = 'fk_rag_index_tasks_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `rag_index_tasks` DROP FOREIGN KEY `fk_rag_index_tasks_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'user_badges' AND CONSTRAINT_NAME = 'fk_user_badges_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `user_badges` DROP FOREIGN KEY `fk_user_badges_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'user_badges' AND CONSTRAINT_NAME = 'fk_user_badges_badge_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `user_badges` DROP FOREIGN KEY `fk_user_badges_badge_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'growth_events' AND CONSTRAINT_NAME = 'fk_growth_events_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `growth_events` DROP FOREIGN KEY `fk_growth_events_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'user_question_stats' AND CONSTRAINT_NAME = 'fk_user_question_stats_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `user_question_stats` DROP FOREIGN KEY `fk_user_question_stats_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'user_practice_sessions' AND CONSTRAINT_NAME = 'fk_user_practice_sessions_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `user_practice_sessions` DROP FOREIGN KEY `fk_user_practice_sessions_user_id`', 'SELECT 1');
-PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
-
-DROP TABLE IF EXISTS question_knowledge_points;
-DROP TABLE IF EXISTS knowledge_points;
-
-ALTER TABLE questions
-    MODIFY question_type VARCHAR(80) NOT NULL COMMENT '题目分类，直接使用题目表字符串',
-    MODIFY importance_score DECIMAL(5,1) NOT NULL DEFAULT 60.0 COMMENT '重要性评分，百分制';
-
--- 以 sprint202613 的 AI面试题Top300.csv 重新初始化系统题库，清理旧验证数据。
-DELETE FROM user_question_stats;
-UPDATE user_practice_sessions SET question_code = NULL, phase = 'QUESTIONING', last_score = NULL, started_at = NULL, answered_at = NULL;
-DELETE FROM questions;
-ALTER TABLE questions AUTO_INCREMENT = 1;
-
+-- 基线题库数据：初始化当前系统内置 AI 面试题 Top 300。
 INSERT INTO questions(code, question, question_type, standard_answer, importance_score, occurrence_count) VALUES
 ('AI-TOP-0001',
  'RAG 的基本流程是什么？',

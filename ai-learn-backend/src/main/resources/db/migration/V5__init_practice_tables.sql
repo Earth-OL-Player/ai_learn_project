@@ -1,1 +1,0 @@
--- V5 保留版本号：答题记录和旧刷题会话功能已下线，新项目不再创建 agent_sessions 与 answer_records。
