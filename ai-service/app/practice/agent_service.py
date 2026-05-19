@@ -9,7 +9,7 @@ from typing import Any
 
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
-from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from pydantic import BaseModel
 
 from app.config.constants import AI_GRADING_API_KEY_PLACEHOLDER, CHAT_COMPLETIONS_PATH, LOCAL_RULE_MODEL
@@ -42,7 +42,7 @@ class PracticeAgentService:
     """AI 智能刷题 Agent 服务。"""
 
     def grade_answer(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
-        """调用真实大模型评分，失败时交由 Java 后端本地兜底。"""
+        """调用真实 Agent 评分，失败时交由 Java 后端本地兜底。"""
         logger.info(
             "【AI智能刷题流程-评分】收到答案评分请求：userId=%s questionCode=%s llmEnabled=%s",
             request.userId,
@@ -51,10 +51,10 @@ class PracticeAgentService:
         )
 
         if self._is_llm_enabled():
-            return self._grade_answer_by_llm(request)
+            return self._grade_answer_by_agent(request)
 
         logger.info(
-            "【AI智能刷题流程-评分】未启用真实大模型，返回失败并交由 Java 后端本地兜底：model=%s baseUrlConfigured=%s",
+            "【AI智能刷题流程-评分】未启用真实 Agent，返回失败并交由 Java 后端本地兜底：model=%s baseUrlConfigured=%s",
             settings.ai_grading_model,
             bool(settings.ai_grading_base_url),
         )
@@ -71,48 +71,50 @@ class PracticeAgentService:
 
         # 流式接口只在最终完成时打印汇总结果，避免 token 级日志刷屏。
         if self._is_llm_enabled():
-            yield from self._stream_discuss_by_llm(request)
+            yield from self._stream_discuss_by_agent(request)
             return
 
         # 未启用真实模型时仍返回 SSE，保证 Java 后端和前端链路稳定。
         logger.info(
-            "【AI智能刷题流程-流式讨论】未调用真实大模型，流式返回讨论不可用提示：model=%s baseUrlConfigured=%s",
+            "【AI智能刷题流程-流式讨论】未调用真实 Agent，流式返回讨论不可用提示：model=%s baseUrlConfigured=%s",
             settings.ai_grading_model,
             bool(settings.ai_grading_base_url),
         )
         yield self._build_sse_event("message", {"content": _FALLBACK_DISCUSS_REPLY})
         yield self._build_sse_event("done", {})
 
-    def _grade_answer_by_llm(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
-        """使用 LangChain 结构化输出完成答案评分。"""
+    def _grade_answer_by_agent(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
+        """使用 LangChain Agent 非流式完成答案评分。"""
         trace_id = self._new_trace_id()
         messages = self._build_grade_messages(request)
         start_time = time.perf_counter()
         logger.info(
-            "【AI智能刷题流程-评分】准备调用大模型结构化评分：traceId=%s model=%s",
+            "【AI智能刷题流程-评分】准备调用 Agent 结构化评分：traceId=%s model=%s",
             trace_id,
             settings.ai_grading_model,
         )
-        self._log_llm_request(trace_id, "答案评分", _GRADE_SYSTEM_PROMPT, messages, stream=False)
+        self._log_llm_request(trace_id, "答案评分-Agent非流式", _GRADE_SYSTEM_PROMPT, messages, stream=False)
         try:
-            grading = self._grade_model().invoke([SystemMessage(content=_GRADE_SYSTEM_PROMPT), *messages])
-            grading = grading if isinstance(grading, PracticeGradeResponse) else PracticeGradeResponse.model_validate(grading)
+            result = self._grading_agent().invoke({"messages": messages})
+            grading = self._structured_grading_result(result)
+            if grading is None:
+                raise ValueError("Agent 未返回结构化评分结果")
 
-            # LangChain 结构化输出成功后记录完整评分结果，便于按 traceId 复盘模型返回。
+            # LangChain Agent 结构化输出成功后记录完整评分结果，便于按 traceId 复盘返回。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            self._log_llm_response(trace_id, "答案评分", {"grading": grading}, elapsed_ms)
+            self._log_llm_response(trace_id, "答案评分-Agent非流式", {"grading": grading, "rawResult": result}, elapsed_ms)
             logger.info(
-                "【AI智能刷题流程-评分】大模型结构化评分完成：traceId=%s model=%s durationMs=%s score=%s",
+                "【AI智能刷题流程-评分】Agent 结构化评分完成：traceId=%s model=%s durationMs=%s score=%s",
                 trace_id,
                 settings.ai_grading_model,
                 elapsed_ms,
                 grading.score,
             )
             return grading
-        except Exception as exc:  # noqa: BLE001 - 模型、网络和结构化解析异常统一交由 Java 后端兜底。
+        except Exception as exc:  # noqa: BLE001 - Agent、网络和结构化解析异常统一交由 Java 后端兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning(
-                "【AI智能刷题流程-评分】大模型结构化评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s error=%s",
+                "【AI智能刷题流程-评分】Agent 结构化评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s error=%s",
                 trace_id,
                 elapsed_ms,
                 exc,
@@ -120,37 +122,37 @@ class PracticeAgentService:
             )
             return None
 
-    def _generate_discuss_reply_by_llm(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
-        """使用 LangChain Agent 为流式链路兜底生成完整讨论回复。"""
+    def _generate_discuss_reply_by_agent(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
+        """使用 LangChain Agent 非流式为讨论链路兜底生成完整回复。"""
         trace_id = self._new_trace_id()
         start_time = time.perf_counter()
         messages = self._build_discuss_messages(request)
         logger.info(
-            "【AI智能刷题流程-讨论】准备调用大模型完整讨论兜底：traceId=%s model=%s",
+            "【AI智能刷题流程-讨论】准备调用 Agent 非流式讨论兜底：traceId=%s model=%s",
             trace_id,
             settings.ai_grading_model,
         )
-        self._log_llm_request(trace_id, "本题讨论-流式兜底", _DISCUSSION_SYSTEM_PROMPT, messages, stream=False)
+        self._log_llm_request(trace_id, "本题讨论-Agent非流式兜底", _DISCUSSION_SYSTEM_PROMPT, messages, stream=False)
         try:
             result = self._discussion_agent().invoke({"messages": messages})
             reply = self._last_ai_reply(result).strip()
             if not reply:
                 return None
 
-            # 流式无可见片段时记录完整模型返回，排查时可直接看到最终回复内容。
+            # Agent 流式无可见片段时记录完整返回，排查时可直接看到最终回复内容。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            self._log_llm_response(trace_id, "本题讨论-流式兜底", {"reply": reply, "rawResult": result}, elapsed_ms)
+            self._log_llm_response(trace_id, "本题讨论-Agent非流式兜底", {"reply": reply, "rawResult": result}, elapsed_ms)
             logger.info(
-                "【AI智能刷题流程-讨论】大模型完整讨论兜底完成：traceId=%s durationMs=%s replyChars=%s",
+                "【AI智能刷题流程-讨论】Agent 非流式讨论兜底完成：traceId=%s durationMs=%s replyChars=%s",
                 trace_id,
                 elapsed_ms,
                 len(reply),
             )
             return PracticeDiscussResponse(reply=reply)
-        except Exception as exc:  # noqa: BLE001 - 模型和图执行异常统一进入兜底。
+        except Exception as exc:  # noqa: BLE001 - Agent 和图执行异常统一进入本地兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning(
-                "【AI智能刷题流程-讨论】大模型完整讨论兜底失败，使用本地兜底：traceId=%s durationMs=%s error=%s",
+                "【AI智能刷题流程-讨论】Agent 非流式讨论兜底失败，使用本地兜底：traceId=%s durationMs=%s error=%s",
                 trace_id,
                 elapsed_ms,
                 exc,
@@ -158,13 +160,13 @@ class PracticeAgentService:
             )
             return None
 
-    def _stream_discuss_by_llm(self, request: PracticeDiscussRequest) -> Iterator[str]:
-        """使用 LangChain 流式接口生成讨论回复。"""
+    def _stream_discuss_by_agent(self, request: PracticeDiscussRequest) -> Iterator[str]:
+        """使用 LangChain Agent 流式接口生成讨论回复。"""
         trace_id = self._new_trace_id()
         start_time = time.perf_counter()
         messages = self._build_discuss_messages(request)
         logger.info(
-            "【AI智能刷题流程-流式讨论】准备调用大模型流式讨论：traceId=%s model=%s",
+            "【AI智能刷题流程-流式讨论】准备调用 Agent 流式讨论：traceId=%s model=%s",
             trace_id,
             settings.ai_grading_model,
         )
@@ -172,41 +174,32 @@ class PracticeAgentService:
             emitted_any = False
             full_reply_parts: list[str] = []
 
-            # 当前 create_agent 在部分 OpenAI 兼容供应商下只产出图事件，不产出可见 token。
-            # 流式接口优先走底层聊天模型，避免先等待 Agent 空流导致前端长时间“思考中”。
-            for content in self._stream_discuss_with_model(messages, trace_id, start_time):
+            # 讨论阶段统一优先使用 Agent 流式，便于后续接入工具、检索和多步骤规划。
+            for content in self._stream_discuss_with_agent(messages, trace_id, start_time):
                 emitted_any = True
                 full_reply_parts.append(content)
                 yield self._build_sse_event("message", {"content": content})
 
-            # 模型原生 stream 不可用时，再尝试 Agent stream，保留 LangChain Agent 兜底能力。
+            # Agent 流式无输出时，再切换 Agent 非流式兜底，避免前端长时间空白。
             if not emitted_any:
-                logger.warning("LangChain 模型原生流式未产出可见片段，切换 Agent 流式输出：traceId=%s", trace_id)
-                for content in self._stream_discuss_with_agent(messages, trace_id, start_time):
-                    emitted_any = True
-                    full_reply_parts.append(content)
-                    yield self._build_sse_event("message", {"content": content})
-
-            # 双流式链路均无输出时，最后才回退非流式，避免前端长时间空白。
-            if not emitted_any:
-                logger.warning("LangChain 流式链路均无可见片段，切换非流式兜底：traceId=%s", trace_id)
-                fallback_response = self._generate_discuss_reply_by_llm(request) or self._discuss_by_local_rule(request)
+                logger.warning("Agent 流式链路无可见片段，切换 Agent 非流式兜底：traceId=%s", trace_id)
+                fallback_response = self._generate_discuss_reply_by_agent(request) or self._discuss_by_local_rule(request)
                 full_reply_parts.append(fallback_response.reply)
                 yield self._build_sse_event("message", {"content": fallback_response.reply})
             yield self._build_sse_event("done", {})
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             full_reply = "".join(full_reply_parts)
-            self._log_llm_response(trace_id, "本题讨论-流式汇总", {"reply": full_reply}, elapsed_ms)
+            self._log_llm_response(trace_id, "本题讨论-Agent流式汇总", {"reply": full_reply}, elapsed_ms)
             logger.info(
-                "【AI智能刷题流程-流式讨论】大模型流式讨论完成：traceId=%s durationMs=%s replyChars=%s",
+                "【AI智能刷题流程-流式讨论】Agent 流式讨论完成：traceId=%s durationMs=%s replyChars=%s",
                 trace_id,
                 elapsed_ms,
                 len(full_reply),
             )
-        except Exception as exc:  # noqa: BLE001 - 流式模型异常统一进入兜底。
+        except Exception as exc:  # noqa: BLE001 - Agent 流式异常统一进入本地兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning(
-                "【AI智能刷题流程-流式讨论】大模型流式讨论失败：traceId=%s durationMs=%s error=%s",
+                "【AI智能刷题流程-流式讨论】Agent 流式讨论失败：traceId=%s durationMs=%s error=%s",
                 trace_id,
                 elapsed_ms,
                 exc,
@@ -231,23 +224,6 @@ class PracticeAgentService:
 
         # 记录事件数和可见文本数，用于定位供应商是否支持 Agent token 流。
         logger.info("【AI智能刷题流程-流式讨论】Agent流式事件统计：traceId=%s events=%s visibleChunks=%s", trace_id, event_count, content_count)
-
-    def _stream_discuss_with_model(self, messages: list[BaseMessage], trace_id: str, start_time: float) -> Iterator[str]:
-        """使用底层聊天模型原生流式输出讨论回复。"""
-        chunk_count = 0
-        model_messages = [SystemMessage(content=_DISCUSSION_SYSTEM_PROMPT), *messages]
-        self._log_llm_request(trace_id, "本题讨论-模型原生流式", None, model_messages, stream=True)
-
-        # 模型原生 stream 作为 Agent stream 的流式兜底，但仍保留同样的系统提示。
-        for chunk in self._chat_model().stream(model_messages):
-            content = self._chunk_content(chunk)
-            if content:
-                chunk_count += 1
-                self._log_visible_stream_chunk(trace_id, start_time, "model", chunk_count, content)
-                yield content
-
-        # 记录模型原生流式片段数，便于排查模型供应商流式能力。
-        logger.info("【AI智能刷题流程-流式讨论】模型原生流式片段统计：traceId=%s visibleChunks=%s", trace_id, chunk_count)
 
     def _log_visible_stream_chunk(self, trace_id: str, start_time: float, source: str, count: int, content: str) -> None:
         """记录可见流式片段输出情况。"""
@@ -382,11 +358,14 @@ class PracticeAgentService:
             and api_key != AI_GRADING_API_KEY_PLACEHOLDER
         )
 
-    def _grade_model(self):
-        """创建答案评分结构化聊天模型。"""
-        # DeepSeek reasoning 模型不支持 Agent 结构化输出触发的 tool_choice。
-        # JSON mode 只使用 response_format，不绑定工具，兼容 OpenAI 与 DeepSeek。
-        return self._chat_model().with_structured_output(PracticeGradeResponse, method="json_mode")
+    def _grading_agent(self):
+        """创建答案评分 Agent。"""
+        return create_agent(
+            model=self._chat_model(),
+            tools=[],
+            system_prompt=_GRADE_SYSTEM_PROMPT,
+            response_format=PracticeGradeResponse,
+        )
 
     def _discussion_agent(self):
         """创建本题讨论 Agent。"""
@@ -447,11 +426,49 @@ class PracticeAgentService:
                 return self._message_content(message)
         return ""
 
+    def _structured_grading_result(self, result: Any) -> PracticeGradeResponse | None:
+        """从 Agent 执行结果中读取结构化评分结果。"""
+        if isinstance(result, PracticeGradeResponse):
+            return result
+        if not isinstance(result, dict):
+            return None
+
+        # LangChain Agent response_format 成功时会返回 structured_response。
+        structured_response = result.get("structured_response")
+        if structured_response is not None:
+            return PracticeGradeResponse.model_validate(structured_response)
+
+        # 兼容结构化结果落在 tool_calls 中的场景，避免供应商返回差异导致评分丢失。
+        messages = result.get("messages")
+        if isinstance(messages, list):
+            return self._grading_result_from_tool_calls(messages)
+        return None
+
+    def _grading_result_from_tool_calls(self, messages: list[Any]) -> PracticeGradeResponse | None:
+        """从 Agent 工具调用消息中读取结构化评分结果。"""
+        for message in reversed(messages):
+            tool_calls = getattr(message, "tool_calls", None)
+            if not tool_calls:
+                continue
+
+            # Agent 结构化输出会以模型工具调用形式携带 Pydantic 参数。
+            for tool_call in tool_calls:
+                if not isinstance(tool_call, dict):
+                    continue
+                if tool_call.get("name") == PracticeGradeResponse.__name__ and tool_call.get("args"):
+                    return PracticeGradeResponse.model_validate(tool_call["args"])
+        return None
+
     def _agent_stream_content(self, chunk: Any) -> str:
         """读取 Agent 流式事件中的文本片段。"""
+        if isinstance(chunk, dict) and chunk.get("type") == "messages":
+            # LangGraph v2 会将 token 事件包装为 {"type": "messages", "data": (...)}。
+            return self._agent_stream_content(chunk.get("data"))
         if isinstance(chunk, tuple) and chunk:
+            # messages 模式下 data 通常是 (AIMessageChunk, metadata)，只读取消息片段。
             return self._chunk_content(chunk[0])
         if isinstance(chunk, dict):
+            # values/updates 模式可能直接返回状态字典，兼容读取最后一条 AI 消息。
             return self._last_ai_reply(chunk)
         return self._chunk_content(chunk)
 

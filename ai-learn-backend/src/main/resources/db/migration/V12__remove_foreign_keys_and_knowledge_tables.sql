@@ -11,6 +11,9 @@ PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPAR
 SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'question_knowledge_points' AND CONSTRAINT_NAME = 'fk_question_knowledge_points_knowledge_point_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `question_knowledge_points` DROP FOREIGN KEY `fk_question_knowledge_points_knowledge_point_id`', 'SELECT 1');
 PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
 
+SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'rag_index_tasks' AND CONSTRAINT_NAME = 'fk_rag_index_tasks_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `rag_index_tasks` DROP FOREIGN KEY `fk_rag_index_tasks_user_id`', 'SELECT 1');
+PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
+
 SET @drop_sql = IF((SELECT COUNT(1) FROM information_schema.TABLE_CONSTRAINTS WHERE CONSTRAINT_SCHEMA = DATABASE() AND TABLE_NAME = 'user_badges' AND CONSTRAINT_NAME = 'fk_user_badges_user_id' AND CONSTRAINT_TYPE = 'FOREIGN KEY') > 0, 'ALTER TABLE `user_badges` DROP FOREIGN KEY `fk_user_badges_user_id`', 'SELECT 1');
 PREPARE drop_statement FROM @drop_sql; EXECUTE drop_statement; DEALLOCATE PREPARE drop_statement;
 
