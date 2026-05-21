@@ -1,8 +1,8 @@
 ## ADDED Requirements
+r` 注册接口，允许游客使用用户名、密码、昵称和邮箱注册账号；注册成功后 SHALL 返回 JWT access token、token 类型、过期时间和用户摘要。
 
 ### Requirement: 用户可以注册并获得登录凭证
-系统 SHALL 提供 `/api/v1/auth/register` 注册接口，允许游客使用用户名、密码、昵称和邮箱注册账号；注册成功后 SHALL 返回 JWT access token、token 类型、过期时间和用户摘要。
-
+系统 SHALL 提供 `/api/v1/auth/registe
 #### Scenario: 注册成功
 - **WHEN** 游客提交符合规则且未被占用的 `username`、`password`、必填 `nickname` 和必填 `email`
 - **THEN** 系统 SHALL 创建用户、保存密码哈希，并返回 `tokenType=Bearer`、`accessToken`、`expiresIn` 和不包含密码哈希的用户摘要

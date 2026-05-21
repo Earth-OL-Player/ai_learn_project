@@ -17,6 +17,7 @@ dist/
 .env
 .env.local
 .env.*.local
+5.部署文档
 
 # 后端构建产物
 target/

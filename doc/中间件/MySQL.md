@@ -1,7 +1,7 @@
 # MySQL 中间件说明
 
-版本：v1.15
-日期：2026-05-18  
+版本：v1.18
+日期：2026-05-20  
 适用工程：`ai-learn-backend`  
 适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
 
@@ -13,6 +13,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、建议�
 
 - `ai-learn-backend` 负责读写 MySQL。
 - Flyway 负责自动执行用户、建议、评论、题目、刷题汇总、RAG 任务和成长体系相关表 migration。
+- 本地开发可继续使用 Docker 自建 MySQL；正式上线推荐使用云数据库 MySQL，当前腾讯云方案使用 TDSQL Boundless 2核4GB、50GB 增强型 SSD 云硬盘，兼容 MySQL 8.0，避免在应用服务器上自行维护数据库进程、备份和故障恢复。
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
 - `sprint2619` 后，建议区不再保存处理状态和标题；建议与评论均通过点赞明细表记录用户点赞状态，评论支持一级父子评论。
 - `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。
@@ -447,3 +448,188 @@ POST /api/v1/practice/messages/stream
 - `last_grading_summary` 和 `discussion_history_json` 属于学习上下文数据，生产排查时禁止全量打印到日志。
 - 如需临时查询，只能查询明确用户和明确题目，并尽量使用 `LEFT` 截断预览。
 - 发布前仍需先备份 MySQL，并确认 Flyway 自动执行 V19 成功。
+
+## 15. 阿里云 RDS 生产部署补充说明
+
+当前阿里云正式上线方案已从 ECS 自建 MySQL 调整为阿里云 RDS MySQL，代码侧连接方式不变，仍通过 `DATABASE_URL`、`DATABASE_USERNAME`、`DATABASE_PASSWORD` 注入 JDBC 配置。
+
+### 15.1 推荐 RDS 规格
+
+| 配置项 | 推荐值 | 说明 |
+| --- | --- | --- |
+| 数据库引擎 | MySQL | 与后端 MySQL Connector/J 兼容 |
+| 版本 | MySQL 8.0 或阿里云当前可选 8.x 稳定版本 | 本地仍推荐 MySQL 8.4 LTS；生产以 RDS 可售稳定版本为准 |
+| 系列 | 高可用系列 | 正式上线推荐，避免基础单机系列单点风险 |
+| 规格 | 2核4GB | 当前部署文档统一使用 2C4G，规格可对应 `mysql.n2.medium.2c` |
+| 存储类型 | ESSD 云盘 | 小流量正式上线可使用购买页默认 ESSD 档位 |
+| 存储空间 | 100GB 起步 | 题库和用户数据初期足够，后续可在线扩容 |
+| 网络 | 专有网络 VPC | 与应用 ECS 放在同一 VPC 内网访问 |
+
+### 15.2 RDS 创建步骤
+
+1. 进入阿里云“云数据库 RDS”控制台。
+2. 点击“创建实例”。
+3. 选择 MySQL、华东1（杭州）、专有网络 VPC。
+4. 选择高可用系列、2核4GB、ESSD 云盘、100GB 存储空间。
+5. 购买完成后创建数据库 `ai_learn`，字符集选择 `utf8mb4`。
+6. 创建业务账号 `ai_learn_user`，只授权 `ai_learn` 数据库读写权限。
+7. 在白名单或安全组中仅放行应用 ECS 内网 IP，禁止放行 `0.0.0.0/0`。
+8. 获取 RDS 内网连接地址，用于配置后端 `DATABASE_URL`。
+
+### 15.3 RDS 生产配置占位符
+
+`ai-learn-backend` 生产环境变量示例：
+
+```dotenv
+DATABASE_URL=jdbc:mysql://<RDS内网地址占位符>:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+DATABASE_USERNAME=ai_learn_user
+DATABASE_PASSWORD=<RDS业务账号密码占位符>
+SPRING_FLYWAY_ENABLED=true
+JWT_SECRET=<至少32位生产JWT密钥占位符>
+JWT_EXPIRES_IN_SECONDS=7200
+```
+
+占位符说明：
+
+- `<RDS内网地址占位符>`：填写 RDS 控制台展示的内网连接地址，不要填写公网地址。
+- `<RDS业务账号密码占位符>`：填写 RDS 业务账号真实密码，真实值只能保存在服务器私有配置或密钥系统中。
+- `<至少32位生产JWT密钥占位符>`：填写生产 JWT 签名密钥，禁止提交仓库。
+
+### 15.4 RDS 验证方式
+
+在应用 ECS 上验证网络连通：
+
+```bash
+mysql -h <RDS内网地址占位符> -P 3306 -u ai_learn_user -p ai_learn
+```
+
+SQL 验证：
+
+```sql
+SELECT VERSION();
+SHOW TABLES;
+SELECT COUNT(1) FROM questions WHERE deleted = 0;
+SELECT setting_key, setting_value FROM system_settings;
+```
+
+后端验证：
+
+1. 启动 `ai-learn-backend`。
+2. 访问 `/api/v1/health`，确认后端返回 `UP`。
+3. 查看后端日志，确认 Flyway migration 执行成功。
+4. 在 RDS 控制台确认表结构、题库初始化数据和系统设置已创建。
+
+### 15.5 RDS 生产注意事项
+
+- RDS 不开启公网地址，应用通过 VPC 内网访问。
+- RDS 白名单或安全组只允许应用 ECS 访问。
+- 发布前手动创建一次 RDS 备份，发布后确认自动备份策略有效。
+- 开启慢 SQL 日志和基础监控，重点关注 CPU、连接数、IOPS、存储空间和慢查询。
+- 生产表结构变更仍必须通过 Flyway migration 发布，不允许只在 RDS 控制台手工改表。
+- RDS 账号密码、连接地址和备份文件不得提交仓库，也不得出现在公开文档、截图或日志中。
+- 如后续需要只读扩展、跨可用区容灾或更高 SLA，应优先升级 RDS 规格或增加只读实例。
+
+## 16. 腾讯云 TDSQL Boundless 生产部署补充说明
+
+当前腾讯云正式上线方案调整为：1 台 4C8G 宝塔 Linux 面板 CVM 部署前端、Java 后端和 Python AI 服务，另使用 **腾讯云 TDSQL Boundless** 作为业务主库。TDSQL Boundless 兼容 MySQL 8.0，代码侧连接方式不变，仍通过 `DATABASE_URL`、`DATABASE_USERNAME`、`DATABASE_PASSWORD` 注入 JDBC 配置。
+
+> 注意：TDSQL 控制台截图中的真实内网地址、实例 ID、账号和密码都属于生产连接信息，不得提交仓库。文档中统一使用占位符。
+
+### 16.1 当前 TDSQL 规格
+
+| 配置项 | 当前值 | 说明 |
+| --- | --- | --- |
+| 产品类型 | TDSQL Boundless | 作为生产 MySQL 兼容主库使用 |
+| 兼容数据库 | MySQL 8.0 | 后端仍使用 MySQL Connector/J 连接 |
+| 数据库版本 | 以控制台展示为准 | 当前截图显示数据库版本为 `21.2.5` |
+| 规格 | 2核4GB | 当前腾讯云上线方案使用该规格 |
+| 存储空间 | 50GB 增强型 SSD 云硬盘 | 当前已购容量；后续按数据增长在线扩容 |
+| 网络 | 私有网络 VPC | 当前实例位于 `Default-VPC - mysql`，应用 CVM 通过内网访问 |
+| 端口 | 3306 | 与 MySQL 协议连接方式一致 |
+
+### 16.2 TDSQL 创建和配置步骤
+
+当前 TDSQL 实例已购买完成，后续重点是创建业务库、账号和安全组：
+
+1. 进入腾讯云控制台左侧“TDSQL” -> “实例列表”。
+2. 找到已购买的 TDSQL Boundless 实例。
+3. 点击“管理”进入实例详情。
+4. 在数据库管理或 SQL 操作入口中创建数据库 `ai_learn`。
+5. 字符集优先选择 `utf8mb4`；如果控制台只显示 `UTF8`，创建后需要确认中文、Emoji 和特殊字符保存是否正常。
+6. 创建业务账号 `ai_learn_user`，只授权 `ai_learn` 数据库读写权限。
+7. 在 TDSQL 安全组中只允许应用 CVM 的内网 IP 或应用 CVM 所在安全组访问 3306。
+8. 获取 TDSQL 内网地址，用于配置后端 `DATABASE_URL`。
+9. 不开启公网地址，不允许将 3306 暴露给 `0.0.0.0/0`。
+
+如果控制台没有可视化创建数据库入口，可通过 TDSQL 控制台“登录”能力或从应用 CVM 使用 MySQL 客户端连接后执行：
+
+```sql
+CREATE DATABASE IF NOT EXISTS ai_learn DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci;
+```
+
+### 16.3 腾讯云 TDSQL 生产配置占位符
+
+`ai-learn-backend` 生产环境变量示例：
+
+```dotenv
+DATABASE_URL=jdbc:mysql://<TDSQL内网地址占位符>:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+DATABASE_USERNAME=ai_learn_user
+DATABASE_PASSWORD=<TDSQL业务账号密码占位符>
+SPRING_FLYWAY_ENABLED=true
+JWT_SECRET=<至少32位生产JWT密钥占位符>
+JWT_EXPIRES_IN_SECONDS=7200
+AI_SERVICE_ENABLED=true
+AI_SERVICE_BASE_URL=http://127.0.0.1:8000
+AI_SERVICE_TOKEN=<生产AI内部Token占位符>
+AI_SERVICE_TIMEOUT_SECONDS=20
+```
+
+占位符说明：
+
+- `<TDSQL内网地址占位符>`：填写 TDSQL 控制台展示的内网地址，不要填写公网地址，不得写入仓库。
+- `<TDSQL业务账号密码占位符>`：填写 `ai_learn_user` 的真实密码，真实值只能保存在服务器私有配置或密钥系统中。
+- `<至少32位生产JWT密钥占位符>`：填写生产 JWT 签名密钥，禁止提交仓库。
+- `<生产AI内部Token占位符>`：Java 后端和 Python AI 服务内部鉴权 Token，必须两端一致。
+
+### 16.4 腾讯云 TDSQL 验证方式
+
+在应用 CVM 上验证网络连通：
+
+```bash
+mysql -h <TDSQL内网地址占位符> -P 3306 -u ai_learn_user -p ai_learn
+```
+
+SQL 验证：
+
+```sql
+SELECT VERSION();
+SHOW DATABASES;
+SHOW TABLES;
+SHOW VARIABLES LIKE 'character_set_database';
+SELECT COUNT(1) FROM questions WHERE deleted = 0;
+SELECT setting_key, setting_value FROM system_settings;
+```
+
+后端验证：
+
+1. 启动 `ai-learn-backend`。
+2. 访问 `/api/v1/health`，确认后端返回 `UP`。
+3. 查看后端日志，确认 Flyway migration 执行成功。
+4. 在 TDSQL 控制台确认表结构、题库初始化数据和系统设置已创建。
+
+### 16.5 腾讯云 TDSQL 生产注意事项
+
+- TDSQL 不开启公网地址，应用通过 VPC 内网访问。
+- TDSQL 安全组只允许 4C8G 应用 CVM 访问 3306。
+- 宝塔面板中不要安装或启用本机 MySQL，避免出现“连错库”和重复维护备份的问题。
+- 发布前手动创建一次 TDSQL 备份，发布后确认自动备份策略有效。
+- 开启慢 SQL 分析、监控告警和基础审计，重点关注 CPU、连接数、IOPS、存储空间和慢查询。
+- 生产表结构变更仍必须通过 Flyway migration 发布，不允许只在 TDSQL 控制台手工改表。
+- TDSQL 账号密码、连接地址、备份文件和控制台截图不得提交仓库，也不得出现在公开文档或日志中。
+- 如果后续访问量增长，应优先评估连接数、慢查询、索引和存储空间，再决定是否升级规格、扩容存储或调整数据库形态。
+
+### 16.6 官方参考资料
+
+- [腾讯云 TDSQL 产品文档](https://cloud.tencent.com/document/product/557)
+- [腾讯云 TDSQL 控制台](https://console.cloud.tencent.com/tdsqld/instance-tdmysql)
+
