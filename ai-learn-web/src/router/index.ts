@@ -51,7 +51,7 @@ const router = createRouter({
           path: 'interview-questions',
           name: 'interview-questions',
           component: InterviewQuestionsPage,
-          meta: { title: '热门面经' },
+          meta: { title: '热门面试题' },
         },
         {
           path: 'practice-agent',

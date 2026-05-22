@@ -20,7 +20,7 @@
         <el-menu-item index="/home">首页</el-menu-item>
         <el-menu-item index="/learning-roadmap">路线和资料</el-menu-item>
         <el-menu-item index="/practice-agent">AI智能刷题</el-menu-item>
-        <el-menu-item index="/interview-questions">热门面经</el-menu-item>
+        <el-menu-item index="/interview-questions">热门面试题</el-menu-item>
         <el-menu-item index="/suggestions-comments">建议评论区</el-menu-item>
       </el-menu>
 

@@ -3,7 +3,7 @@
     <div class="login-guide-body">
       <div class="login-guide-icon">🔐</div>
       <h3>登录后即可使用该功能</h3>
-      <p>登录后可以访问热门面经、AI智能刷题和个人中心，后续学习记录也会自动沉淀。</p>
+      <p>登录后可以访问热门面试题、AI智能刷题和个人中心，后续学习记录也会自动沉淀。</p>
       <div class="login-guide-actions">
         <el-button @click="visible = false">稍后再说</el-button>
         <el-button type="primary" @click="openLogin">立即登录</el-button>

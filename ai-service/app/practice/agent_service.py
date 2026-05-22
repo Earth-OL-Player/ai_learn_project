@@ -26,8 +26,9 @@ _GRADE_SYSTEM_PROMPT = (
     "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，我将提交一段题目、参考答案、用户答案给你。\n"
     "请你进行评分，并且使用我要求的Json结构化输出。\n"
     "允许用户使用同义表达，结合你自身和知识和参考答案一起点评，不能强求用户答案和参考答案一模一样，意义相同即得分。\n"
+    "参考答案通常很长，带有解释性说明，而用户的答案可能只是匹配关键点，长度较短，但是只要能够说出关键点依然可以满分，回答答案长度不作为评分标准。请发挥你的智能分析用户的答案，给出中肯的评分，而不是死按参考答案套路。\n"
 )
-_DISCUSSION_SYSTEM_PROMPT = "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，请围绕当前刷题上下文为用户解答疑惑。"
+_DISCUSSION_SYSTEM_PROMPT = "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，请围绕当前刷题上下文为用户解答疑惑，此阶段你的回答要结构化的md格式，风格精确严谨，回答控制在 600 个中文字符以内。"
 _DEEPSEEK_THINKING_DISABLED_BODY = {"thinking": {"type": "disabled"}}
 logger = logging.getLogger("ai_service.practice.llm")
 logger.setLevel(logging.INFO)

@@ -4,7 +4,7 @@
       <nav
         v-if="questionTypes.length"
         :class="['markdown-toc-card interview-category-card', { 'is-collapsed': isTocCollapsed }]"
-        aria-label="热门面经分类"
+        aria-label="热门面试题分类"
       >
         <div class="markdown-toc-header">
           <h3 v-if="!isTocCollapsed">分类</h3>
@@ -28,13 +28,8 @@
 
       <article class="markdown-card interview-document-card">
         <el-skeleton :loading="loading" animated :rows="10">
-          <el-empty v-if="!activeQuestionType" description="暂无热门面经内容，管理员补充题库后将自动展示" />
+          <el-empty v-if="!activeQuestionType" description="暂无热门面试题内容，管理员补充题库后将自动展示" />
           <div v-else class="markdown-body interview-markdown-body">
-            <h1>热门面经</h1>
-            <p class="interview-document-intro">
-              精选 AI、RAG、Agent 等方向真实面试高频题，当前按分类加载阅读，切换分类时再查询对应题目。
-            </p>
-
             <section class="interview-category-section">
               <h2>{{ activeQuestionType }}</h2>
 
@@ -101,7 +96,7 @@ markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
 };
 
 /**
- * 初始化热门面经分类和默认题目。
+ * 初始化热门面试题分类和默认题目。
  */
 async function initializeInterviewDocument(): Promise<void> {
   loading.value = true;
@@ -111,7 +106,7 @@ async function initializeInterviewDocument(): Promise<void> {
     activeQuestionType.value = questionTypes.value[0] || '';
     questionDetails.value = activeQuestionType.value ? await fetchInterviewQuestionDocument(activeQuestionType.value) : [];
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '热门面经加载失败');
+    ElMessage.error(error instanceof Error ? error.message : '热门面试题加载失败');
   } finally {
     loading.value = false;
   }
@@ -132,7 +127,7 @@ async function handleCategoryChange(questionType: string): Promise<void> {
 }
 
 /**
- * 按指定分类加载热门面经题目。
+ * 按指定分类加载热门面试题题目。
  *
  * @param questionType 题目分类
  */
@@ -144,7 +139,7 @@ async function loadInterviewDocumentByCategory(questionType: string): Promise<vo
     questionDetails.value = await fetchInterviewQuestionDocument(questionType);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '热门面经加载失败');
+    ElMessage.error(error instanceof Error ? error.message : '热门面试题加载失败');
   } finally {
     loading.value = false;
   }
@@ -201,10 +196,6 @@ onMounted(initializeInterviewDocument);
 <style scoped lang="scss">
 .interview-document-card {
   min-height: 640px;
-}
-
-.interview-document-intro {
-  color: #5d6b82;
 }
 
 .interview-category-card {

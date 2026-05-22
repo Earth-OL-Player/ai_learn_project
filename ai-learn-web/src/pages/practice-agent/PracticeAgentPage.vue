@@ -816,8 +816,8 @@ function scoreTagType(score: number): 'success' | 'warning' | 'info' {
  * 提取评分问题文案。
  */
 function gradingProblemText(grading: PracticeGrading): string {
-  // 过滤空问题点，避免页面出现多余分号。
-  return grading.problems.map((item) => item.trim()).filter(Boolean).join('；');
+  // 过滤空问题点，多个问题点保留模型原有标点并换行展示。
+  return grading.problems.map((item) => item.trim()).filter(Boolean).join('\n');
 }
 
 /**
