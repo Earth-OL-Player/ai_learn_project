@@ -122,14 +122,18 @@ const badgeGroups = computed<BadgeGroup[]>(() => {
   })).filter((group) => group.category !== 'RARE' || group.badges.length > 0);
 });
 
-// 进度条按当前等级经验计算，让右侧区域拥有更明确的成长反馈。
+// 进度条按当前等级内经验计算，避免总经验比例影响升级反馈。
 const levelProgressPercent = computed(() => {
-  if (!growth.value || growth.value.nextLevelExperience <= 0) {
+  if (!growth.value) {
     return 0;
   }
 
+  const levelStartExperience = growth.value.currentLevelExperience;
+  const levelTotalExperience = growth.value.nextLevelExperience - levelStartExperience;
+  const levelEarnedExperience = growth.value.currentExperience - levelStartExperience;
+
   // 限制百分比范围，防止异常数据撑满或反向展示进度条。
-  const progress = (growth.value.currentLevelExperience / growth.value.nextLevelExperience) * 100;
+  const progress = levelTotalExperience <= 0 ? 0 : (levelEarnedExperience / levelTotalExperience) * 100;
   return Math.min(100, Math.max(0, Number(progress.toFixed(1))));
 });
 

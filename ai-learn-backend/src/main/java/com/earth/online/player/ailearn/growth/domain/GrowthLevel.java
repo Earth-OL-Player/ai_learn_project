@@ -6,7 +6,7 @@ package com.earth.online.player.ailearn.growth.domain;
 public final class GrowthLevel {
 
     private static final int MIN_LEVEL = 1;
-    private static final int EXPERIENCE_PER_LEVEL = 300;
+    private static final int EXPERIENCE_PER_LEVEL = 100;
     private static final String LEVEL_PREFIX = "LV";
 
     private final int levelValue;

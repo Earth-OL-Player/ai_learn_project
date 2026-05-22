@@ -178,10 +178,9 @@ public class SystemQuestionAdminService {
      */
     public boolean clearAll() {
         requireSuperAdmin();
-        systemQuestionAdminMapper.deleteAllQuestionStats();
         systemQuestionAdminMapper.resetAllPracticeSessions();
 
-        // 按需求对题库主表执行 TRUNCATE，确保题库数据被真实清空并重置自增ID。
+        // 只清空题库主表，用户历史最高分汇总继续保留用于成长经验计算。
         systemQuestionAdminMapper.truncateQuestions();
         return true;
     }
@@ -320,19 +319,38 @@ public class SystemQuestionAdminService {
         List<SystemQuestionRequest> requests = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
             String line;
-            int rowIndex = 0;
+            int physicalRowIndex = 0;
+            int recordStartRowIndex = 0;
+            StringBuilder recordBuilder = new StringBuilder();
             while ((line = reader.readLine()) != null) {
-                rowIndex++;
-                if (rowIndex == 1 && line.replace("\uFEFF", "").startsWith("code,")) {
+                physicalRowIndex++;
+                if (recordBuilder.isEmpty() && !StringUtils.hasText(line)) {
                     continue;
                 }
-                if (!StringUtils.hasText(line)) {
+
+                // CSV 字段内允许换行，必须累积到双引号闭合后再按一条记录解析。
+                if (recordBuilder.isEmpty()) {
+                    recordStartRowIndex = physicalRowIndex;
+                } else {
+                    recordBuilder.append('\n');
+                }
+                recordBuilder.append(line);
+                if (!isCompleteCsvRecord(recordBuilder)) {
                     continue;
                 }
-                requests.add(parseCsvRow(line, rowIndex));
+
+                String record = recordBuilder.toString();
+                recordBuilder.setLength(0);
+                if (recordStartRowIndex == 1 && record.replace("\uFEFF", "").startsWith("code,")) {
+                    continue;
+                }
+                requests.add(parseCsvRow(record, recordStartRowIndex));
                 if (requests.size() > MAX_IMPORT_ROWS) {
                     throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "单次最多导入1000道题");
                 }
+            }
+            if (!recordBuilder.isEmpty()) {
+                throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "第" + recordStartRowIndex + "行CSV引号未闭合");
             }
         } catch (IOException exception) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "CSV文件读取失败");
@@ -341,6 +359,28 @@ public class SystemQuestionAdminService {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "CSV文件没有可导入题目");
         }
         return requests;
+    }
+
+    /**
+     * 判断 CSV 记录是否已经读取完整。
+     *
+     * @param recordBuilder CSV记录内容
+     * @return 是否完整
+     */
+    private boolean isCompleteCsvRecord(StringBuilder recordBuilder) {
+        boolean inQuote = false;
+        for (int index = 0; index < recordBuilder.length(); index++) {
+            char ch = recordBuilder.charAt(index);
+            if (ch != '"') {
+                continue;
+            }
+            if (inQuote && index + 1 < recordBuilder.length() && recordBuilder.charAt(index + 1) == '"') {
+                index++;
+                continue;
+            }
+            inQuote = !inQuote;
+        }
+        return !inQuote;
     }
 
     /**

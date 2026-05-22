@@ -156,14 +156,6 @@ public interface SystemQuestionAdminMapper {
     int deleteById(@Param("id") Long id);
 
     /**
-     * 删除全部用户题目汇总。
-     *
-     * @return 影响行数
-     */
-    @Update("DELETE FROM user_question_stats")
-    int deleteAllQuestionStats();
-
-    /**
      * 重置用户当前刷题状态。
      *
      * @return 影响行数

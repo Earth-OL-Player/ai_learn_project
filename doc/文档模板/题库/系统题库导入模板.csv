@@ -1,0 +1,2 @@
+code,question,question_type,standard_answer,importance_score,occurrence_count
+,什么是 RAG？,RAG,检索增强生成通过外部知识提升回答质量。,90,120
