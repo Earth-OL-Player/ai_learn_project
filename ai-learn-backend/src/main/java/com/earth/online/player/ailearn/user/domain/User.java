@@ -11,6 +11,7 @@ public class User {
     private String username;
     private String nickname;
     private String avatar;
+    private String gender;
     private String email;
     private String passwordHash;
     private Integer experience;
@@ -91,6 +92,24 @@ public class User {
      */
     public void setAvatar(String avatar) {
         this.avatar = avatar;
+    }
+
+    /**
+     * 获取性别编码。
+     *
+     * @return 性别编码
+     */
+    public String getGender() {
+        return gender;
+    }
+
+    /**
+     * 设置性别编码。
+     *
+     * @param gender 性别编码
+     */
+    public void setGender(String gender) {
+        this.gender = gender;
     }
 
     /**

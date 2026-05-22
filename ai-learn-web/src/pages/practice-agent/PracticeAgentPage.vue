@@ -15,6 +15,7 @@
         :current-experience="growth.currentExperience"
         :next-level-experience="growth.nextLevelExperience"
         :level-progress-text="growth.levelProgressText"
+        :gender="authStore.user?.gender || null"
         compact
       />
 
@@ -30,11 +31,17 @@
             collapse-tags
             collapse-tags-tooltip
             filterable
+            popper-class="practice-category-select-popper"
             placeholder="全部分类"
             @visible-change="handleCategoryVisibleChange"
             @change="handleCategoryChange"
           >
-            <el-option v-for="item in categories" :key="item" :label="item" :value="item" />
+            <el-option v-for="item in categories" :key="item" :label="item" :value="item">
+              <div class="practice-category-option-content" :class="{ 'is-checked': selectedCategories.includes(item) }">
+                <span class="practice-category-checkbox" aria-hidden="true"></span>
+                <span class="practice-category-option-label">{{ item }}</span>
+              </div>
+            </el-option>
           </el-select>
         </div>
         <el-button class="main-action-button" type="primary" round :loading="loading" @click="handleNextQuestion">{{ nextButtonText }}</el-button>
@@ -1198,6 +1205,66 @@ onBeforeUnmount(() => {
   min-height: 34px;
   border-radius: 999px;
   box-shadow: none;
+}
+
+:global(.practice-category-select-popper .el-select-dropdown__item) {
+  // 下拉项保留 Element Plus 原生交互，只增强左侧复选框识别。
+  height: auto;
+  padding: 0 12px;
+}
+
+:global(.practice-category-select-popper .el-select-dropdown__item.is-selected) {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+:global(.practice-category-select-popper .el-select-dropdown__item::after) {
+  display: none;
+}
+
+:global(.practice-category-option-content) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 36px;
+}
+
+:global(.practice-category-checkbox) {
+  position: relative;
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  border: 1px solid #cbd5e1;
+  border-radius: 4px;
+  background: #ffffff;
+  transition: border-color 0.18s ease, background-color 0.18s ease, box-shadow 0.18s ease;
+}
+
+:global(.practice-category-option-content.is-checked .practice-category-checkbox) {
+  border-color: #2563eb;
+  background: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+:global(.practice-category-option-content.is-checked .practice-category-checkbox::after) {
+  // 使用 CSS 勾选符号，避免额外引入图标组件。
+  position: absolute;
+  top: 1px;
+  left: 4px;
+  width: 4px;
+  height: 8px;
+  border: solid #ffffff;
+  border-width: 0 2px 2px 0;
+  content: '';
+  transform: rotate(45deg);
+}
+
+:global(.practice-category-option-label) {
+  overflow: hidden;
+  color: inherit;
+  font-size: 14px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .main-action-button,

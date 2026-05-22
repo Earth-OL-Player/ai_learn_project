@@ -1,13 +1,13 @@
 # MySQL 中间件说明
 
-版本：v1.18
-日期：2026-05-20  
+版本：v1.20
+日期：2026-05-22  
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，用于保存用户注册登录数据、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照、系统设置和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、用户性别编码、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照、系统设置和审计字段。
 
 当前边界说明：
 
@@ -16,7 +16,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、建议�
 - 本地开发可继续使用 Docker 自建 MySQL；正式上线推荐使用云数据库 MySQL，当前腾讯云方案使用 TDSQL Boundless 2核4GB、50GB 增强型 SSD 云硬盘，兼容 MySQL 8.0，避免在应用服务器上自行维护数据库进程、备份和故障恢复。
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
 - `sprint2619` 后，建议区不再保存处理状态和标题；建议与评论均通过点赞明细表记录用户点赞状态，评论支持一级父子评论。
-- `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。
+- `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。`sprint2623` 后，`users.gender` 保存用户性别编码，用于个人中心资料编辑，并供系统内部展示逻辑读取。
 - 系统题库通过 migration 初始化 `AI面试题Top300.csv` 中的真实题目数据，供热门面经和 AI 智能刷题使用。
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
 - Redis 当前未接入运行代码；Qdrant 预留代码、配置和依赖已移除，不直接参与 MySQL 业务主表写入。
@@ -155,14 +155,14 @@ SHOW INDEX FROM users;
 SHOW INDEX FROM suggestions;
 SHOW INDEX FROM comments;
 SHOW INDEX FROM questions;
-SELECT id, username, super_admin FROM users WHERE username = '本地用户名占位符';
+SELECT id, username, gender, super_admin FROM users WHERE username = '本地用户名占位符';
 ```
 
 后端验证：
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行 `V1` 到 `V19` migration，包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表和当前题多轮讨论记忆字段。
+3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V4__add_user_gender.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表和当前题多轮讨论记忆字段。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -248,7 +248,7 @@ SELECT user_id, question_code, phase, last_score, LEFT(last_answer_text, 80) AS 
 成长计算说明：
 
 - 总经验仍按 `user_question_stats.best_score` 汇总得到，即所有题目历史最高分之和。
-- 每 300 总经验升 1 级，展示格式为 `LV3 700/900`。
+- 每 100 总经验升 1 级，展示格式为 `LV8 700/800`。
 - 段位由等级范围映射得到，例如 `LV1~LV10` 为炼气期，`LV11~LV20` 为筑基期。
 - 历史 `BRONZE`、`SILVER`、`GOLD`、`PLATINUM`、`DIAMOND`、`KING` 会先回收为 `QI_REFINING`，用户登录、查询个人信息或完成答题后会按真实总经验刷新为正确境界编码。
 
@@ -632,4 +632,43 @@ SELECT setting_key, setting_value FROM system_settings;
 
 - [腾讯云 TDSQL 产品文档](https://cloud.tencent.com/document/product/557)
 - [腾讯云 TDSQL 控制台](https://console.cloud.tencent.com/tdsqld/instance-tdmysql)
+
+## 17. sprint2623 用户性别字段说明
+
+本迭代新增 `V4__add_user_gender.sql`，用于在当前压缩后的主干 migration 中补齐用户性别字段。
+
+新增或调整内容：
+
+| 表 | 字段 | 用途 |
+| --- | --- | --- |
+| `users` | `gender` | 保存用户性别编码，支持 `MALE`、`FEMALE`，为空表示未设置。 |
+
+本地验证 SQL：
+
+```sql
+DESC users;
+SELECT version, description, success FROM flyway_schema_history WHERE version = '4';
+SELECT id, username, nickname, gender FROM users WHERE username = '本地用户名占位符';
+```
+
+本地联调场景：
+
+```text
+GET /api/v1/users/me
+PUT /api/v1/users/me/profile
+```
+
+联调关注点：
+
+- 新注册用户不需要提交性别，`users.gender` 默认保持 `NULL`。
+- 个人中心保存昵称和性别后，`users.nickname` 与 `users.gender` 同步更新。
+- 修改为其他用户已占用昵称时，后端返回“昵称已被使用，请更换后重试”。
+- `gender` 为空时，个人中心资料区展示 `-`。
+- 人物形象属于系统内部展示逻辑，前端组件可读取 `gender` 自动切换，不在个人资料编辑区暴露“默认形象”等文案。
+
+部署注意事项：
+
+- 发布前必须先备份 MySQL，并确认 Flyway 自动执行 V4 成功。
+- `gender` 不属于敏感信息，但仍不得把用户资料全量导出到不受控环境。
+- 生产排查时只查询明确用户，避免批量导出昵称、邮箱等个人资料。
 

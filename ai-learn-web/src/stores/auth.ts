@@ -3,7 +3,7 @@ import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { login, logout, register, type LoginPayload, type RegisterPayload } from '../api/auth';
 import { AUTH_TOKEN_STORAGE_KEY } from '../constants/api';
-import { getCurrentUser, type CurrentUser } from '../api/user';
+import { getCurrentUser, updateCurrentProfile, type CurrentUser, type UpdateProfilePayload } from '../api/user';
 
 /**
  * 用户认证状态仓库。
@@ -54,6 +54,21 @@ export const useAuthStore = defineStore('auth', () => {
   }
 
   /**
+   * 刷新当前用户资料。
+   */
+  async function refreshCurrentUser(): Promise<void> {
+    user.value = await getCurrentUser();
+  }
+
+  /**
+   * 更新当前用户资料。
+   */
+  async function updateProfile(payload: UpdateProfilePayload): Promise<void> {
+    user.value = await updateCurrentProfile(payload);
+    ElMessage.success('资料已保存');
+  }
+
+  /**
    * 初始化并恢复登录态。
    */
   async function initialize(): Promise<void> {
@@ -66,7 +81,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
 
     try {
-      user.value = await getCurrentUser();
+      await refreshCurrentUser();
     } catch {
       clearAuth();
     }
@@ -96,6 +111,8 @@ export const useAuthStore = defineStore('auth', () => {
     clearAuth,
     loginByPassword,
     registerAccount,
+    refreshCurrentUser,
+    updateProfile,
     initialize,
     logoutAccount,
   };

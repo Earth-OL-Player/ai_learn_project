@@ -17,6 +17,7 @@
             :current-experience="growth.currentExperience"
             :next-level-experience="growth.nextLevelExperience"
             :level-progress-text="growth.levelProgressText"
+            :gender="authStore.user?.gender || null"
             compact
           />
           <div class="growth-grid">
