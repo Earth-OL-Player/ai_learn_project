@@ -108,7 +108,7 @@ docker logs -f ai-learn-mysql
 
 ## 6. 示例占位符配置
 
-仓库提供 `ai-learn-backend/.env.example`，开发者可复制为本地私有 `.env` 后替换真实值；真实密码、JWT 密钥和生产地址禁止提交。
+仓库提供 `ai-learn-backend/.example.env`，开发者可复制为本地私有 `.env` 后替换真实值；真实密码、JWT 密钥和生产地址禁止提交。
 
 后端已在 `ai-learn-backend/src/main/resources/application.yml` 中提供环境变量占位配置：
 

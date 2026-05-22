@@ -5,6 +5,7 @@ import logging
 import time
 import uuid
 from collections.abc import Iterator
+from dataclasses import dataclass
 from typing import Any
 
 from langchain.agents import create_agent
@@ -28,7 +29,7 @@ _GRADE_SYSTEM_PROMPT = (
     "允许用户使用同义表达，结合你自身和知识和参考答案一起点评，不能强求用户答案和参考答案一模一样，意义相同即得分。\n"
     "参考答案通常很长，带有解释性说明，而用户的答案可能只是匹配关键点，长度较短，但是只要能够说出关键点依然可以满分，回答答案长度不作为评分标准。请发挥你的智能分析用户的答案，给出中肯的评分，而不是死按参考答案套路。\n"
 )
-_DISCUSSION_SYSTEM_PROMPT = "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，请围绕当前刷题上下文为用户解答疑惑，此阶段你的回答要结构化的md格式，风格精确严谨，回答控制在 600 个中文字符以内。"
+_DISCUSSION_SYSTEM_PROMPT = "你是一名资深AI Agent开发工程师，熟悉领域内各大技术栈，请围绕当前刷题上下文为用户解答疑惑，此阶段你的回答要结构化的md格式，风格精确严谨，不要啰嗦，回答强制控制在 600 个中文字符以内。"
 _DEEPSEEK_THINKING_DISABLED_BODY = {"thinking": {"type": "disabled"}}
 logger = logging.getLogger("ai_service.practice.llm")
 logger.setLevel(logging.INFO)
@@ -37,6 +38,14 @@ if not logger.handlers:
     stream_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
     logger.addHandler(stream_handler)
 logger.propagate = False
+
+
+@dataclass
+class StreamDiscussChunk:
+    """流式讨论单片段内容和供应商返回的 Token 用量。"""
+
+    content: str
+    output_tokens: int | None = None
 
 
 class PracticeAgentService:
@@ -176,7 +185,13 @@ class PracticeAgentService:
             full_reply_parts: list[str] = []
 
             # 讨论阶段统一优先使用 Agent 流式，便于后续接入工具、检索和多步骤规划。
-            for content in self._stream_discuss_with_agent(messages, trace_id, start_time):
+            output_tokens: int | None = None
+            for stream_chunk in self._stream_discuss_with_agent(messages, trace_id, start_time):
+                content = stream_chunk.content
+                if stream_chunk.output_tokens is not None:
+                    output_tokens = stream_chunk.output_tokens
+                if not content:
+                    continue
                 emitted_any = True
                 full_reply_parts.append(content)
                 yield self._build_sse_event("message", {"content": content})
@@ -192,11 +207,13 @@ class PracticeAgentService:
             full_reply = "".join(full_reply_parts)
             self._log_llm_response(trace_id, "本题讨论-Agent流式汇总", {"reply": full_reply}, elapsed_ms)
             logger.info(
-                "【AI智能刷题流程-流式讨论】Agent 流式讨论完成：traceId=%s durationMs=%s replyChars=%s",
+                "【AI智能刷题流程-流式讨论】Agent 流式讨论完成：traceId=%s durationMs=%s replyChars=%s maxOutputTokens=%s",
                 trace_id,
                 elapsed_ms,
                 len(full_reply),
+                settings.ai_grading_max_output_tokens,
             )
+            self._log_stream_output_tokens(trace_id, output_tokens, full_reply)
         except Exception as exc:  # noqa: BLE001 - Agent 流式异常统一进入本地兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             logger.warning(
@@ -210,7 +227,7 @@ class PracticeAgentService:
             yield self._build_sse_event("message", {"content": fallback_response.reply})
             yield self._build_sse_event("done", {})
 
-    def _stream_discuss_with_agent(self, messages: list[BaseMessage], trace_id: str, start_time: float) -> Iterator[str]:
+    def _stream_discuss_with_agent(self, messages: list[BaseMessage], trace_id: str, start_time: float) -> Iterator[StreamDiscussChunk]:
         """使用 LangChain Agent 流式输出讨论回复。"""
         event_count = 0
         content_count = 0
@@ -218,13 +235,68 @@ class PracticeAgentService:
         for chunk in self._discussion_agent().stream({"messages": messages}, stream_mode="messages", version="v2"):
             event_count += 1
             content = self._agent_stream_content(chunk)
+            output_tokens = self._stream_output_tokens(chunk)
             if content:
                 content_count += 1
                 self._log_visible_stream_chunk(trace_id, start_time, "agent", content_count, content)
-                yield content
+                yield StreamDiscussChunk(content=content, output_tokens=output_tokens)
+            elif output_tokens is not None:
+                yield StreamDiscussChunk(content="", output_tokens=output_tokens)
 
         # 记录事件数和可见文本数，用于定位供应商是否支持 Agent token 流。
         logger.info("【AI智能刷题流程-流式讨论】Agent流式事件统计：traceId=%s events=%s visibleChunks=%s", trace_id, event_count, content_count)
+
+    def _log_stream_output_tokens(self, trace_id: str, output_tokens: int | None, full_reply: str) -> None:
+        """记录流式讨论总输出 Token，便于核验 max_completion_tokens 是否生效。"""
+        if output_tokens is not None:
+            logger.info(
+                "【AI智能刷题流程-流式讨论】Agent 流式讨论总输出Token：traceId=%s outputTokens=%s tokenSource=provider",
+                trace_id,
+                output_tokens,
+            )
+            return
+
+        _ = full_reply
+        logger.info(
+            "【AI智能刷题流程-流式讨论】Agent 流式讨论总输出Token：traceId=%s outputTokens=不可用 tokenSource=unavailable",
+            trace_id,
+        )
+
+    def _stream_output_tokens(self, chunk: Any) -> int | None:
+        """从 LangChain 流式事件中读取供应商返回的输出 Token。"""
+        if isinstance(chunk, dict) and chunk.get("type") == "messages":
+            return self._stream_output_tokens(chunk.get("data"))
+        if isinstance(chunk, tuple) and chunk:
+            return self._message_output_tokens(chunk[0])
+        if isinstance(chunk, dict):
+            return self._dict_output_tokens(chunk)
+        return self._message_output_tokens(chunk)
+
+    def _message_output_tokens(self, message: Any) -> int | None:
+        """从消息对象中读取输出 Token。"""
+        usage_metadata = getattr(message, "usage_metadata", None)
+        output_tokens = self._dict_output_tokens(usage_metadata)
+        if output_tokens is not None:
+            return output_tokens
+
+        response_metadata = getattr(message, "response_metadata", None)
+        return self._dict_output_tokens(response_metadata)
+
+    def _dict_output_tokens(self, value: Any) -> int | None:
+        """从字典结构中读取不同供应商常见的输出 Token 字段。"""
+        if not isinstance(value, dict):
+            return None
+
+        for key in ("output_tokens", "completion_tokens"):
+            token_count = value.get(key)
+            if isinstance(token_count, int):
+                return token_count
+
+        for nested_key in ("token_usage", "usage", "usage_metadata", "response_metadata"):
+            token_count = self._dict_output_tokens(value.get(nested_key))
+            if token_count is not None:
+                return token_count
+        return None
 
     def _log_visible_stream_chunk(self, trace_id: str, start_time: float, source: str, count: int, content: str) -> None:
         """记录可见流式片段输出情况。"""
@@ -251,6 +323,7 @@ class PracticeAgentService:
             "modelProvider": settings.ai_grading_model_provider,
             "baseUrl": self._normalized_base_url() if settings.ai_grading_base_url.strip() else "",
             "timeoutSeconds": settings.ai_grading_timeout_seconds,
+            "maxOutputTokens": settings.ai_grading_max_output_tokens,
             "systemPrompt": system_prompt,
             "messages": [self._message_to_log_payload(message) for message in messages],
         }
@@ -381,6 +454,8 @@ class PracticeAgentService:
         kwargs: dict[str, Any] = {
             "temperature": 0.2,
             "timeout": settings.ai_grading_timeout_seconds,
+            "stream_usage": True,
+            "max_completion_tokens": settings.ai_grading_max_output_tokens,
         }
         if settings.ai_grading_api_key.strip():
             kwargs["api_key"] = settings.ai_grading_api_key

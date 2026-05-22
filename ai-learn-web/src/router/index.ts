@@ -57,7 +57,7 @@ const router = createRouter({
           path: 'practice-agent',
           name: 'practice-agent',
           component: PracticeAgentPage,
-          meta: { title: 'AI智能刷题' },
+          meta: { title: 'AI智能刷题', keepAlive: true },
         },
         {
           path: 'profile',

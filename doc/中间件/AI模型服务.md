@@ -1,7 +1,7 @@
 # AI模型服务配置说明
 
-版本：v1.6
-日期：2026-05-19
+版本：v1.7
+日期：2026-05-22
 适用工程：`ai-service`、`ai-learn-backend`  
 适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
 
@@ -29,6 +29,7 @@ AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
 AI_GRADING_MODEL=LOCAL_RULE
 AI_GRADING_MODEL_PROVIDER=
 AI_GRADING_TIMEOUT_SECONDS=20
+AI_GRADING_MAX_OUTPUT_TOKENS=800
 ```
 
 ## 5. 必要配置项
@@ -44,10 +45,11 @@ AI_GRADING_TIMEOUT_SECONDS=20
 | `AI_GRADING_MODEL` | `LOCAL_RULE` | 本地规则或真实模型名 |
 | `AI_GRADING_MODEL_PROVIDER` | 空字符串 | 可选 LangChain 模型供应商标识；为空时让 LangChain 根据模型名推断，无法推断时再按官方文档配置 |
 | `AI_GRADING_TIMEOUT_SECONDS` | `20` | AI 服务调用模型服务超时时间 |
+| `AI_GRADING_MAX_OUTPUT_TOKENS` | `800` | AI 服务调用模型服务时允许单次回复生成的最大输出 Token 数 |
 
 ## 6. 示例占位符配置
 
-`ai-service/.env.example` 使用占位符，不包含真实密钥：
+`ai-service/.example.env` 使用占位符，不包含真实密钥：
 
 ```dotenv
 AI_SERVICE_TOKEN=AI_SERVICE_TOKEN占位符
@@ -56,6 +58,7 @@ AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
 AI_GRADING_MODEL=LOCAL_RULE
 AI_GRADING_MODEL_PROVIDER=
 AI_GRADING_TIMEOUT_SECONDS=20
+AI_GRADING_MAX_OUTPUT_TOKENS=800
 ```
 
 ## 7. 验证方式

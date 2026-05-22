@@ -143,6 +143,33 @@ export class SmoothStreamTypewriter<T extends SmoothStreamTextTarget> {
   }
 
   /**
+   * 立即展示仍在队列中的文本。
+   */
+  public flushPendingOutput(): void {
+    if (!this.target || this.queueChars.length === 0) {
+      this.cancelAnimationFrame();
+      this.resolveIdleWaiters();
+      return;
+    }
+
+    // 异常中断时优先保留浏览器已经收到的内容，避免用户看到空白回复。
+    const text = this.takeNextText(this.queueChars.length);
+    this.target.text += text;
+    this.renderCount += 1;
+    this.cancelAnimationFrame();
+    this.renderClockTimestamp = 0;
+    this.renderCharBudget = 0;
+
+    this.options.onRender?.({
+      count: this.renderCount,
+      text,
+      chars: Array.from(text).length,
+      queuedChars: this.queueChars.length,
+    });
+    this.resolveIdleWaiters();
+  }
+
+  /**
    * 清理动画帧和缓冲队列。
    */
   public clear(): void {

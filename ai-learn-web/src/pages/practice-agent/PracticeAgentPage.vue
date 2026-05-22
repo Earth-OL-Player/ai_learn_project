@@ -41,7 +41,7 @@
         <el-button class="sub-action-button" round :disabled="retryButtonDisabled" :loading="loading" @click="handleRetry">重答本题</el-button>
       </div>
 
-      <section ref="messagePanelRef" class="practice-message-panel">
+      <section ref="messagePanelRef" class="practice-message-panel" @scroll="handleMessagePanelScroll">
         <el-alert
           v-if="!authStore.isLoggedIn"
           class="guest-login-alert"
@@ -172,8 +172,8 @@
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import MarkdownIt from 'markdown-it';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, triggerRef, watch } from 'vue';
-import { useRoute, useRouter } from 'vue-router';
+import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, triggerRef, watch } from 'vue';
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
 import {
   fetchPracticeCategories,
   fetchNextPracticeQuestion,
@@ -208,6 +208,8 @@ interface PracticeChatSnapshot {
   phase: PracticePhase;
   questionCode: string;
   messages: ChatMessage[];
+  scrollTop?: number;
+  pinnedToBottom?: boolean;
   updatedAt: number;
 }
 
@@ -215,6 +217,9 @@ const EMPTY_LIST_TEXT = '暂无';
 const GUEST_LOGIN_MESSAGE = '注册登录后即可使用该功能';
 const PRACTICE_CHAT_STORAGE_PREFIX = 'ai_learn_practice_chat_';
 const STREAM_SNAPSHOT_SAVE_INTERVAL_MILLIS = 800;
+const MESSAGE_PANEL_BOTTOM_THRESHOLD_PX = 72;
+const STREAM_INTERRUPTED_SUFFIX = '\n\n（本次回复已中断，已保留当前已生成内容。）';
+const STREAM_INTERRUPTED_FALLBACK_TEXT = '本次回复中断，暂未收到可展示内容，请稍后重试。';
 const MARKDOWN_CODE_FENCE_PATTERN = /^\s*(```|~~~)/;
 const MARKDOWN_HEADING_WITHOUT_SPACE_PATTERN = /^(#{1,6})([^\s#].*)$/;
 const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
@@ -227,6 +232,7 @@ const currentQuestion = ref<PracticeQuestion | null>(null);
 const growth = ref<GrowthInfo | null>(null);
 const messages = ref<ChatMessage[]>([]);
 const messagePanelRef = ref<HTMLElement | null>(null);
+const isMessagePanelPinnedToBottom = ref(true);
 const badgeDialogVisible = ref(false);
 const badgeDialogBadges = ref<BadgeInfo[]>([]);
 const authStore = useAuthStore();
@@ -236,6 +242,8 @@ let messageId = 1;
 let pendingStreamingResult: { result: PracticeMessageResult; assistantMessage: ChatMessage } | null = null;
 let scrollAnimationFrame: number | undefined;
 let snapshotSaveTimer: number | undefined;
+let rememberedMessagePanelScrollTop = 0;
+let isRestoringMessagePanelScroll = false;
 
 // 前端统一用平滑打字机重排 SSE 节奏，避免后端突发小片段直接抖动上屏。
 const streamTypewriter = new SmoothStreamTypewriter<ChatMessage>({
@@ -379,7 +387,7 @@ async function sendMessage(): Promise<void> {
   const assistantMessage = appendStreamingAssistantMessage(buildStreamingLoadingText());
   resetStreamTypewriter(assistantMessage);
   savePracticeSnapshot();
-  scrollToBottom();
+  scrollToBottom(true);
   loading.value = true;
   try {
     await sendPracticeMessageStream(
@@ -392,8 +400,7 @@ async function sendMessage(): Promise<void> {
     await streamTypewriter.waitForIdle();
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '发送失败');
-    clearStreamTypewriter();
-    removeStreamingMessage(assistantMessage.id);
+    preserveInterruptedStreamingMessage(assistantMessage);
   } finally {
     loading.value = false;
   }
@@ -459,7 +466,7 @@ function applyResult(result: PracticeMessageResult, clearMessages: boolean): voi
     messages.value.push(message);
   }
   savePracticeSnapshot();
-  scrollToBottom();
+  scrollToBottom(true);
   showNewBadgeDialog(result);
 }
 
@@ -497,7 +504,7 @@ function finishStreamingResult(result: PracticeMessageResult, assistantMessage: 
   }
   refreshMessagesView();
   savePracticeSnapshot();
-  scrollToBottom();
+  scheduleScrollToBottom();
   showNewBadgeDialog(result);
 }
 
@@ -573,11 +580,31 @@ function logFrontendStreamChunk(event: SmoothStreamChunkEvent): void {
 }
 
 /**
- * 移除异常中断的流式消息。
+ * 保留异常中断前已经生成的流式消息。
  */
-function removeStreamingMessage(messageIdValue: number): void {
-  messages.value = messages.value.filter((item) => item.id !== messageIdValue);
+function preserveInterruptedStreamingMessage(message: ChatMessage): void {
+  streamTypewriter.flushPendingOutput();
+  pendingStreamingResult = null;
+  streamTypewriter.clear();
+  message.streaming = false;
+  message.loadingText = undefined;
+  message.text = buildInterruptedStreamingText(message.text);
+  refreshMessagesView();
   savePracticeSnapshot();
+  scheduleScrollToBottom();
+}
+
+/**
+ * 生成流式中断后的可见提示文案。
+ */
+function buildInterruptedStreamingText(text: string): string {
+  if (!text.trim()) {
+    return STREAM_INTERRUPTED_FALLBACK_TEXT;
+  }
+  if (text.includes(STREAM_INTERRUPTED_SUFFIX.trim())) {
+    return text;
+  }
+  return `${text}${STREAM_INTERRUPTED_SUFFIX}`;
 }
 
 /**
@@ -645,8 +672,13 @@ function shouldStartNewQuestion(result: PracticeMessageResult): boolean {
 function restorePracticeSnapshot(state: PracticeState): void {
   const snapshot = readPracticeSnapshot();
   if (snapshot && snapshot.questionCode === state.currentQuestion?.code && snapshot.messages.length > 0) {
-    messages.value = snapshot.messages;
-    messageId = Math.max(...snapshot.messages.map((item) => item.id), 0) + 1;
+    const hasInterruptedStreaming = snapshot.messages.some((item) => item.streaming);
+    messages.value = snapshot.messages.map(normalizeRestoredMessage);
+    messageId = Math.max(...messages.value.map((item) => item.id), 0) + 1;
+    restoreMessagePanelScroll(snapshot.scrollTop, snapshot.pinnedToBottom ?? true);
+    if (hasInterruptedStreaming) {
+      savePracticeSnapshot();
+    }
     return;
   }
 
@@ -654,6 +686,24 @@ function restorePracticeSnapshot(state: PracticeState): void {
   const text = state.phase === 'DISCUSSING' ? '您可以与我探讨细节、重新作答或者开始下一题。' : '上次还有一道题未完成，请继续作答。';
   messages.value = [buildAssistantMessage(text, state.currentQuestion, null)];
   savePracticeSnapshot();
+  scrollToBottom(true);
+}
+
+/**
+ * 恢复快照中的消息状态。
+ */
+function normalizeRestoredMessage(message: ChatMessage): ChatMessage {
+  if (!message.streaming) {
+    return message;
+  }
+
+  // 页面刷新后无法继续旧的浏览器流，保留已落盘文本并明确标记中断。
+  return {
+    ...message,
+    text: buildInterruptedStreamingText(message.text),
+    streaming: false,
+    loadingText: undefined,
+  };
 }
 
 /**
@@ -683,6 +733,8 @@ function savePracticeSnapshot(): void {
     phase: phase.value,
     questionCode: currentQuestion.value.code,
     messages: messages.value,
+    scrollTop: resolveMessagePanelScrollTop(),
+    pinnedToBottom: isMessagePanelPinnedToBottom.value,
     updatedAt: Date.now(),
   };
 
@@ -754,32 +806,131 @@ function syncAuthGrowth(nextGrowth: GrowthInfo): void {
 /**
  * 滚动到消息底部。
  */
-function scrollToBottom(): void {
+function scrollToBottom(force = true): void {
   nextTick(() => {
-    scrollMessagePanelToBottom();
+    scrollMessagePanelToBottom(force);
   });
 }
 
 /**
  * 合并滚动请求，避免流式逐字渲染时反复触发布局计算。
  */
-function scheduleScrollToBottom(): void {
+function scheduleScrollToBottom(force = false): void {
+  if (!force && !shouldAutoScrollMessagePanel()) {
+    return;
+  }
   if (scrollAnimationFrame !== undefined) {
     return;
   }
   scrollAnimationFrame = window.requestAnimationFrame(() => {
     scrollAnimationFrame = undefined;
-    scrollMessagePanelToBottom();
+    scrollMessagePanelToBottom(force);
   });
 }
 
 /**
  * 将消息面板滚动到最新消息位置。
  */
-function scrollMessagePanelToBottom(): void {
-  if (messagePanelRef.value) {
-    messagePanelRef.value.scrollTop = messagePanelRef.value.scrollHeight;
+function scrollMessagePanelToBottom(force = false): void {
+  const panel = messagePanelRef.value;
+  if (!panel || (!force && !shouldAutoScrollMessagePanel())) {
+    return;
   }
+  panel.scrollTop = panel.scrollHeight;
+  rememberedMessagePanelScrollTop = panel.scrollTop;
+  isMessagePanelPinnedToBottom.value = true;
+}
+
+/**
+ * 处理用户主动滚动消息面板。
+ */
+function handleMessagePanelScroll(): void {
+  if (isRestoringMessagePanelScroll) {
+    return;
+  }
+  const panel = messagePanelRef.value;
+  if (!panel) {
+    return;
+  }
+
+  // 用户离开底部后暂停自动跟随，避免流式输出抢夺滚轮控制权。
+  rememberedMessagePanelScrollTop = panel.scrollTop;
+  isMessagePanelPinnedToBottom.value = isMessagePanelNearBottom(panel);
+  schedulePracticeSnapshotSave();
+}
+
+/**
+ * 判断消息面板是否应该继续自动贴底。
+ */
+function shouldAutoScrollMessagePanel(): boolean {
+  const panel = messagePanelRef.value;
+  return !panel || isMessagePanelPinnedToBottom.value || isMessagePanelNearBottom(panel);
+}
+
+/**
+ * 判断消息面板当前是否接近底部。
+ */
+function isMessagePanelNearBottom(panel: HTMLElement): boolean {
+  return panel.scrollHeight - panel.scrollTop - panel.clientHeight <= MESSAGE_PANEL_BOTTOM_THRESHOLD_PX;
+}
+
+/**
+ * 读取当前消息面板滚动位置。
+ */
+function resolveMessagePanelScrollTop(): number {
+  return rememberedMessagePanelScrollTop;
+}
+
+/**
+ * 恢复消息面板滚动位置。
+ */
+function restoreMessagePanelScroll(scrollTop = rememberedMessagePanelScrollTop, pinnedToBottom = isMessagePanelPinnedToBottom.value): void {
+  rememberedMessagePanelScrollTop = scrollTop;
+  isMessagePanelPinnedToBottom.value = pinnedToBottom;
+  isRestoringMessagePanelScroll = true;
+  nextTick(() => {
+    window.requestAnimationFrame(() => {
+      const panel = messagePanelRef.value;
+      if (!panel) {
+        isRestoringMessagePanelScroll = false;
+        return;
+      }
+      if (pinnedToBottom) {
+        scrollMessagePanelToBottom(true);
+        isRestoringMessagePanelScroll = false;
+        return;
+      }
+
+      // 历史位置超过当前内容高度时做兜底裁剪，避免恢复后出现空白区域。
+      panel.scrollTop = Math.min(scrollTop, Math.max(panel.scrollHeight - panel.clientHeight, 0));
+      rememberedMessagePanelScrollTop = panel.scrollTop;
+      isMessagePanelPinnedToBottom.value = isMessagePanelNearBottom(panel);
+      isRestoringMessagePanelScroll = false;
+    });
+  });
+}
+
+/**
+ * 记住当前消息面板滚动状态。
+ */
+function rememberMessagePanelScrollState(): void {
+  const panel = messagePanelRef.value;
+  if (!panel || isRestoringMessagePanelScroll) {
+    return;
+  }
+
+  // 路由离开前主动读取真实滚动位置，避免组件停用后被默认 0 覆盖。
+  rememberedMessagePanelScrollTop = panel.scrollTop;
+  isMessagePanelPinnedToBottom.value = isMessagePanelNearBottom(panel);
+}
+
+/**
+ * 保存离开页面前的滚动状态。
+ */
+function saveMessagePanelStateBeforeLeave(): void {
+  rememberMessagePanelScrollState();
+  flushScheduledSnapshotSave();
+  savePracticeSnapshot();
 }
 
 /**
@@ -917,13 +1068,31 @@ watch(
   (isLoggedIn) => {
     if (isLoggedIn) {
       initializePage();
+      return;
     }
+    clearStreamTypewriter();
+    initializeGuestPage().catch((error: unknown) => {
+      ElMessage.error(error instanceof Error ? error.message : '刷题状态加载失败');
+    });
   },
 );
 
 onMounted(initializePage);
 
+onActivated(() => {
+  restoreMessagePanelScroll();
+});
+
+onBeforeRouteLeave(() => {
+  saveMessagePanelStateBeforeLeave();
+});
+
+onDeactivated(() => {
+  savePracticeSnapshot();
+});
+
 onBeforeUnmount(() => {
+  saveMessagePanelStateBeforeLeave();
   clearStreamTypewriter();
   if (scrollAnimationFrame !== undefined) {
     window.cancelAnimationFrame(scrollAnimationFrame);
