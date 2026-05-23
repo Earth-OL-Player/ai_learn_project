@@ -12,6 +12,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
@@ -22,6 +24,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * 认证过滤器。
  */
 @Component
+@Order(Ordered.HIGHEST_PRECEDENCE + 20)
 public class AuthFilter extends OncePerRequestFilter {
 
     /** 自动续期 token 响应头。 */

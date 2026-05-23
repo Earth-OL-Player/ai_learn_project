@@ -1,4 +1,3 @@
-import logging
 import time
 from collections.abc import Awaitable, Callable
 
@@ -9,15 +8,10 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import Response
 
 from app.api.practice import router as practice_router
+from app.config.log_config import configure_logger
 
 app = FastAPI(title="AI Learn Service", version="0.2.0")
-logger = logging.getLogger("ai_service.http")
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
-    logger.addHandler(stream_handler)
-logger.propagate = False
+logger = configure_logger("ai_service.http")
 
 
 @app.middleware("http")

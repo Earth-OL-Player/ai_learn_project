@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     """AI 服务配置。"""
 
     ai_service_token: str = AI_SERVICE_TOKEN_PLACEHOLDER
+    ai_service_log_level: str = "INFO"
     ai_grading_base_url: str = ""
     ai_grading_api_key: str = AI_GRADING_API_KEY_PLACEHOLDER
     ai_grading_model: str = LOCAL_RULE_MODEL

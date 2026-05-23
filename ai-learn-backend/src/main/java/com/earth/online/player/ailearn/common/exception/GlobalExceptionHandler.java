@@ -116,6 +116,9 @@ public class GlobalExceptionHandler {
         if (ResponseCode.AUTH_UNAUTHORIZED.code().equals(exception.getCode())) {
             return HttpStatus.UNAUTHORIZED;
         }
+        if (ResponseCode.RATE_LIMITED.code().equals(exception.getCode())) {
+            return HttpStatus.TOO_MANY_REQUESTS;
+        }
         return HttpStatus.OK;
     }
 }

@@ -1,16 +1,9 @@
-import logging
-
 from fastapi import Header, HTTPException, status
 
+from app.config.log_config import configure_logger
 from app.config.settings import settings
 
-logger = logging.getLogger("ai_service.auth")
-logger.setLevel(logging.INFO)
-if not logger.handlers:
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s"))
-    logger.addHandler(stream_handler)
-logger.propagate = False
+logger = configure_logger("ai_service.auth")
 
 
 def verify_internal_token(x_internal_token: str | None = Header(default=None)) -> None:

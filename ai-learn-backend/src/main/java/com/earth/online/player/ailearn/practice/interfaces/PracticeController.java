@@ -1,23 +1,34 @@
 package com.earth.online.player.ailearn.practice.interfaces;
 
+import com.earth.online.player.ailearn.common.config.AiStreamExecutorConfig;
 import com.earth.online.player.ailearn.common.exception.ClientStreamClosedException;
+import com.earth.online.player.ailearn.common.ratelimit.InMemoryRateLimitService;
+import com.earth.online.player.ailearn.common.ratelimit.RateLimitIdentityResolver;
+import com.earth.online.player.ailearn.common.ratelimit.RateLimitLease;
+import com.earth.online.player.ailearn.common.ratelimit.RateLimitProperties;
 import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.security.AuthContext;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.trace.TraceContext;
 import com.earth.online.player.ailearn.common.util.ClientDisconnectUtils;
 import com.earth.online.player.ailearn.practice.application.PracticeService;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -35,20 +46,38 @@ public class PracticeController {
     private static final Logger LOGGER = LoggerFactory.getLogger(PracticeController.class);
     private static final int SSE_TIMEOUT_MILLIS = 120000;
     private static final int STREAM_CHUNK_SIZE = 8;
-    private static final int STREAM_CHUNK_INTERVAL_MILLIS = 20;
+    private static final String AI_CONCURRENT_RULE = "practice-ai-concurrent";
 
     private final PracticeService practiceService;
     private final ObjectMapper objectMapper;
+    private final ThreadPoolTaskExecutor aiStreamTaskExecutor;
+    private final RateLimitProperties rateLimitProperties;
+    private final InMemoryRateLimitService rateLimitService;
+    private final RateLimitIdentityResolver identityResolver;
 
     /**
      * 创建 AI 智能刷题接口。
      *
      * @param practiceService 刷题应用服务
      * @param objectMapper JSON 序列化器
+     * @param aiStreamTaskExecutor AI 流式请求线程池
+     * @param rateLimitProperties 限流配置
+     * @param rateLimitService 内存限流服务
+     * @param identityResolver 限流身份解析器
      */
-    public PracticeController(PracticeService practiceService, ObjectMapper objectMapper) {
+    public PracticeController(
+            PracticeService practiceService,
+            ObjectMapper objectMapper,
+            @Qualifier(AiStreamExecutorConfig.AI_STREAM_EXECUTOR_BEAN_NAME) ThreadPoolTaskExecutor aiStreamTaskExecutor,
+            RateLimitProperties rateLimitProperties,
+            InMemoryRateLimitService rateLimitService,
+            RateLimitIdentityResolver identityResolver) {
         this.practiceService = practiceService;
         this.objectMapper = objectMapper;
+        this.aiStreamTaskExecutor = aiStreamTaskExecutor;
+        this.rateLimitProperties = rateLimitProperties;
+        this.rateLimitService = rateLimitService;
+        this.identityResolver = identityResolver;
     }
 
     /**
@@ -100,11 +129,30 @@ public class PracticeController {
      */
     @PostMapping(value = "/messages/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
     public ResponseEntity<SseEmitter> handleMessageStream(@RequestBody PracticeMessageRequest request) {
-        SseEmitter emitter = new SseEmitter((long) SSE_TIMEOUT_MILLIS);
         AuthenticatedUser authenticatedUser = AuthContext.getUser();
+        RateLimitLease aiLease = acquireAiConcurrency(authenticatedUser);
+        SseEmitter emitter = new SseEmitter((long) SSE_TIMEOUT_MILLIS);
+        String traceId = TraceContext.getTraceId();
+        AtomicBoolean streamClosed = new AtomicBoolean(false);
+        AtomicReference<Future<?>> streamTaskReference = new AtomicReference<>();
 
-        // 异步线程中恢复认证上下文，保证复用原有业务服务和权限校验。
-        CompletableFuture.runAsync(() -> emitMessageStream(request, emitter, authenticatedUser));
+        // 先注册生命周期，保证客户端断开时可以取消已经提交的 AI 流式任务。
+        registerEmitterLifecycle(emitter, streamClosed, streamTaskReference, aiLease);
+        try {
+            Future<?> streamTask = aiStreamTaskExecutor.submit(
+                    () -> emitMessageStream(request, emitter, authenticatedUser, traceId, streamClosed, aiLease)
+            );
+            streamTaskReference.set(streamTask);
+            if (streamClosed.get()) {
+                streamTask.cancel(true);
+                aiLease.close();
+            }
+        } catch (RejectedExecutionException exception) {
+            aiLease.close();
+            streamClosed.set(true);
+            LOGGER.warn("AI 流式请求线程池已满，拒绝本次 SSE 请求", exception);
+            emitError(emitter, "当前 AI 流式请求较多，请稍后再试");
+        }
         return ResponseEntity.ok()
                 .header(HttpHeaders.CACHE_CONTROL, "no-cache, no-transform")
                 .header("X-Accel-Buffering", "no")
@@ -118,15 +166,23 @@ public class PracticeController {
      * @param request 聊天请求
      * @param emitter SSE 发射器
      * @param authenticatedUser 当前用户
+     * @param traceId 请求链路标识
+     * @param streamClosed 流关闭标记
+     * @param aiLease AI 并发占用租约
      */
-    private void emitMessageStream(PracticeMessageRequest request, SseEmitter emitter, AuthenticatedUser authenticatedUser) {
+    private void emitMessageStream(
+            PracticeMessageRequest request,
+            SseEmitter emitter,
+            AuthenticatedUser authenticatedUser,
+            String traceId,
+            AtomicBoolean streamClosed,
+            RateLimitLease aiLease) {
         AtomicBoolean chunkSent = new AtomicBoolean(false);
-        AtomicBoolean streamClosed = new AtomicBoolean(false);
         AtomicInteger chunkCount = new AtomicInteger(0);
         long startMillis = System.currentTimeMillis();
-        registerEmitterLifecycle(emitter, streamClosed);
         try {
             AuthContext.setUser(authenticatedUser);
+            TraceContext.setTraceId(traceId);
             sendEvent(emitter, SseEmitter.event().comment("stream-open"), streamClosed);
             PracticeMessageResponse result = practiceService.handleMessageStream(request, chunk -> {
                 emitChunk(emitter, chunk, chunkCount.incrementAndGet(), startMillis, streamClosed);
@@ -136,6 +192,7 @@ public class PracticeController {
                 emitTextChunks(emitter, result.message(), streamClosed);
             }
             sendEvent(emitter, SseEmitter.event().name("result").data(toJson(result)), streamClosed);
+            streamClosed.set(true);
             emitter.complete();
         } catch (ClientStreamClosedException exception) {
             LOGGER.info("SSE 客户端连接已断开，停止本次流式输出：{}", exception.getMessage());
@@ -143,8 +200,38 @@ public class PracticeController {
         } catch (IOException | RuntimeException exception) {
             emitError(emitter, exception.getMessage());
         } finally {
+            aiLease.close();
             AuthContext.clear();
+            TraceContext.clear();
         }
+    }
+
+    /**
+     * 获取单用户 AI 并发限流租约。
+     *
+     * @param authenticatedUser 当前用户
+     * @return AI 并发租约
+     */
+    private RateLimitLease acquireAiConcurrency(AuthenticatedUser authenticatedUser) {
+        if (!rateLimitProperties.isEnabled()) {
+            return skippedAiConcurrencyLease();
+        }
+        String userKey = identityResolver.resolveUserKey(authenticatedUser);
+        if (!StringUtils.hasText(userKey)) {
+            return skippedAiConcurrencyLease();
+        }
+
+        // AI 评分和讨论都走同一个流式入口，统一限制单用户并发请求数量。
+        return rateLimitService.acquireConcurrency(AI_CONCURRENT_RULE, userKey, rateLimitProperties.getAiConcurrentLimit());
+    }
+
+    /**
+     * 创建未占用并发额度的空租约。
+     *
+     * @return 空租约
+     */
+    private RateLimitLease skippedAiConcurrencyLease() {
+        return new RateLimitLease(() -> LOGGER.trace("AI 并发限流未占用，无需释放"));
     }
 
     /**
@@ -152,16 +239,43 @@ public class PracticeController {
      *
      * @param emitter SSE 发射器
      * @param streamClosed 流关闭标记
+     * @param streamTaskReference 流式任务引用
+     * @param aiLease AI 并发占用租约
      */
-    private void registerEmitterLifecycle(SseEmitter emitter, AtomicBoolean streamClosed) {
-        emitter.onCompletion(() -> streamClosed.set(true));
+    private void registerEmitterLifecycle(
+            SseEmitter emitter,
+            AtomicBoolean streamClosed,
+            AtomicReference<Future<?>> streamTaskReference,
+            RateLimitLease aiLease) {
+        emitter.onCompletion(() -> closeStream(streamClosed, streamTaskReference, aiLease));
         emitter.onTimeout(() -> {
-            streamClosed.set(true);
+            closeStream(streamClosed, streamTaskReference, aiLease);
             LOGGER.debug("SSE 连接超时，已标记流式输出结束");
         });
 
         // 客户端关闭浏览器时也会进入错误回调，此时不打印 ERROR 堆栈。
-        emitter.onError(exception -> handleEmitterError(exception, streamClosed));
+        emitter.onError(exception -> handleEmitterError(exception, streamClosed, streamTaskReference, aiLease));
+    }
+
+    /**
+     * 标记流式连接关闭并取消异步任务。
+     *
+     * @param streamClosed 流关闭标记
+     * @param streamTaskReference 流式任务引用
+     * @param aiLease AI 并发占用租约
+     */
+    private void closeStream(
+            AtomicBoolean streamClosed,
+            AtomicReference<Future<?>> streamTaskReference,
+            RateLimitLease aiLease) {
+        if (!streamClosed.compareAndSet(false, true)) {
+            return;
+        }
+        Future<?> streamTask = streamTaskReference.get();
+        if (streamTask != null && !streamTask.isDone()) {
+            streamTask.cancel(true);
+        }
+        aiLease.close();
     }
 
     /**
@@ -169,9 +283,15 @@ public class PracticeController {
      *
      * @param exception 生命周期异常
      * @param streamClosed 流关闭标记
+     * @param streamTaskReference 流式任务引用
+     * @param aiLease AI 并发占用租约
      */
-    private void handleEmitterError(Throwable exception, AtomicBoolean streamClosed) {
-        streamClosed.set(true);
+    private void handleEmitterError(
+            Throwable exception,
+            AtomicBoolean streamClosed,
+            AtomicReference<Future<?>> streamTaskReference,
+            RateLimitLease aiLease) {
+        closeStream(streamClosed, streamTaskReference, aiLease);
         if (ClientDisconnectUtils.isClientDisconnected(exception)) {
             LOGGER.debug("SSE 客户端连接已断开，生命周期错误已忽略：{}", exception.getMessage());
             return;
@@ -194,9 +314,6 @@ public class PracticeController {
         for (int index = 0; index < safeMessage.length(); index += STREAM_CHUNK_SIZE) {
             int endIndex = Math.min(index + STREAM_CHUNK_SIZE, safeMessage.length());
             sendEvent(emitter, SseEmitter.event().name("message").data(safeMessage.substring(index, endIndex)), streamClosed);
-            if (!pauseBetweenChunks()) {
-                break;
-            }
         }
     }
 
@@ -281,21 +398,6 @@ public class PracticeController {
                 chunk == null ? 0 : chunk.length(),
                 System.currentTimeMillis() - startMillis
         );
-    }
-
-    /**
-     * 控制前端可感知的流式输出节奏。
-     *
-     * @return 是否继续发送
-     */
-    private boolean pauseBetweenChunks() {
-        try {
-            Thread.sleep(STREAM_CHUNK_INTERVAL_MILLIS);
-            return true;
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            return false;
-        }
     }
 
     /**

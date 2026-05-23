@@ -32,6 +32,33 @@ app:
     base-url: ${AI_SERVICE_BASE_URL:http://127.0.0.1:8000}
     token: ${AI_SERVICE_TOKEN:AI_SERVICE_TOKEN占位符}
     timeout-seconds: ${AI_SERVICE_TIMEOUT_SECONDS:15}
+    stream-executor:
+      core-size: ${AI_STREAM_EXECUTOR_CORE_SIZE:4}
+      max-size: ${AI_STREAM_EXECUTOR_MAX_SIZE:8}
+      queue-capacity: ${AI_STREAM_EXECUTOR_QUEUE_CAPACITY:32}
+      keep-alive-seconds: ${AI_STREAM_EXECUTOR_KEEP_ALIVE_SECONDS:60}
+      await-termination-seconds: ${AI_STREAM_EXECUTOR_AWAIT_TERMINATION_SECONDS:5}
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    login-limit: ${RATE_LIMIT_LOGIN_LIMIT:10}
+    login-window-seconds: ${RATE_LIMIT_LOGIN_WINDOW_SECONDS:60}
+    register-limit: ${RATE_LIMIT_REGISTER_LIMIT:3}
+    register-window-seconds: ${RATE_LIMIT_REGISTER_WINDOW_SECONDS:3600}
+    like-limit: ${RATE_LIMIT_LIKE_LIMIT:30}
+    like-window-seconds: ${RATE_LIMIT_LIKE_WINDOW_SECONDS:60}
+    comment-limit: ${RATE_LIMIT_COMMENT_LIMIT:10}
+    comment-window-seconds: ${RATE_LIMIT_COMMENT_WINDOW_SECONDS:60}
+    csv-import-limit: ${RATE_LIMIT_CSV_IMPORT_LIMIT:3}
+    csv-import-window-seconds: ${RATE_LIMIT_CSV_IMPORT_WINDOW_SECONDS:600}
+    ai-request-limit: ${RATE_LIMIT_AI_REQUEST_LIMIT:8}
+    ai-request-window-seconds: ${RATE_LIMIT_AI_REQUEST_WINDOW_SECONDS:60}
+    ai-concurrent-limit: ${RATE_LIMIT_AI_CONCURRENT_LIMIT:1}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics
 
 logging:
   level:

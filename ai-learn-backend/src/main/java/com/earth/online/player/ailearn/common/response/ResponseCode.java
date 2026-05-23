@@ -20,6 +20,9 @@ public enum ResponseCode {
     /** 权限不足。 */
     AUTH_FORBIDDEN("AUTH_FORBIDDEN"),
 
+    /** 请求过于频繁。 */
+    RATE_LIMITED("RATE_LIMITED"),
+
     /** 资源冲突，例如用户名已存在。 */
     RESOURCE_CONFLICT("RESOURCE_CONFLICT"),
 

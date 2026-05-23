@@ -1,7 +1,7 @@
 # AI模型服务配置说明
 
-版本：v1.7
-日期：2026-05-22
+版本：v1.9
+日期：2026-05-23
 适用工程：`ai-service`、`ai-learn-backend`  
 适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
 
@@ -24,6 +24,7 @@ AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评�
 按根目录 `README.md` 启动 `ai-service`。未配置真实模型服务时，保留如下占位配置即可：
 
 ```dotenv
+AI_SERVICE_LOG_LEVEL=INFO
 AI_GRADING_BASE_URL=https://模型服务地址占位符/v1
 AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
 AI_GRADING_MODEL=LOCAL_RULE
@@ -37,9 +38,13 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 | 配置项 | 示例占位符 | 说明 |
 | --- | --- | --- |
 | `AI_SERVICE_TOKEN` | `AI_SERVICE_TOKEN本地占位符` | 后端调用 AI 服务内部接口的鉴权 Token |
+| `AI_SERVICE_LOG_LEVEL` | `INFO` | AI 服务日志级别；生产默认 `INFO`，本地开发排查大模型完整入参和返回时可临时改为 `DEBUG` |
 | `AI_SERVICE_ENABLED` | `true` | 后端是否调用 AI 服务；关闭时使用后端本地规则兜底 |
 | `AI_SERVICE_BASE_URL` | `http://127.0.0.1:8000` | 后端访问 AI 服务的基础地址 |
 | `AI_SERVICE_TIMEOUT_SECONDS` | `15` | 后端调用 AI 服务超时时间 |
+| `RATE_LIMIT_AI_REQUEST_LIMIT` | `8` | Java 后端 AI 评分/讨论流式入口在窗口内允许的请求次数 |
+| `RATE_LIMIT_AI_REQUEST_WINDOW_SECONDS` | `60` | Java 后端 AI 评分/讨论流式入口频率限流窗口秒数 |
+| `RATE_LIMIT_AI_CONCURRENT_LIMIT` | `1` | Java 后端单用户 AI 评分/讨论流式入口并发上限 |
 | `AI_GRADING_BASE_URL` | `https://模型服务地址占位符/v1` | 可选真实模型服务基础地址，OpenAI 兼容服务通常填写到 `/v1` |
 | `AI_GRADING_API_KEY` | `AI_GRADING_API_KEY占位符` | 可选真实模型服务 Key |
 | `AI_GRADING_MODEL` | `LOCAL_RULE` | 本地规则或真实模型名 |
@@ -53,6 +58,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 
 ```dotenv
 AI_SERVICE_TOKEN=AI_SERVICE_TOKEN占位符
+AI_SERVICE_LOG_LEVEL=INFO
 AI_GRADING_BASE_URL=https://模型服务地址占位符/v1
 AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
 AI_GRADING_MODEL=LOCAL_RULE
@@ -75,7 +81,9 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 
 - 真实模型 Key、生产模型地址和供应商账号信息不得提交仓库。
 - 生产环境应配置超时、限流、重试、成本监控和日志脱敏。
-- 不得把用户完整答案和聊天记录写入日志。
+- 生产环境保持 `AI_SERVICE_LOG_LEVEL=INFO` 或更高级别，不得把用户完整答案、题目、参考答案、聊天记录和模型完整回复写入常规日志。
+- 仅允许本地开发排查时临时设置 `AI_SERVICE_LOG_LEVEL=DEBUG`，排查完成后需要恢复为 `INFO`。
+- Java 后端已对 AI 评分/讨论入口增加单机内存级频率和并发限流；生产多实例部署时需要迁移到 Redis、网关或其他集中式限流组件，避免各实例额度互不感知。
 - 评分结构化输出通过 LangChain `with_structured_output(..., method="json_mode")` 解析，避免 DeepSeek reasoning 模型触发工具调用 `tool_choice` 兼容问题；仍需要保留兜底，避免模型异常输出影响刷题主流程。
 - DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
 - Java 后端内部调用路径、Header、响应码和内容类型集中在 `AiServiceConstants`，新增 AI 内部接口时需同步维护该常量类与本文档。

@@ -1,10 +1,7 @@
 import { defineConfig, type ServerOptions } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
-// 允许 cpolar 免费隧道域名访问本地 Vite 开发服务。
-const CPOLAR_ALLOWED_HOST = '.cpolar.top';
-
-// 后端服务只在本机访问，由 Vite 代理转发给朋友的公网请求。
+// 后端服务只在本机访问，由 Vite 代理转发本地开发请求。
 const LOCAL_BACKEND_TARGET = 'http://localhost:8080';
 
 /**
@@ -28,19 +25,13 @@ function resolveManualChunk(id: string): string | undefined {
 /**
  * 创建开发服务器配置。
  *
- * @param mode Vite 启动模式
  * @return 开发服务器配置
  */
-function createServerOptions(mode: string): ServerOptions {
-  const publicTunnelMode = mode === 'public';
+function createServerOptions(): ServerOptions {
   return {
     port: 5173,
-    // 公网隧道可能会异常关闭 HMR WebSocket，关闭热更新可避免 1006 噪音日志。
-    hmr: publicTunnelMode ? false : undefined,
-    // 仅放行 cpolar 隧道域名，避免直接关闭 Vite 的 Host 安全校验。
-    allowedHosts: [CPOLAR_ALLOWED_HOST],
     proxy: {
-      // 统一把公网访问中的 /api 请求代理到本机后端，避免浏览器请求朋友电脑的 localhost。
+      // 统一把本地开发中的 /api 请求代理到本机后端，便于沿用同源调用路径。
       '/api': {
         target: LOCAL_BACKEND_TARGET,
         changeOrigin: true,
@@ -50,7 +41,7 @@ function createServerOptions(mode: string): ServerOptions {
 }
 
 // Vite 配置保持轻量，方便本地快速启动。
-export default defineConfig(({ mode }) => ({
+export default defineConfig(() => ({
   plugins: [vue()],
   cacheDir: '.vite-cache',
   build: {
@@ -68,5 +59,5 @@ export default defineConfig(({ mode }) => ({
       },
     },
   },
-  server: createServerOptions(mode),
+  server: createServerOptions(),
 }));

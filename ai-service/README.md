@@ -14,10 +14,11 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install -r requirements.txt
 $env:AI_SERVICE_TOKEN="AI_SERVICE_TOKEN本地占位符"
+$env:AI_SERVICE_LOG_LEVEL="INFO"
 uvicorn app.main:app --host 0.0.0.0 --port 8000
 ```
 
-说明：真实模型 Key 和内部 Token 只允许通过本地环境变量或私有配置注入，不得提交仓库。
+说明：真实模型 Key 和内部 Token 只允许通过本地环境变量或私有配置注入，不得提交仓库。生产默认使用 `AI_SERVICE_LOG_LEVEL=INFO`，如本地开发需要查看大模型完整入参和返回，可临时设置为 `DEBUG`。
 
 
 ## Qdrant 当前状态

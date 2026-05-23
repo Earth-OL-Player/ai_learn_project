@@ -52,6 +52,22 @@ AI_SERVICE_ENABLED="true"
 AI_SERVICE_BASE_URL="http://127.0.0.1:8000"
 AI_SERVICE_TOKEN="AI_SERVICE_TOKEN本地占位符"
 AI_SERVICE_TIMEOUT_SECONDS="15"
+
+# 内存级限流，生产默认开启；后续如迁移 Redis，需要同步更新中间件文档。
+RATE_LIMIT_ENABLED="true"
+RATE_LIMIT_LOGIN_LIMIT="10"
+RATE_LIMIT_LOGIN_WINDOW_SECONDS="60"
+RATE_LIMIT_REGISTER_LIMIT="3"
+RATE_LIMIT_REGISTER_WINDOW_SECONDS="3600"
+RATE_LIMIT_LIKE_LIMIT="30"
+RATE_LIMIT_LIKE_WINDOW_SECONDS="60"
+RATE_LIMIT_COMMENT_LIMIT="10"
+RATE_LIMIT_COMMENT_WINDOW_SECONDS="60"
+RATE_LIMIT_CSV_IMPORT_LIMIT="3"
+RATE_LIMIT_CSV_IMPORT_WINDOW_SECONDS="600"
+RATE_LIMIT_AI_REQUEST_LIMIT="8"
+RATE_LIMIT_AI_REQUEST_WINDOW_SECONDS="60"
+RATE_LIMIT_AI_CONCURRENT_LIMIT="1"
 ```
 
 PowerShell 临时加载 `.env` 示例：
@@ -64,7 +80,7 @@ Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Obj
 }
 ```
 
-说明：Flyway 默认启用，后端启动后会自动执行 `src/main/resources/db/migration` 下全部数据库迁移，初始化用户、互动、题库、刷题会话、成长徽章、系统设置、JWT 失效记录和超级管理员标识相关表结构。`JWT_SECRET` 必须配置为至少 32 字节的高强度随机值，不能直接使用占位符，否则后端会拒绝启动。
+说明：Flyway 默认启用，后端启动后会自动执行 `src/main/resources/db/migration` 下全部数据库迁移，初始化用户、互动、题库、刷题会话、成长徽章、系统设置、JWT 失效记录和超级管理员标识相关表结构。`JWT_SECRET` 必须配置为至少 32 字节的高强度随机值，不能直接使用占位符，否则后端会拒绝启动。当前限流为单机内存级过渡方案，登录和注册按 IP 限流，评论、点赞、CSV 导入和 AI 流式请求同时按 IP 与用户限流，AI 流式请求额外限制单用户并发。
 
 ### 3. 准备前端配置
 
