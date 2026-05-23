@@ -12,7 +12,6 @@ import java.util.List;
  * @param problems 问题点
  * @param referenceAnswer 参考答案
  * @param improvementAdvice 优化建议
- * @param reviewKnowledgePoints 建议复习点
  * @param earnedExperience 本次获得经验
  * @param previousBestScore 评分前历史最高分
  * @param previousLastScore 评分前最近一次得分
@@ -28,7 +27,6 @@ public record PracticeGradingResponse(
         List<String> problems,
         String referenceAnswer,
         String improvementAdvice,
-        List<String> reviewKnowledgePoints,
         Integer earnedExperience,
         Integer previousBestScore,
         Integer previousLastScore,

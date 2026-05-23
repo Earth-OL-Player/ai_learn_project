@@ -25,7 +25,7 @@ mybatis:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:请在本地环境变量中配置至少32位JWT密钥占位符}
+    secret: ${JWT_SECRET:请在本地环境变量中配置至少32字节JWT密钥占位符}
     expires-in-seconds: ${JWT_EXPIRES_IN_SECONDS:7200}
   ai-service:
     enabled: ${AI_SERVICE_ENABLED:false}

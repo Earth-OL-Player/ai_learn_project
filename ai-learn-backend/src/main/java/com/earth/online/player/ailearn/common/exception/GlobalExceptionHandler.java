@@ -30,9 +30,9 @@ public class GlobalExceptionHandler {
      * @return 统一失败响应
      */
     @ExceptionHandler(BusinessException.class)
-    @ResponseStatus(HttpStatus.OK)
-    public ApiResponse<Void> handleBusinessException(BusinessException exception) {
-        return ApiResponse.failure(exception.getCode(), exception.getMessage());
+    public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
+        HttpStatus status = resolveBusinessHttpStatus(exception);
+        return ResponseEntity.status(status).body(ApiResponse.failure(exception.getCode(), exception.getMessage()));
     }
 
     /**
@@ -104,5 +104,18 @@ public class GlobalExceptionHandler {
         return exception.getBindingResult().getFieldErrors().stream()
                 .map(error -> error.getDefaultMessage() == null ? "参数不合法" : error.getDefaultMessage())
                 .collect(Collectors.joining("；"));
+    }
+
+    /**
+     * 解析业务异常对应的 HTTP 状态。
+     *
+     * @param exception 业务异常
+     * @return HTTP 状态
+     */
+    private HttpStatus resolveBusinessHttpStatus(BusinessException exception) {
+        if (ResponseCode.AUTH_UNAUTHORIZED.code().equals(exception.getCode())) {
+            return HttpStatus.UNAUTHORIZED;
+        }
+        return HttpStatus.OK;
     }
 }

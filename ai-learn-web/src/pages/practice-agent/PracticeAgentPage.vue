@@ -65,7 +65,7 @@
               <span v-else class="streaming-placeholder">{{ streamingPlaceholderText(item) }}</span>
               <span class="stream-cursor" aria-hidden="true"></span>
             </p>
-            <div v-else-if="item.text" class="message-text message-markdown" v-html="renderMessageText(item)"></div>
+            <div v-else-if="item.text" class="message-text message-markdown" v-html="renderSafeMessageText(item)"></div>
             <div v-if="item.question" class="question-bubble-card">
               <div class="question-meta-row">
                 <el-tag effect="plain">{{ item.question.questionType }}</el-tag>
@@ -177,7 +177,6 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import MarkdownIt from 'markdown-it';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
 import { computed, nextTick, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref, triggerRef, watch } from 'vue';
 import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router';
@@ -200,6 +199,7 @@ import {
   type SmoothStreamChunkEvent,
   type SmoothStreamRenderEvent,
 } from '../../utils/smoothStreamTypewriter';
+import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 interface ChatMessage {
   id: number;
@@ -229,7 +229,7 @@ const STREAM_INTERRUPTED_SUFFIX = '\n\n（本次回复已中断，已保留当�
 const STREAM_INTERRUPTED_FALLBACK_TEXT = '本次回复中断，暂未收到可展示内容，请稍后重试。';
 const MARKDOWN_CODE_FENCE_PATTERN = /^\s*(```|~~~)/;
 const MARKDOWN_HEADING_WITHOUT_SPACE_PATTERN = /^(#{1,6})([^\s#].*)$/;
-const markdownParser = new MarkdownIt({ html: false, breaks: true, linkify: false });
+const messageMarkdownRenderer = createSafeMarkdownRenderer({ breaks: true, linkify: false });
 const loading = ref(false);
 const inputText = ref('');
 const phase = ref<PracticePhase>('QUESTIONING');
@@ -989,10 +989,10 @@ function gradingAdviceText(grading: PracticeGrading): string {
 }
 
 /**
- * 渲染聊天 Markdown 文本。
+ * 安全渲染聊天 Markdown 文本。
  */
-function renderMessageText(item: ChatMessage): string {
-  return markdownParser.render(normalizeMessageMarkdown(item.text));
+function renderSafeMessageText(item: ChatMessage): string {
+  return messageMarkdownRenderer.render(normalizeMessageMarkdown(item.text));
 }
 
 /**

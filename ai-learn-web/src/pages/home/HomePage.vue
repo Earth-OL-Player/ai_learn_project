@@ -31,16 +31,16 @@
       </nav>
 
       <article class="markdown-card">
-        <div class="markdown-body" v-html="homeHtml"></div>
+        <div class="markdown-body" v-html="safeHomeHtml"></div>
       </article>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import MarkdownIt from 'markdown-it';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import homeMarkdown from '../../content/learning-roadmap/首页.md?raw';
+import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 interface TocItem {
   id: string;
@@ -51,39 +51,26 @@ interface TocItem {
 let tocObserver: IntersectionObserver | null = null;
 const activeTocId = ref('');
 const isTocCollapsed = ref(false);
+let headingIdGenerator = createHeadingIdGenerator();
 
-const markdown = new MarkdownIt({
-  html: true,
+const homeMarkdownRenderer = createSafeMarkdownRenderer({
   linkify: true,
   breaks: false,
+  configureMarkdown(markdown) {
+    const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
+
+    // 本地 Markdown 标题保留锚点能力，渲染结果仍会经过统一消毒。
+    markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
+      const title = tokens[index + 1]?.content || '';
+      const headingId = headingIdGenerator(title);
+      tokens[index].attrSet('id', headingId);
+
+      return defaultHeadingOpenRenderer
+        ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
+        : self.renderToken(tokens, index, options);
+    };
+  },
 });
-
-let headingIdGenerator = createHeadingIdGenerator();
-const defaultLinkOpenRenderer = markdown.renderer.rules.link_open;
-const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
-
-markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
-  const targetIndex = tokens[index].attrIndex('target');
-  if (targetIndex < 0) {
-    tokens[index].attrPush(['target', '_blank']);
-  }
-
-  // 外部链接统一增加安全属性，页面内容仍来自原始 Markdown。
-  tokens[index].attrSet('rel', 'noreferrer');
-  return defaultLinkOpenRenderer
-    ? defaultLinkOpenRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-};
-
-markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
-  const title = tokens[index + 1]?.content || '';
-  const headingId = headingIdGenerator(title);
-  tokens[index].attrSet('id', headingId);
-
-  return defaultHeadingOpenRenderer
-    ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-};
 
 /**
  * 创建标题锚点生成器，重复标题自动追加序号。
@@ -124,11 +111,11 @@ function buildTocItems(markdownText: string): TocItem[] {
 }
 
 /**
- * 渲染首页 Markdown 原文为页面 HTML。
+ * 安全渲染首页 Markdown 原文为页面 HTML。
  */
 function renderHomeMarkdown(): string {
   headingIdGenerator = createHeadingIdGenerator();
-  return markdown.render(homeMarkdown);
+  return homeMarkdownRenderer.render(homeMarkdown);
 }
 
 /**
@@ -172,7 +159,7 @@ function observeTocHeadings(): void {
 }
 
 // 首页内容直接读取首页.md，展示方式与路线和资料页保持一致。
-const homeHtml = computed(() => renderHomeMarkdown());
+const safeHomeHtml = computed(() => renderHomeMarkdown());
 const tocItems = computed(() => buildTocItems(homeMarkdown));
 
 onMounted(async () => {

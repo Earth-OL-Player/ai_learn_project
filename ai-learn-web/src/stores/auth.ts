@@ -2,14 +2,19 @@ import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { defineStore } from 'pinia';
 import { computed, ref } from 'vue';
 import { login, logout, register, type LoginPayload, type RegisterPayload } from '../api/auth';
-import { AUTH_TOKEN_STORAGE_KEY } from '../constants/api';
 import { getCurrentUser, updateCurrentProfile, type CurrentUser, type UpdateProfilePayload } from '../api/user';
+import {
+  AUTH_TOKEN_CLEARED_EVENT,
+  clearStoredAccessToken,
+  getStoredAccessToken,
+  setStoredAccessToken,
+} from '../utils/authTokenStorage';
 
 /**
  * 用户认证状态仓库。
  */
 export const useAuthStore = defineStore('auth', () => {
-  const token = ref<string | null>(localStorage.getItem(AUTH_TOKEN_STORAGE_KEY));
+  const token = ref<string | null>(getStoredAccessToken());
   const user = ref<CurrentUser | null>(null);
   const initialized = ref(false);
 
@@ -23,7 +28,7 @@ export const useAuthStore = defineStore('auth', () => {
   function setAuth(accessToken: string, currentUser: CurrentUser): void {
     token.value = accessToken;
     user.value = currentUser;
-    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, accessToken);
+    setStoredAccessToken(accessToken);
   }
 
   /**
@@ -32,8 +37,16 @@ export const useAuthStore = defineStore('auth', () => {
   function clearAuth(): void {
     token.value = null;
     user.value = null;
-    localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+    clearStoredAccessToken();
   }
+
+  /**
+   * 监听接口层发现的认证失效事件。
+   */
+  window.addEventListener(AUTH_TOKEN_CLEARED_EVENT, () => {
+    token.value = null;
+    user.value = null;
+  });
 
   /**
    * 执行登录。

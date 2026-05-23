@@ -10,6 +10,7 @@
     "preview": "vite preview --host 0.0.0.0"
   },
   "dependencies": {
+    "dompurify": "^3.4.5",
     "element-plus": "^2.9.3",
     "markdown-it": "^14.1.1",
     "pinia": "^2.3.1",

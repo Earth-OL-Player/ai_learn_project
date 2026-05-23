@@ -1,4 +1,5 @@
-import { API_SUCCESS_CODE, AUTH_TOKEN_STORAGE_KEY, DEFAULT_API_BASE_URL, REFRESH_TOKEN_HEADER } from '../constants/api';
+import { API_SUCCESS_CODE, DEFAULT_API_BASE_URL, REFRESH_TOKEN_HEADER } from '../constants/api';
+import { clearStoredAccessToken, getStoredAccessToken, setStoredAccessToken } from '../utils/authTokenStorage';
 
 export interface ApiResponse<T> {
   code: string;
@@ -33,7 +34,7 @@ function buildRequestUrl(path: string): string {
  */
 function buildHeaders(extraHeaders?: HeadersInit, includeAuthToken = true): HeadersInit {
   const headers = new Headers(extraHeaders);
-  const token = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY);
+  const token = getStoredAccessToken();
 
   // 登录后统一通过 Bearer token 访问受保护接口。
   headers.set('Accept', headers.get('Accept') || 'application/json');
@@ -49,7 +50,19 @@ function buildHeaders(extraHeaders?: HeadersInit, includeAuthToken = true): Head
 function saveRefreshedToken(response: Response): void {
   const refreshedToken = response.headers.get(REFRESH_TOKEN_HEADER);
   if (refreshedToken) {
-    localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, refreshedToken);
+    setStoredAccessToken(refreshedToken);
+  }
+}
+
+/**
+ * 解析非 2xx 响应中的错误消息。
+ */
+async function parseErrorMessage(response: Response): Promise<string> {
+  try {
+    const result = (await response.json()) as ApiResponse<unknown>;
+    return result.message || '请求处理失败';
+  } catch {
+    return response.status === 401 ? '登录状态已失效，请重新登录' : '服务暂时不可用，请稍后重试';
   }
 }
 
@@ -58,7 +71,11 @@ function saveRefreshedToken(response: Response): void {
  */
 async function parseResponse<T>(response: Response): Promise<T> {
   if (!response.ok) {
-    throw new Error('服务暂时不可用，请稍后重试');
+    const message = await parseErrorMessage(response);
+    if (response.status === 401) {
+      clearStoredAccessToken();
+    }
+    throw new Error(message);
   }
 
   saveRefreshedToken(response);
@@ -97,7 +114,11 @@ async function requestBlob(path: string): Promise<Blob> {
     headers: buildHeaders({ Accept: 'text/csv' }),
   });
   if (!response.ok) {
-    throw new Error('文件下载失败，请稍后重试');
+    const message = await parseErrorMessage(response);
+    if (response.status === 401) {
+      clearStoredAccessToken();
+    }
+    throw new Error(message || '文件下载失败，请稍后重试');
   }
   saveRefreshedToken(response);
   return response.blob();
@@ -147,7 +168,11 @@ export async function postStream<B = unknown>(
 
   // 流式接口仍复用后端自动续期 token。
   if (!response.ok || !response.body) {
-    throw new Error('服务暂时不可用，请稍后重试');
+    const message = await parseErrorMessage(response);
+    if (response.status === 401) {
+      clearStoredAccessToken();
+    }
+    throw new Error(message);
   }
   saveRefreshedToken(response);
   await readEventStream(response.body, onEvent);

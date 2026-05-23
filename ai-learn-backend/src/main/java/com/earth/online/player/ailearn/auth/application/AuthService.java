@@ -8,6 +8,7 @@ import com.earth.online.player.ailearn.common.constant.AppConstants;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.JwtTokenService;
+import com.earth.online.player.ailearn.common.security.TokenInvalidationService;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
@@ -31,6 +32,7 @@ public class AuthService {
     private final SystemSettingMapper systemSettingMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
+    private final TokenInvalidationService tokenInvalidationService;
 
     /**
      * 创建认证应用服务。
@@ -40,18 +42,21 @@ public class AuthService {
      * @param systemSettingMapper 系统设置仓储
      * @param passwordEncoder 密码编码器
      * @param jwtTokenService JWT 服务
+     * @param tokenInvalidationService 令牌失效服务
      */
     public AuthService(
             UserMapper userMapper,
             GrowthMapper growthMapper,
             SystemSettingMapper systemSettingMapper,
             PasswordEncoder passwordEncoder,
-            JwtTokenService jwtTokenService) {
+            JwtTokenService jwtTokenService,
+            TokenInvalidationService tokenInvalidationService) {
         this.userMapper = userMapper;
         this.growthMapper = growthMapper;
         this.systemSettingMapper = systemSettingMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
+        this.tokenInvalidationService = tokenInvalidationService;
     }
 
     /**
@@ -107,6 +112,14 @@ public class AuthService {
         return buildAuthResponse(user);
     }
 
+    /**
+     * 退出登录并服务端失效当前令牌。
+     *
+     * @param token 当前访问令牌
+     */
+    public void logout(String token) {
+        tokenInvalidationService.invalidate(jwtTokenService.parseTokenDetail(token));
+    }
 
     /**
      * 校验系统用户容量是否仍可注册。

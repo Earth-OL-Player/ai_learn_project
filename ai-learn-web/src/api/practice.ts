@@ -30,7 +30,6 @@ export interface PracticeGrading {
   problems: string[];
   referenceAnswer: string;
   improvementAdvice: string;
-  reviewKnowledgePoints: string[];
   earnedExperience: number;
   previousBestScore: number;
   previousLastScore: number | null;

@@ -342,8 +342,7 @@ public class PracticeAiClient {
                 readStringList(data.get("missingPoints")),
                 readStringList(data.get("problems")),
                 data.path("referenceAnswer").asText(""),
-                data.path("improvementAdvice").asText(""),
-                readStringList(data.get("reviewKnowledgePoints"))
+                data.path("improvementAdvice").asText("")
         );
 
         // 只要 AI 服务返回成功，就表示本次未使用 Java 后端本地兜底评分。

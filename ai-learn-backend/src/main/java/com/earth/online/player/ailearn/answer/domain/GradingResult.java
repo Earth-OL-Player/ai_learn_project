@@ -11,7 +11,6 @@ import java.util.List;
  * @param problems 问题点
  * @param referenceAnswer 参考答案
  * @param improvementAdvice 改进建议
- * @param reviewKnowledgePoints 建议复习知识点
  */
 public record GradingResult(
         int score,
@@ -19,7 +18,6 @@ public record GradingResult(
         List<String> missingPoints,
         List<String> problems,
         String referenceAnswer,
-        String improvementAdvice,
-        List<String> reviewKnowledgePoints
+        String improvementAdvice
 ) {
 }

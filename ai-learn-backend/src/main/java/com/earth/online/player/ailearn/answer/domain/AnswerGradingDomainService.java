@@ -76,7 +76,6 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
         int score = calculateScore(hitPoints.size(), keywords.size(), safeAnswer.length());
         List<String> problems = buildProblems(safeAnswer, hitPoints.isEmpty());
         String advice = buildAdvice(missingPoints, problems);
-        List<String> reviewKnowledgePoints = missingPoints.isEmpty() ? safeReviewPoints(knowledgePoints) : extractReviewPoints(missingPoints);
 
         return new GradingResult(
                 score,
@@ -84,8 +83,7 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
                 missingPoints,
                 problems,
                 standardAnswer,
-                advice,
-                reviewKnowledgePoints
+                advice
         );
     }
 
@@ -335,31 +333,4 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
                 .toList();
     }
 
-    /**
-     * 从缺失点中提取复习提示。
-     *
-     * @param missingPoints 缺失点
-     * @return 复习知识点
-     */
-    private List<String> extractReviewPoints(List<String> missingPoints) {
-        return missingPoints.stream()
-                .map(point -> point.replace("待补充「", "").replace("」相关说明", ""))
-                .toList();
-    }
-
-    /**
-     * 生成安全复习点列表。
-     *
-     * @param knowledgePoints 题目分类或知识点
-     * @return 安全复习点
-     */
-    private List<String> safeReviewPoints(List<String> knowledgePoints) {
-        if (knowledgePoints == null || knowledgePoints.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return knowledgePoints.stream()
-                .filter(StringUtils::hasText)
-                .map(String::trim)
-                .toList();
-    }
 }

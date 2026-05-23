@@ -31,16 +31,16 @@
       </nav>
 
       <article class="markdown-card">
-        <div class="markdown-body" v-html="roadmapHtml"></div>
+        <div class="markdown-body" v-html="safeRoadmapHtml"></div>
       </article>
     </div>
   </section>
 </template>
 
 <script setup lang="ts">
-import MarkdownIt from 'markdown-it';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import roadmapMarkdown from '../../content/learning-roadmap/AI应用开发学习路线和资料集.md?raw';
+import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 interface TocItem {
   id: string;
@@ -51,6 +51,8 @@ interface TocItem {
 let tocObserver: IntersectionObserver | null = null;
 const activeTocId = ref('');
 const isTocCollapsed = ref(false);
+let headingIdGenerator = createHeadingIdGenerator();
+let imageCaptionNumber = 0;
 
 const roadmapAssetModules = import.meta.glob(
   '../../content/learning-roadmap/AI应用开发学习路线和资料集.assets/*',
@@ -77,58 +79,43 @@ const roadmapAssetUrlMap = Object.entries(roadmapAssetModules).reduce<Record<str
   {}
 );
 
-const markdown = new MarkdownIt({
-  html: true,
+const roadmapMarkdownRenderer = createSafeMarkdownRenderer({
   linkify: true,
   breaks: false,
+  configureMarkdown(markdown) {
+    const defaultImageRenderer = markdown.renderer.rules.image;
+    const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
+
+    // 图片资源先解析成 Vite URL，再交给统一消毒链路保留安全标签。
+    markdown.renderer.rules.image = (tokens, index, options, env, self) => {
+      const source = tokens[index].attrGet('src');
+      const resolvedSource = resolveAssetUrl(source);
+
+      if (resolvedSource) {
+        tokens[index].attrSet('src', resolvedSource);
+      }
+
+      imageCaptionNumber += 1;
+      const imageHtml = defaultImageRenderer
+        ? defaultImageRenderer(tokens, index, options, env, self)
+        : self.renderToken(tokens, index, options);
+      const imageTitle = resolveImageTitle(tokens[index].content, imageCaptionNumber);
+      const figureClass = resolveImageFigureClass(tokens[index].content);
+      return `<figure class="${figureClass}">${imageHtml}<figcaption>${imageTitle}</figcaption></figure>`;
+    };
+
+    // 本地 Markdown 标题保留锚点能力，渲染结果仍会经过统一消毒。
+    markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
+      const title = tokens[index + 1]?.content || '';
+      const headingId = headingIdGenerator(title);
+      tokens[index].attrSet('id', headingId);
+
+      return defaultHeadingOpenRenderer
+        ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
+        : self.renderToken(tokens, index, options);
+    };
+  },
 });
-
-let headingIdGenerator = createHeadingIdGenerator();
-let imageCaptionNumber = 0;
-const defaultImageRenderer = markdown.renderer.rules.image;
-const defaultLinkOpenRenderer = markdown.renderer.rules.link_open;
-const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
-
-markdown.renderer.rules.image = (tokens, index, options, env, self) => {
-  const source = tokens[index].attrGet('src');
-  const resolvedSource = resolveAssetUrl(source);
-
-  // 本地图片交给 Vite 资源系统处理，外部图片保持原始地址。
-  if (resolvedSource) {
-    tokens[index].attrSet('src', resolvedSource);
-  }
-
-  imageCaptionNumber += 1;
-  const imageHtml = defaultImageRenderer
-    ? defaultImageRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-  const imageTitle = resolveImageTitle(tokens[index].content, imageCaptionNumber);
-  const figureClass = resolveImageFigureClass(tokens[index].content);
-  return `<figure class="${figureClass}">${imageHtml}<figcaption>${imageTitle}</figcaption></figure>`;
-};
-
-markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
-  const targetIndex = tokens[index].attrIndex('target');
-  if (targetIndex < 0) {
-    tokens[index].attrPush(['target', '_blank']);
-  }
-
-  // 外部链接统一增加安全属性，页面内容仍来自原始 Markdown。
-  tokens[index].attrSet('rel', 'noreferrer');
-  return defaultLinkOpenRenderer
-    ? defaultLinkOpenRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-};
-
-markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
-  const title = tokens[index + 1]?.content || '';
-  const headingId = headingIdGenerator(title);
-  tokens[index].attrSet('id', headingId);
-
-  return defaultHeadingOpenRenderer
-    ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-};
 
 /**
  * 解析 Markdown 本地图片资源地址。
@@ -153,7 +140,7 @@ function resolveAssetUrl(source: string | null): string | undefined {
  * 根据图片替代文本生成图注。
  */
 function resolveImageTitle(altText: string, imageIndex: number): string {
-  const safeTitle = markdown.utils.escapeHtml(altText.trim() || '图片');
+  const safeTitle = roadmapMarkdownRenderer.markdown.utils.escapeHtml(altText.trim() || '图片');
   return `图${imageIndex}-${safeTitle}`;
 }
 
@@ -210,12 +197,12 @@ function buildTocItems(markdownText: string): TocItem[] {
 }
 
 /**
- * 渲染 Markdown 原文为页面 HTML。
+ * 安全渲染 Markdown 原文为页面 HTML。
  */
 function renderRoadmapMarkdown(): string {
   headingIdGenerator = createHeadingIdGenerator();
   imageCaptionNumber = 0;
-  return markdown.render(roadmapMarkdown);
+  return roadmapMarkdownRenderer.render(roadmapMarkdown);
 }
 
 /**
@@ -259,7 +246,7 @@ function observeTocHeadings(): void {
 }
 
 // Markdown 内容由前端项目内 md 文件直接渲染，修改 md 后开发环境会热更新。
-const roadmapHtml = computed(() => renderRoadmapMarkdown());
+const safeRoadmapHtml = computed(() => renderRoadmapMarkdown());
 const tocItems = computed(() => buildTocItems(roadmapMarkdown));
 
 onMounted(async () => {

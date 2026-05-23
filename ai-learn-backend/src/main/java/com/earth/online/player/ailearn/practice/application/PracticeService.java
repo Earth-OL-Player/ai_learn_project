@@ -322,7 +322,6 @@ public class PracticeService {
                 gradingResult.problems(),
                 gradingResult.referenceAnswer(),
                 gradingResult.improvementAdvice(),
-                gradingResult.reviewKnowledgePoints(),
                 earnedExperience,
                 previousBest,
                 oldStat == null ? null : previousLast,
@@ -403,7 +402,6 @@ public class PracticeService {
         appendSummaryList(builder, "命中点", grading.hitPoints());
         appendSummaryList(builder, "缺失点", grading.missingPoints());
         appendSummaryList(builder, "问题点", grading.problems());
-        appendSummaryList(builder, "建议复习", grading.reviewKnowledgePoints());
         builder.append("优化建议：").append(grading.improvementAdvice()).append("。");
         builder.append("评分来源：").append(Boolean.TRUE.equals(grading.fallbackUsed()) ? "本地兜底评分" : "AI评分").append("。");
         return limitText(builder.toString(), PracticeConstants.MAX_GRADING_SUMMARY_LENGTH);

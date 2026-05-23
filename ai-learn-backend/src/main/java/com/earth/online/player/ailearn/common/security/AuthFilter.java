@@ -33,6 +33,7 @@ public class AuthFilter extends OncePerRequestFilter {
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenService jwtTokenService;
+    private final TokenInvalidationService tokenInvalidationService;
     private final ObjectMapper objectMapper;
     private final List<String> publicGetPaths = List.of(
             "/api/v1/questions/interview-document",
@@ -57,10 +58,15 @@ public class AuthFilter extends OncePerRequestFilter {
      * 创建认证过滤器。
      *
      * @param jwtTokenService JWT 服务
+     * @param tokenInvalidationService 令牌失效服务
      * @param objectMapper JSON 序列化器
      */
-    public AuthFilter(JwtTokenService jwtTokenService, ObjectMapper objectMapper) {
+    public AuthFilter(
+            JwtTokenService jwtTokenService,
+            TokenInvalidationService tokenInvalidationService,
+            ObjectMapper objectMapper) {
         this.jwtTokenService = jwtTokenService;
+        this.tokenInvalidationService = tokenInvalidationService;
         this.objectMapper = objectMapper;
     }
 
@@ -84,14 +90,16 @@ public class AuthFilter extends OncePerRequestFilter {
 
             // 受保护接口必须认证，公开接口携带有效 token 时也顺便续期。
             if (isProtectedPath(request)) {
-                JwtParseResult parseResult = jwtTokenService.parseTokenDetail(resolveToken(request));
-                AuthContext.setUser(parseResult.user());
-                refreshToken(response, parseResult.user());
+                JwtParseResult parseResult = parseActiveToken(request);
+                if (!isLogoutPath(request)) {
+                    refreshToken(response, parseResult.user());
+                }
             } else if (hasBearerToken(request)) {
                 refreshPublicRequestToken(request, response);
             }
             filterChain.doFilter(request, response);
         } catch (JwtUnauthorizedException exception) {
+            LOGGER.info("认证失败，path={}, method={}, reason={}", request.getRequestURI(), request.getMethod(), exception.getMessage());
             writeUnauthorizedResponse(response, exception.getMessage());
         } finally {
             AuthContext.clear();
@@ -127,13 +135,25 @@ public class AuthFilter extends OncePerRequestFilter {
      */
     private void refreshPublicRequestToken(HttpServletRequest request, HttpServletResponse response) {
         try {
-            JwtParseResult parseResult = jwtTokenService.parseTokenDetail(resolveToken(request));
-            AuthContext.setUser(parseResult.user());
+            JwtParseResult parseResult = parseActiveToken(request);
             refreshToken(response, parseResult.user());
         } catch (JwtUnauthorizedException exception) {
             // 公开接口不因过期 token 失败，受保护接口仍会严格拦截。
             LOGGER.debug("公开接口携带的登录令牌无效：{}", exception.getMessage());
         }
+    }
+
+    /**
+     * 解析并校验服务端仍有效的 Bearer token。
+     *
+     * @param request HTTP 请求
+     * @return JWT 解析结果
+     */
+    private JwtParseResult parseActiveToken(HttpServletRequest request) {
+        JwtParseResult parseResult = jwtTokenService.parseTokenDetail(resolveToken(request));
+        tokenInvalidationService.ensureTokenActive(parseResult.tokenId());
+        AuthContext.setUser(parseResult.user());
+        return parseResult;
     }
 
     /**
@@ -168,6 +188,16 @@ public class AuthFilter extends OncePerRequestFilter {
         // 建议和评论列表公开可读，发布、回复和点赞动作要求登录。
         return HttpMethod.POST.matches(request.getMethod())
                 && postProtectedPrefixes.stream().anyMatch(prefix -> hasPathPrefix(requestUri, prefix));
+    }
+
+    /**
+     * 判断是否为退出登录接口。
+     *
+     * @param request HTTP 请求
+     * @return 是否退出登录
+     */
+    private boolean isLogoutPath(HttpServletRequest request) {
+        return HttpMethod.POST.matches(request.getMethod()) && "/api/v1/auth/logout".equals(request.getRequestURI());
     }
 
     /**
@@ -214,7 +244,7 @@ public class AuthFilter extends OncePerRequestFilter {
      * @throws IOException IO 异常
      */
     private void writeUnauthorizedResponse(HttpServletResponse response, String message) throws IOException {
-        response.setStatus(HttpServletResponse.SC_OK);
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setCharacterEncoding(StandardCharsets.UTF_8.name());
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         ApiResponse<Void> body = ApiResponse.failure(ResponseCode.AUTH_UNAUTHORIZED.code(), message);

@@ -1,7 +1,7 @@
 # MySQL 中间件说明
 
-版本：v1.20
-日期：2026-05-22  
+版本：v1.21
+日期：2026-05-23  
 适用工程：`ai-learn-backend`  
 适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
 
@@ -21,6 +21,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、用户�
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
 - Redis 当前未接入运行代码；Qdrant 预留代码、配置和依赖已移除，不直接参与 MySQL 业务主表写入。
 - `system_settings` 保存系统最大用户数等轻量配置，当前使用 `MAX_USERS` 控制开放注册容量。
+- `invalidated_tokens` 保存用户退出登录后的 JWT `jti` 失效记录，确保退出后旧访问令牌不能继续访问受保护接口。
 
 ## 2. 推荐版本
 
@@ -103,7 +104,7 @@ docker logs -f ai-learn-mysql
 | `DATABASE_USERNAME` | `ai_learn_user` | 业务库账号，按本地实际值配置 |
 | `DATABASE_PASSWORD` | `本地业务用户密码占位符` | 业务库密码，真实值只能放在本地环境变量或私有配置中 |
 | `SPRING_FLYWAY_ENABLED` | `true` | 是否启用 Flyway migration |
-| `JWT_SECRET` | `至少32位JWT密钥占位符` | JWT 签名密钥，真实值禁止提交仓库 |
+| `JWT_SECRET` | `至少32字节JWT随机密钥占位符` | JWT 签名密钥，启动时会校验至少 32 字节且不能使用占位符，真实值禁止提交仓库 |
 | `JWT_EXPIRES_IN_SECONDS` | `7200` | access token 过期秒数 |
 
 ## 6. 示例占位符配置
@@ -131,6 +132,7 @@ app:
 
 - 示例密码和 JWT 密钥是占位符，不是真实值。
 - 真实密码、JWT 密钥只能放在本地环境变量、私有配置或服务器密钥管理系统中。
+- `JWT_SECRET` 必须使用高强度随机值；如果未配置、长度不足 32 字节或仍为占位符，后端会在启动阶段失败，避免弱密钥上线。
 - `application-local.yml`、`.env` 等真实配置文件必须加入 `.gitignore`。
 
 ## 7. 验证方式
@@ -151,10 +153,12 @@ DESC users;
 DESC suggestions;
 DESC comments;
 DESC questions;
+DESC invalidated_tokens;
 SHOW INDEX FROM users;
 SHOW INDEX FROM suggestions;
 SHOW INDEX FROM comments;
 SHOW INDEX FROM questions;
+SHOW INDEX FROM invalidated_tokens;
 SELECT id, username, gender, super_admin FROM users WHERE username = '本地用户名占位符';
 ```
 
@@ -162,7 +166,7 @@ SELECT id, username, gender, super_admin FROM users WHERE username = '本地用�
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V4__add_user_gender.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表和当前题多轮讨论记忆字段。
+3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V5__create_invalidated_tokens.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表和当前题多轮讨论记忆字段。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -179,17 +183,19 @@ SELECT id, username, gender, super_admin FROM users WHERE username = '本地用�
 17. 调用 AI 智能刷题评分接口后，查询 `badges`、`user_badges` 和 `user_practice_sessions.discussion_follow_up_count`，确认 sprint2620 勋章发放与追问计数正常。
 18. 使用超级管理员 token 调用 `GET /api/v1/admin/users/limit` 和 `PUT /api/v1/admin/users/limit`，确认 `system_settings.MAX_USERS` 可维护。
 19. 将最大用户数设置为当前用户数后，再调用 `/api/v1/auth/register`，确认返回“当前系统用户数量已达上限，等待管理员升级服务器并扩容”。
+20. 调用 `POST /api/v1/auth/logout` 后，查询 `invalidated_tokens` 已写入当前 token 的 `jti`，再用退出前的旧 token 调用 `/api/v1/users/me`，确认 HTTP 状态为 `401` 且响应编码为 `AUTH_UNAUTHORIZED`。
 
 ## 8. 后续部署到服务器注意事项
 
 - 禁止使用 root 账号作为业务账号。
-- 生产密码和 `JWT_SECRET` 必须使用高强度随机值，并通过环境变量、服务器私有配置或密钥管理系统注入。
+- 生产密码和 `JWT_SECRET` 必须使用高强度随机值，并通过环境变量、服务器私有配置或密钥管理系统注入；`JWT_SECRET` 不满足强度要求时应用会拒绝启动。
 - MySQL 端口不直接暴露公网，只允许应用服务器或可信内网访问。
 - 数据目录必须持久化，并制定备份策略，至少包含定期全量备份和恢复演练。
 - 上线前确认字符集、时区、排序规则与本地环境一致。
 - 表结构变更必须通过 Flyway migration 发布，不允许只在生产库手工改表。
 - 生产环境调整超级管理员必须走审批流程，执行 SQL 时只能更新明确账号，禁止批量无条件更新 `users.super_admin`。
 - 日志和监控中不得输出完整连接串、用户名密码、JWT token 或敏感业务数据。
+- `invalidated_tokens` 中只保存 JWT 唯一标识、用户ID和过期时间，不保存完整 token；生产排查时禁止把请求头中的 `Authorization` 原文写入日志。
 
 ## 9. sprint202612/sprint202613 系统题库与刷题汇总说明
 
@@ -672,3 +678,50 @@ PUT /api/v1/users/me/profile
 - `gender` 不属于敏感信息，但仍不得把用户资料全量导出到不受控环境。
 - 生产排查时只查询明确用户，避免批量导出昵称、邮箱等个人资料。
 
+## 18. sprint202625 JWT退出登录失效说明
+
+本迭代新增 `V5__create_invalidated_tokens.sql`，用于支持 JWT access token 的服务端失效机制。
+
+新增内容：
+
+| 表 | 字段或索引 | 用途 |
+| --- | --- | --- |
+| `invalidated_tokens` | `token_id` | 保存 JWT `jti`，退出登录后用于拦截旧令牌。 |
+| `invalidated_tokens` | `user_id` | 保存退出登录用户ID，便于按用户排查。 |
+| `invalidated_tokens` | `expires_at` | 保存令牌原始过期时间，便于清理自然过期记录。 |
+| `invalidated_tokens` | `uk_invalidated_tokens_token_id` | 防止重复写入同一个失效 token。 |
+
+本地验证 SQL：
+
+```sql
+DESC invalidated_tokens;
+SELECT version, description, success FROM flyway_schema_history WHERE version = '5';
+SELECT token_id, user_id, expires_at, invalidated_at
+FROM invalidated_tokens
+WHERE user_id = 用户ID占位符
+ORDER BY invalidated_at DESC
+LIMIT 5;
+```
+
+本地联调场景：
+
+```text
+POST /api/v1/auth/login
+GET  /api/v1/users/me
+POST /api/v1/auth/logout
+GET  /api/v1/users/me
+```
+
+联调关注点：
+
+- 登录响应中的 token 由 JJWT 生成，payload 解析不再依赖手写字符串切分。
+- 退出登录接口不再下发自动续期 token，并会把当前 token 的 `jti` 写入 `invalidated_tokens`。
+- 使用退出登录前的旧 token 调用受保护接口时，HTTP 状态应为 `401`，响应编码应为 `AUTH_UNAUTHORIZED`。
+- `JWT_SECRET` 未配置、长度不足 32 字节或仍为占位符时，后端启动失败，开发者需要先配置本地私有环境变量。
+
+部署注意事项：
+
+- 发布前必须先备份 MySQL，并确认 Flyway 自动执行 V5 成功。
+- `invalidated_tokens` 不保存完整 JWT，不允许手工写入生产用户 token 原文。
+- 服务端日志只记录认证失败路径、方法和原因，禁止记录 `Authorization` 请求头原文。
+- 后续如升级为 HttpOnly、Secure、SameSite Cookie 或 access token + refresh token，可继续复用该表作为 access token 黑名单。

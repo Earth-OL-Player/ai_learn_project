@@ -52,7 +52,7 @@
                 </div>
 
                 <div class="interview-answer-title">参考答案</div>
-                <div class="interview-answer" v-html="renderAnswerMarkdown(question.standardAnswer)"></div>
+                <div class="interview-answer" v-html="renderSafeAnswerMarkdown(question.standardAnswer)"></div>
               </article>
             </section>
           </div>
@@ -64,10 +64,10 @@
 
 <script setup lang="ts">
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
-import MarkdownIt from 'markdown-it';
 import { onMounted, ref } from 'vue';
 import { fetchInterviewQuestionDocument, fetchPublicQuestionTypes } from '../../api/questions';
 import type { QuestionDetail } from '../../types/question';
+import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 const activeQuestionType = ref('');
 const isTocCollapsed = ref(false);
@@ -75,25 +75,10 @@ const loading = ref(false);
 const questionDetails = ref<QuestionDetail[]>([]);
 const questionTypes = ref<string[]>([]);
 
-const markdown = new MarkdownIt({
-  html: false,
+const answerMarkdownRenderer = createSafeMarkdownRenderer({
   linkify: true,
   breaks: false,
 });
-
-const defaultLinkOpenRenderer = markdown.renderer.rules.link_open;
-
-// 外部链接统一新窗口打开，并避免把来源页面信息带给外部站点。
-markdown.renderer.rules.link_open = (tokens, index, options, env, self) => {
-  if (tokens[index].attrIndex('target') < 0) {
-    tokens[index].attrPush(['target', '_blank']);
-  }
-
-  tokens[index].attrSet('rel', 'noreferrer');
-  return defaultLinkOpenRenderer
-    ? defaultLinkOpenRenderer(tokens, index, options, env, self)
-    : self.renderToken(tokens, index, options);
-};
 
 /**
  * 初始化热门面试题分类和默认题目。
@@ -146,10 +131,10 @@ async function loadInterviewDocumentByCategory(questionType: string): Promise<vo
 }
 
 /**
- * 渲染参考答案 Markdown。
+ * 安全渲染参考答案 Markdown。
  */
-function renderAnswerMarkdown(value: string | undefined): string {
-  return markdown.render(normalizeAnswerMarkdown(value));
+function renderSafeAnswerMarkdown(value: string | undefined): string {
+  return answerMarkdownRenderer.render(normalizeAnswerMarkdown(value));
 }
 
 /**

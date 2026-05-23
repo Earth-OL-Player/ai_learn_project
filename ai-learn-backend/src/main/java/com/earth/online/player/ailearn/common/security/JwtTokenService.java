@@ -1,13 +1,14 @@
 package com.earth.online.player.ailearn.common.security;
 
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.security.Keys;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.time.Instant;
-import java.util.Base64;
-import java.util.LinkedHashMap;
-import java.util.Map;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
+import java.util.Date;
+import java.util.UUID;
+import javax.crypto.SecretKey;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 
@@ -17,10 +18,12 @@ import org.springframework.util.StringUtils;
 @Component
 public class JwtTokenService {
 
-    private static final String HMAC_ALGORITHM = "HmacSHA256";
-    private static final String TOKEN_TYPE = "JWT";
+    private static final int MIN_SECRET_BYTES = 32;
+    private static final String USERNAME_CLAIM = "username";
+    private static final String PLACEHOLDER_SECRET_KEYWORD = "占位符";
 
     private final JwtProperties jwtProperties;
+    private final SecretKey secretKey;
 
     /**
      * 创建 JWT 令牌服务。
@@ -29,6 +32,8 @@ public class JwtTokenService {
      */
     public JwtTokenService(JwtProperties jwtProperties) {
         this.jwtProperties = jwtProperties;
+        validateSecret(jwtProperties.getSecret());
+        this.secretKey = Keys.hmacShaKeyFor(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8));
     }
 
     /**
@@ -39,17 +44,18 @@ public class JwtTokenService {
      * @return JWT 令牌
      */
     public String generateToken(Long userId, String username) {
-        long now = Instant.now().getEpochSecond();
-        long expiresAt = now + jwtProperties.getExpiresInSeconds();
+        Instant now = Instant.now();
+        Instant expiresAt = now.plusSeconds(jwtProperties.getExpiresInSeconds());
 
-        // 使用稳定字段顺序，避免签名内容不一致。
-        String headerJson = "{\"alg\":\"HS256\",\"typ\":\"" + TOKEN_TYPE + "\"}";
-        String payloadJson = "{\"sub\":\"" + userId + "\",\"username\":\"" + escapeJson(username)
-                + "\",\"iat\":" + now + ",\"exp\":" + expiresAt + "}";
-        String header = base64Url(headerJson.getBytes(StandardCharsets.UTF_8));
-        String payload = base64Url(payloadJson.getBytes(StandardCharsets.UTF_8));
-        String unsignedToken = header + "." + payload;
-        return unsignedToken + "." + sign(unsignedToken);
+        // 使用成熟 JWT 库统一生成标准 claims 和 HS256 签名。
+        return Jwts.builder()
+                .id(UUID.randomUUID().toString())
+                .subject(String.valueOf(userId))
+                .claim(USERNAME_CLAIM, username)
+                .issuedAt(Date.from(now))
+                .expiration(Date.from(expiresAt))
+                .signWith(secretKey, Jwts.SIG.HS256)
+                .compact();
     }
 
     /**
@@ -72,25 +78,19 @@ public class JwtTokenService {
         if (!StringUtils.hasText(token)) {
             throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
         }
-        String[] parts = token.split("\\.");
-        if (parts.length != 3) {
-            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
-        }
 
-        // 固定时间比较签名，降低签名探测风险。
-        String unsignedToken = parts[0] + "." + parts[1];
-        String expectedSignature = sign(unsignedToken);
-        if (!MessageDigest.isEqual(expectedSignature.getBytes(StandardCharsets.UTF_8), parts[2].getBytes(StandardCharsets.UTF_8))) {
-            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
-        }
-
-        Map<String, String> claims = parsePayload(parts[1]);
-        long expiresAt = Long.parseLong(claims.getOrDefault("exp", "0"));
-        if (expiresAt <= Instant.now().getEpochSecond()) {
+        try {
+            // 解析过程由 JJWT 完成签名、格式和过期时间校验。
+            Claims claims = Jwts.parser()
+                    .verifyWith(secretKey)
+                    .build()
+                    .parseSignedClaims(token)
+                    .getPayload();
+            AuthenticatedUser user = buildAuthenticatedUser(claims);
+            return new JwtParseResult(user, claims.getId(), claims.getExpiration().toInstant().getEpochSecond());
+        } catch (JwtException | IllegalArgumentException exception) {
             throw new JwtUnauthorizedException("登录状态已过期，请重新登录");
         }
-        AuthenticatedUser user = new AuthenticatedUser(Long.valueOf(claims.get("sub")), claims.get("username"));
-        return new JwtParseResult(user, expiresAt);
     }
 
     /**
@@ -103,57 +103,36 @@ public class JwtTokenService {
     }
 
     /**
-     * 对签名原文执行 HMAC-SHA256。
+     * 根据 JWT claims 构造认证用户。
      *
-     * @param unsignedToken 签名原文
-     * @return Base64Url 签名
+     * @param claims JWT claims
+     * @return 认证用户
      */
-    private String sign(String unsignedToken) {
-        try {
-            Mac mac = Mac.getInstance(HMAC_ALGORITHM);
-            mac.init(new SecretKeySpec(jwtProperties.getSecret().getBytes(StandardCharsets.UTF_8), HMAC_ALGORITHM));
-            return base64Url(mac.doFinal(unsignedToken.getBytes(StandardCharsets.UTF_8)));
-        } catch (java.security.GeneralSecurityException exception) {
-            throw new IllegalStateException("JWT 签名失败", exception);
+    private AuthenticatedUser buildAuthenticatedUser(Claims claims) {
+        String subject = claims.getSubject();
+        String username = claims.get(USERNAME_CLAIM, String.class);
+        if (!StringUtils.hasText(subject) || !StringUtils.hasText(username)) {
+            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
         }
+        return new AuthenticatedUser(Long.valueOf(subject), username);
     }
 
     /**
-     * 解析简单 JSON payload。
+     * 校验 JWT 密钥强度。
      *
-     * @param payload Base64Url 编码 payload
-     * @return claims 映射
+     * @param secret JWT 密钥
      */
-    private Map<String, String> parsePayload(String payload) {
-        String json = new String(Base64.getUrlDecoder().decode(payload), StandardCharsets.UTF_8);
-        Map<String, String> claims = new LinkedHashMap<>();
-        String content = json.substring(1, json.length() - 1);
-        for (String item : content.split(",")) {
-            String[] pair = item.split(":", 2);
-            String key = pair[0].replace("\"", "").trim();
-            String value = pair[1].replace("\"", "").trim();
-            claims.put(key, value);
+    private void validateSecret(String secret) {
+        if (!StringUtils.hasText(secret)) {
+            throw new IllegalStateException("JWT_SECRET不能为空");
         }
-        return claims;
-    }
 
-    /**
-     * 执行 Base64Url 无填充编码。
-     *
-     * @param bytes 原始字节
-     * @return 编码结果
-     */
-    private String base64Url(byte[] bytes) {
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
-    }
+        // HS256 至少需要 256 bit 密钥，且禁止使用仓库中的占位值启动服务。
+        boolean weakSecret = secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES
+                || secret.contains(PLACEHOLDER_SECRET_KEYWORD);
 
-    /**
-     * 转义 JSON 字符串。
-     *
-     * @param value 原始字符串
-     * @return 转义后字符串
-     */
-    private String escapeJson(String value) {
-        return value.replace("\\", "\\\\").replace("\"", "\\\"");
+        if (weakSecret) {
+            throw new IllegalStateException("JWT_SECRET必须是至少32字节的高强度随机密钥，且不能使用占位符");
+        }
     }
 }

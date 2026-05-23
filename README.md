@@ -44,7 +44,7 @@ DATABASE_URL="jdbc:mysql://127.0.0.1:3306/ai_learn?useUnicode=true&characterEnco
 DATABASE_USERNAME="本地MySQL用户名占位符"
 DATABASE_PASSWORD="本地MySQL密码占位符"
 SPRING_FLYWAY_ENABLED="true"
-JWT_SECRET="至少32位本地JWT密钥占位符"
+JWT_SECRET="至少32字节本地JWT随机密钥占位符"
 JWT_EXPIRES_IN_SECONDS="7200"
 
 # 启用 AI 服务时，请保持 token 与 ai-service/.env 一致。
@@ -64,7 +64,7 @@ Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Obj
 }
 ```
 
-说明：Flyway 默认启用，后端启动后会自动执行 `src/main/resources/db/migration` 下全部数据库迁移，初始化用户、互动、题库、刷题会话、成长徽章、系统设置和超级管理员标识相关表结构。
+说明：Flyway 默认启用，后端启动后会自动执行 `src/main/resources/db/migration` 下全部数据库迁移，初始化用户、互动、题库、刷题会话、成长徽章、系统设置、JWT 失效记录和超级管理员标识相关表结构。`JWT_SECRET` 必须配置为至少 32 字节的高强度随机值，不能直接使用占位符，否则后端会拒绝启动。
 
 ### 3. 准备前端配置
 
