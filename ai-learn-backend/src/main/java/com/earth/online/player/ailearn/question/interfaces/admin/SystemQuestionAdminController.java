@@ -147,6 +147,17 @@ public class SystemQuestionAdminController {
     }
 
     /**
+     * 预检 CSV 导入题目。
+     *
+     * @param file CSV 文件
+     * @return 预检结果
+     */
+    @PostMapping(value = "/import/precheck", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ApiResponse<ImportSystemQuestionsPrecheckResponse> precheckImportCsv(@RequestPart("file") MultipartFile file) {
+        return ApiResponse.success(systemQuestionAdminService.precheckImportCsv(file));
+    }
+
+    /**
      * 上传 CSV 导入题目。
      *
      * @param file CSV 文件

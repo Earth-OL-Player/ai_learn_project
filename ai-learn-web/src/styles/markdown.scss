@@ -1,0 +1,291 @@
+.markdown-card {
+  min-width: 0;
+  padding: 28px 36px 40px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid rgba(83, 116, 170, 0.12);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-panel);
+}
+
+.markdown-toolbar {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding-bottom: 18px;
+  margin-bottom: 26px;
+  color: #6b7890;
+  border-bottom: 1px solid #e8eef7;
+}
+
+.markdown-body {
+  color: var(--color-text-strong);
+  font-size: 16px;
+  line-height: 1.9;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  color: var(--color-heading);
+  line-height: 1.45;
+}
+
+.markdown-body h1 {
+  padding-bottom: 16px;
+  margin: 0 0 26px;
+  font-size: 34px;
+  border-bottom: 1px solid #e8eef7;
+}
+
+.markdown-body h2 {
+  position: relative;
+  margin: 34px 0 16px;
+  padding-left: 14px;
+  font-size: 26px;
+}
+
+.markdown-body h2::before {
+  position: absolute;
+  top: 7px;
+  left: 0;
+  width: 4px;
+  height: 24px;
+  content: "";
+  background: linear-gradient(180deg, var(--color-primary-bright), var(--color-accent));
+  border-radius: var(--radius-pill);
+}
+
+.markdown-body h3 {
+  margin: 28px 0 12px;
+  font-size: 21px;
+}
+
+.markdown-body h4 {
+  margin: 22px 0 10px;
+  color: var(--color-primary);
+  font-size: 17px;
+}
+
+.markdown-body p {
+  margin: 10px 0;
+}
+
+.markdown-body blockquote {
+  padding: 14px 18px;
+  margin: 16px 0;
+  color: #526178;
+  background: #f6f9ff;
+  border-left: 4px solid #8bb8ff;
+  border-radius: var(--radius-md);
+}
+
+.markdown-body table {
+  display: block;
+  width: 100%;
+  margin: 18px 0;
+  overflow-x: auto;
+  border-spacing: 0;
+  border-collapse: collapse;
+}
+
+.markdown-body th,
+.markdown-body td {
+  padding: 10px 14px;
+  border: 1px solid #e1e8f2;
+}
+
+.markdown-body th {
+  color: var(--color-heading);
+  background: #f3f7fd;
+}
+
+.markdown-body a {
+  color: var(--color-primary);
+  font-weight: 600;
+  word-break: break-all;
+}
+
+.markdown-body img {
+  display: block;
+  max-width: 100%;
+  margin: 20px auto;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 12px 32px rgba(61, 91, 132, 0.12);
+}
+
+// Markdown 内联重点词只保留系统蓝色文字，不额外增加背景和边框。
+.markdown-body code {
+  padding: 0;
+  color: var(--color-primary);
+  font-family: inherit;
+  font-weight: 800;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+// 如果后续 Markdown 增加真实代码块，块级代码仍保留等宽字体和常规矩形容器。
+.markdown-body pre code {
+  display: block;
+  padding: 12px 14px;
+  color: var(--color-heading);
+  font-family: "Consolas", "SFMono-Regular", "Menlo", monospace;
+  font-weight: 600;
+  overflow-x: auto;
+  white-space: pre;
+  background: #f6f9ff;
+  border-color: #dbeafe;
+  border-radius: var(--radius-md);
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 24px;
+}
+
+.markdown-layout {
+  display: grid;
+  grid-template-columns: 264px minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
+.markdown-toc-card {
+  position: sticky;
+  top: 88px;
+  display: flex;
+  flex-direction: column;
+  max-height: calc(100vh - 112px);
+  padding: 20px 18px;
+  // 目录卡片本身固定，仅让下面的目录列表滚动。
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(83, 116, 170, 0.12);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 14px 36px rgba(48, 84, 135, 0.08);
+}
+
+
+.markdown-layout.is-toc-collapsed {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
+.markdown-toc-card.is-collapsed {
+  padding: 14px 10px;
+}
+
+.markdown-toc-header {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.markdown-toc-card.is-collapsed .markdown-toc-header {
+  justify-content: center;
+  margin-bottom: 0;
+}
+
+.markdown-toc-toggle {
+  padding: 5px 10px;
+  color: var(--color-primary);
+  cursor: pointer;
+  background: var(--color-primary-softer);
+  border: 1px solid #cfe3ff;
+  border-radius: var(--radius-pill);
+  transition: all 0.18s ease;
+}
+
+.markdown-toc-toggle:hover {
+  color: var(--color-surface);
+  background: var(--color-primary-bright);
+  border-color: var(--color-primary-bright);
+}
+
+.markdown-toc-card.is-collapsed .markdown-toc-toggle {
+  width: 40px;
+  min-height: 72px;
+  padding: 8px 6px;
+  line-height: 1.3;
+  writing-mode: vertical-rl;
+}
+
+.markdown-toc-list {
+  display: grid;
+  gap: 2px;
+  // 扣除目录标题栏高度，避免滚动时标题栏跟随内容移动。
+  max-height: calc(100vh - 190px);
+  padding-right: 4px;
+  overflow-y: auto;
+}
+
+.markdown-toc-card h3 {
+  margin: 0 0 14px;
+  color: var(--color-heading);
+  font-size: 18px;
+}
+
+.markdown-toc-link {
+  display: block;
+  padding: 8px 10px;
+  margin: 2px 0;
+  color: var(--color-muted);
+  font-size: 14px;
+  line-height: 1.45;
+  border-radius: var(--radius-sm);
+  transition: all 0.18s ease;
+}
+
+.markdown-toc-link:hover {
+  color: var(--color-primary);
+  background: var(--color-primary-softer);
+}
+
+.markdown-toc-link.is-active {
+  color: var(--color-primary-strong);
+  font-weight: 700;
+  background: linear-gradient(90deg, var(--color-primary-soft) 0%, #f6fbff 100%);
+  box-shadow: inset 3px 0 0 var(--color-primary-bright);
+}
+
+.markdown-toc-level-3 {
+  padding-left: 20px;
+  font-size: 13px;
+}
+
+.markdown-toc-level-4 {
+  padding-left: 32px;
+  color: #75849a;
+  font-size: 12px;
+}
+
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  scroll-margin-top: 84px;
+}
+
+.markdown-figure {
+  margin: 22px auto;
+  text-align: center;
+}
+
+.markdown-figure img {
+  margin-bottom: 10px;
+}
+
+// AI 应用开发学习路线图按需求缩小到正文宽度的 67%。
+.markdown-figure.is-learning-roadmap-image img {
+  width: 67%;
+}
+
+.markdown-figure figcaption {
+  color: #66758c;
+  font-size: 14px;
+  line-height: 1.6;
+}
+

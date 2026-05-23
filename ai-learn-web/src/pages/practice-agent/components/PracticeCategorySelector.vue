@@ -1,7 +1,8 @@
 <template>
   <div class="practice-category-picker">
-    <span>请选择题目分类</span>
+    <label id="practice-category-label" for="practice-category-select">请选择题目分类</label>
     <el-select
+      id="practice-category-select"
       v-model="selectedValues"
       multiple
       collapse-tags
@@ -9,6 +10,7 @@
       filterable
       popper-class="practice-category-select-popper"
       placeholder="全部分类"
+      aria-labelledby="practice-category-label"
       @visible-change="emit('visibleChange', $event)"
       @change="emit('change')"
     >
@@ -23,6 +25,8 @@
 </template>
 
 <script setup lang="ts">
+import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs';
+import 'element-plus/es/components/select/style/css';
 import { computed } from 'vue';
 
 interface PracticeCategorySelectorProps {

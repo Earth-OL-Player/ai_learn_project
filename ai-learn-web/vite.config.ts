@@ -12,9 +12,9 @@ function resolveManualChunk(id: string): string | undefined {
     return undefined;
   }
 
-  // Element Plus 全量注册体积较大，按组件路径继续拆分避免单包过大。
+  // Element Plus 组件由页面局部导入，交给 Rollup 按路由自然拆分。
   if (id.includes('element-plus')) {
-    return 'vendor-element-plus';
+    return undefined;
   }
   if (id.includes('vue') || id.includes('pinia')) {
     return 'vendor-vue';

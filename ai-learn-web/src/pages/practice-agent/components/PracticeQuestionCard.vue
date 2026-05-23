@@ -1,5 +1,5 @@
 <template>
-  <div class="question-bubble-card">
+  <section class="question-bubble-card" :aria-label="`当前题目：${question.question}`">
     <div class="question-meta-row">
       <el-tag effect="plain">{{ question.questionType }}</el-tag>
       <el-tag type="warning" effect="light">重要性 {{ question.importanceScore }}</el-tag>
@@ -7,10 +7,12 @@
       <el-tag type="info" effect="plain">您的历史最高分 {{ question.bestScore }}</el-tag>
     </div>
     <h3>{{ question.question }}</h3>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
+import { ElTag } from 'element-plus/es/components/tag/index.mjs';
+import 'element-plus/es/components/tag/style/css';
 import type { PracticeQuestion } from '../../../api/practice';
 
 interface PracticeQuestionCardProps {

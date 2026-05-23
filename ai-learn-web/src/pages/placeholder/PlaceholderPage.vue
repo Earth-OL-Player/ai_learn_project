@@ -10,6 +10,11 @@
 </template>
 
 <script setup lang="ts">
+import { ElCard } from 'element-plus/es/components/card/index.mjs';
+import { ElTag } from 'element-plus/es/components/tag/index.mjs';
+import 'element-plus/es/components/card/style/css';
+import 'element-plus/es/components/tag/style/css';
+
 interface PlaceholderProps {
   title: string;
   description: string;

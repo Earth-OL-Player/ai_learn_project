@@ -1,0 +1,356 @@
+.admin-center-page {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  gap: 24px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.admin-sidebar {
+  min-height: 560px;
+  padding: 22px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid rgba(83, 116, 170, 0.1);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.admin-sidebar-header {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  padding-bottom: 20px;
+  border-bottom: 1px solid rgba(83, 116, 170, 0.1);
+}
+
+.admin-sidebar-icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  color: var(--color-surface);
+  font-weight: 700;
+  background: var(--color-brand-gradient);
+  border-radius: var(--radius-lg);
+  place-items: center;
+}
+
+.admin-sidebar-header h2 {
+  margin: 0 0 6px;
+  color: var(--color-heading);
+  font-size: 20px;
+}
+
+.admin-sidebar-header p {
+  margin: 0;
+  color: var(--color-subtle);
+  font-size: 13px;
+}
+
+.admin-menu {
+  margin-top: 18px;
+  border-right: 0;
+  background: transparent;
+}
+
+.admin-menu .el-menu-item {
+  height: 46px;
+  margin-bottom: 8px;
+  color: #4b5870;
+  font-weight: 700;
+  border-radius: var(--radius-md);
+}
+
+.admin-menu .el-menu-item.is-active {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.admin-content,
+.system-question-bank-page {
+  min-width: 0;
+}
+
+.admin-page-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: flex-start;
+  padding: 28px;
+  color: var(--color-surface);
+  background: var(--color-hero-gradient);
+  border-radius: var(--radius-hero);
+  box-shadow: 0 18px 46px rgba(48, 115, 210, 0.18);
+}
+
+.admin-page-hero h2 {
+  margin: 6px 0 10px;
+  font-size: 30px;
+}
+
+.admin-page-hero p {
+  max-width: 640px;
+  margin: 0;
+  line-height: 1.8;
+  opacity: 0.94;
+}
+
+.admin-empty-card {
+  min-height: 360px;
+  margin-top: 22px;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+// 管理中心使用窄侧栏，把横向空间留给表格和表单。
+.admin-center-page {
+  grid-template-columns: 220px minmax(0, 1fr);
+  max-width: 1440px;
+  padding: 0 8px;
+}
+
+.admin-sidebar {
+  padding: 18px;
+}
+
+.system-question-hero {
+  align-items: center;
+}
+
+.system-question-hero h2 {
+  // 管理页头部只保留核心标题，避免重复说明干扰操作。
+  margin: 0;
+}
+
+.system-question-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.admin-filter-card,
+.admin-table-card {
+  margin-top: 18px;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.admin-filter-form {
+  display: grid;
+  grid-template-columns: minmax(240px, 1.4fr) minmax(180px, 0.8fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-filter-actions {
+  margin-bottom: 18px;
+}
+
+.system-question-table .el-table__cell {
+  vertical-align: top;
+}
+
+.table-action-row {
+  // 操作按钮保持同一行，避免编辑和删除在固定列中上下错位。
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  white-space: nowrap;
+}
+
+.table-action-row .el-button {
+  margin-left: 0;
+}
+
+.question-cell {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: #344054;
+  line-height: 1.7;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.system-question-dialog .el-dialog {
+  border-radius: var(--radius-2xl);
+}
+
+.system-question-import-dialog .el-dialog {
+  border-radius: var(--radius-2xl);
+}
+
+.import-preview-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.import-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.import-summary-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  background: var(--color-surface-soft);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+
+.import-summary-item span {
+  color: #667085;
+  font-size: var(--font-size-sm);
+  font-weight: 700;
+}
+
+.import-summary-item strong {
+  color: var(--color-heading);
+  font-size: var(--font-size-2xl);
+}
+
+.import-summary-item.is-create strong {
+  color: #16a34a;
+}
+
+.import-summary-item.is-update strong {
+  color: var(--color-primary);
+}
+
+.import-summary-item.is-warning strong {
+  color: #d97706;
+}
+
+.import-summary-item.is-danger strong {
+  color: #dc2626;
+}
+
+.import-row-detail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.import-row-muted {
+  color: var(--color-subtle);
+}
+
+.dialog-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.admin-form-error {
+  margin: 0 0 12px;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+// 管理员用户管理页面延续系统清新简约风格。
+.user-manage-hero {
+  align-items: center;
+}
+
+.user-limit-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  margin-top: 18px;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.user-limit-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.user-limit-copy span {
+  color: #667085;
+  font-weight: 700;
+}
+
+.user-limit-copy strong {
+  color: var(--color-heading);
+  font-size: 28px;
+}
+
+.user-limit-copy small {
+  color: var(--color-subtle);
+}
+
+.user-limit-action,
+.admin-user-cell {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.admin-user-filter-form {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.admin-user-cell strong,
+.admin-user-cell span {
+  display: block;
+}
+
+.admin-user-cell strong {
+  color: var(--color-heading);
+}
+
+.admin-user-cell span {
+  margin-top: 3px;
+  color: #667085;
+  font-size: 13px;
+}
+
+.admin-user-dialog .el-dialog {
+  border-radius: var(--radius-2xl);
+}
+
+.user-limit-card .el-card__body {
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  align-items: center;
+  width: 100%;
+}
+
+@media (max-width: 980px) {
+  .import-summary-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .admin-page-hero,
+  .user-limit-card .el-card__body {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .system-question-actions {
+    justify-content: flex-start;
+  }
+
+  .admin-filter-form,
+  .admin-user-filter-form,
+  .dialog-grid,
+  .import-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}

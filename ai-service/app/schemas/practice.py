@@ -23,6 +23,25 @@ class PracticeGradeResponse(BaseModel):
     improvementAdvice: str = Field(description="基于 missingPoints 和 problems 给出最优先的改进建议；要求具体、可操作，不要空泛鼓励；一到三句话。")
 
 
+class PracticeAiCallMetrics(BaseModel):
+    """AI 调用观测指标。"""
+
+    traceId: str
+    scene: str
+    model: str
+    modelProvider: str = ""
+    success: bool
+    fallbackUsed: bool = False
+    stream: bool = False
+    firstTokenMs: int | None = None
+    durationMs: int
+    inputTokens: int | None = None
+    outputTokens: int | None = None
+    totalTokens: int | None = None
+    estimatedCost: str = "unavailable"
+    errorCategory: str = ""
+
+
 class PracticeConversationMessage(BaseModel):
     """当前题短期讨论历史消息。"""
 

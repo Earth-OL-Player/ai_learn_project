@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from dataclasses import dataclass
 
 from app.config.settings import settings
 from app.practice.discussion_agent import PracticeDiscussionAgent
@@ -10,10 +11,19 @@ from app.practice.prompts import PracticePromptBuilder
 from app.practice.provider_adapter import PracticeProviderAdapter
 from app.practice.sse import PracticeSseEncoder
 from app.schemas.practice import (
+    PracticeAiCallMetrics,
     PracticeDiscussRequest,
     PracticeGradeRequest,
     PracticeGradeResponse,
 )
+
+
+@dataclass
+class PracticeGradeServiceResult:
+    """AI 服务评分结果和观测指标。"""
+
+    grading: PracticeGradeResponse | None
+    metrics: PracticeAiCallMetrics
 
 
 class PracticeAgentService:
@@ -37,7 +47,7 @@ class PracticeAgentService:
         # 默认依赖在门面内装配，外部接口保持原有调用方式。
         self._local_fallback = local_fallback or PracticeLocalFallback()
         self._sse_encoder = sse_encoder or PracticeSseEncoder()
-        self._grading_agent = grading_agent or PracticeGradingAgent(model_factory, prompt_builder, llm_logger)
+        self._grading_agent = grading_agent or PracticeGradingAgent(model_factory, prompt_builder, llm_logger, self._provider_adapter)
         self._discussion_agent = discussion_agent or PracticeDiscussionAgent(
             model_factory,
             prompt_builder,
@@ -47,29 +57,42 @@ class PracticeAgentService:
             self._sse_encoder,
         )
 
-    def grade_answer(self, request: PracticeGradeRequest) -> PracticeGradeResponse | None:
+    def grade_answer(self, request: PracticeGradeRequest, trace_id: str) -> PracticeGradeServiceResult:
         """调用真实 Agent 评分，失败时交由 Java 后端本地兜底。"""
         logger.info(
-            "【AI智能刷题流程-评分】收到答案评分请求：userId=%s questionCode=%s llmEnabled=%s",
+            "【AI智能刷题流程-评分】收到答案评分请求：traceId=%s userId=%s questionCode=%s llmEnabled=%s",
+            trace_id,
             request.userId,
             request.questionCode,
             self._provider_adapter.is_llm_enabled(),
         )
 
         if self._provider_adapter.is_llm_enabled():
-            return self._grading_agent.grade_answer(request)
+            return self._grading_agent.grade_answer(request, trace_id)
 
         logger.info(
-            "【AI智能刷题流程-评分】未启用真实 Agent，返回失败并交由 Java 后端本地兜底：model=%s baseUrlConfigured=%s",
+            "【AI智能刷题流程-评分】未启用真实 Agent，返回失败并交由 Java 后端本地兜底：traceId=%s model=%s baseUrlConfigured=%s",
+            trace_id,
             settings.ai_grading_model,
             bool(settings.ai_grading_base_url),
         )
-        return None
+        metrics = PracticeAiCallMetrics(
+            traceId=trace_id,
+            scene="practice_grade",
+            model=settings.ai_grading_model,
+            modelProvider=settings.ai_grading_model_provider,
+            success=False,
+            fallbackUsed=True,
+            durationMs=0,
+            errorCategory="MODEL_DISABLED",
+        )
+        return PracticeGradeServiceResult(grading=None, metrics=metrics)
 
-    def stream_discuss(self, request: PracticeDiscussRequest) -> Iterator[str]:
+    def stream_discuss(self, request: PracticeDiscussRequest, trace_id: str) -> Iterator[str]:
         """流式生成本题讨论回复。"""
         logger.info(
-            "【AI智能刷题流程-流式讨论】收到流式讨论请求：questionCode=%s historySize=%s llmEnabled=%s",
+            "【AI智能刷题流程-流式讨论】收到流式讨论请求：traceId=%s questionCode=%s historySize=%s llmEnabled=%s",
+            trace_id,
             request.questionCode,
             len(request.conversationHistory),
             self._provider_adapter.is_llm_enabled(),
@@ -77,12 +100,13 @@ class PracticeAgentService:
 
         # 流式接口只在最终完成时打印汇总结果，避免 token 级日志刷屏。
         if self._provider_adapter.is_llm_enabled():
-            yield from self._discussion_agent.stream_discuss(request)
+            yield from self._discussion_agent.stream_discuss(request, trace_id)
             return
 
         # 未启用真实模型时仍返回 SSE，保证 Java 后端和前端链路稳定。
         logger.info(
-            "【AI智能刷题流程-流式讨论】未调用真实 Agent，流式返回讨论不可用提示：model=%s baseUrlConfigured=%s",
+            "【AI智能刷题流程-流式讨论】未调用真实 Agent，流式返回讨论不可用提示：traceId=%s model=%s baseUrlConfigured=%s",
+            trace_id,
             settings.ai_grading_model,
             bool(settings.ai_grading_base_url),
         )

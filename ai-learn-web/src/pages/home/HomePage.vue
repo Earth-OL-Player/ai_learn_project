@@ -8,12 +8,19 @@
       >
         <div class="markdown-toc-header">
           <h3 v-if="!isTocCollapsed">目录</h3>
-          <button type="button" class="markdown-toc-toggle" @click="toggleToc">
+          <button
+            type="button"
+            class="markdown-toc-toggle"
+            :aria-expanded="!isTocCollapsed"
+            aria-controls="home-toc-list"
+            :aria-label="isTocCollapsed ? '展开目录' : '收起目录'"
+            @click="toggleToc"
+          >
             {{ isTocCollapsed ? '展开' : '收起' }}
           </button>
         </div>
 
-        <div v-show="!isTocCollapsed" class="markdown-toc-list">
+        <div id="home-toc-list" v-show="!isTocCollapsed" class="markdown-toc-list">
           <a
             v-for="item in tocItems"
             :key="item.id"
@@ -23,6 +30,7 @@
               `markdown-toc-level-${item.level}`,
               { 'is-active': activeTocId === item.id },
             ]"
+            :aria-current="activeTocId === item.id ? 'location' : undefined"
             @click="setActiveToc(item.id)"
           >
             {{ item.title }}
@@ -64,6 +72,7 @@ const homeMarkdownRenderer = createSafeMarkdownRenderer({
       const title = tokens[index + 1]?.content || '';
       const headingId = headingIdGenerator(title);
       tokens[index].attrSet('id', headingId);
+      tokens[index].attrSet('tabindex', '-1');
 
       return defaultHeadingOpenRenderer
         ? defaultHeadingOpenRenderer(tokens, index, options, env, self)

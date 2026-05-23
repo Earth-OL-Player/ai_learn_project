@@ -1,15 +1,30 @@
 <template>
-  <div class="practice-input-bar">
+  <div class="practice-input-bar" role="form" aria-label="提交答案">
+    <label class="sr-only" for="practice-answer-input">答案输入框</label>
     <el-input
+      id="practice-answer-input"
       v-model="inputValue"
       type="textarea"
       :rows="3"
       resize="none"
       :placeholder="placeholder"
+      :disabled="loading"
+      aria-label="答案输入框"
+      aria-describedby="practice-answer-help"
       @focus="emit('focusInput')"
       @keydown.enter.exact.prevent="emit('send')"
     />
-    <el-button type="primary" round :loading="loading" @click="emit('send')">发送</el-button>
+    <span id="practice-answer-help" class="sr-only">按 Enter 提交答案，按 Shift 加 Enter 换行。</span>
+    <el-button
+      type="primary"
+      round
+      :disabled="!inputValue.trim()"
+      :loading="loading"
+      aria-label="发送答案"
+      @click="emit('send')"
+    >
+      发送
+    </el-button>
   </div>
 </template>
 

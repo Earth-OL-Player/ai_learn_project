@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import time
-import uuid
 from collections.abc import Iterator
 from dataclasses import dataclass
 
@@ -45,9 +44,8 @@ class PracticeDiscussionAgent:
         self._local_fallback = local_fallback
         self._sse_encoder = sse_encoder
 
-    def stream_discuss(self, request: PracticeDiscussRequest) -> Iterator[str]:
+    def stream_discuss(self, request: PracticeDiscussRequest, trace_id: str) -> Iterator[str]:
         """使用 LangChain Agent 流式接口生成讨论回复。"""
-        trace_id = self._new_trace_id()
         start_time = time.perf_counter()
         messages = self._prompt_builder.build_discuss_messages(request)
         logger.info(
@@ -70,9 +68,8 @@ class PracticeDiscussionAgent:
             yield self._sse_encoder.message(fallback_response.reply)
             yield self._sse_encoder.done()
 
-    def generate_discuss_reply(self, request: PracticeDiscussRequest) -> PracticeDiscussResponse | None:
+    def generate_discuss_reply(self, request: PracticeDiscussRequest, trace_id: str) -> PracticeDiscussResponse | None:
         """使用 LangChain Agent 非流式为讨论链路兜底生成完整回复。"""
-        trace_id = self._new_trace_id()
         start_time = time.perf_counter()
         messages = self._prompt_builder.build_discuss_messages(request)
         logger.info(
@@ -134,7 +131,7 @@ class PracticeDiscussionAgent:
         # Agent 流式无输出时，再切换 Agent 非流式兜底，避免前端长时间空白。
         if not emitted_any:
             logger.warning("Agent 流式链路无可见片段，切换 Agent 非流式兜底：traceId=%s", trace_id)
-            fallback_response = self.generate_discuss_reply(request) or self._local_fallback.discuss(request)
+            fallback_response = self.generate_discuss_reply(request, trace_id) or self._local_fallback.discuss(request)
             full_reply_parts.append(fallback_response.reply)
             yield self._sse_encoder.message(fallback_response.reply)
         yield self._sse_encoder.done()
@@ -144,11 +141,13 @@ class PracticeDiscussionAgent:
         full_reply = "".join(full_reply_parts)
         self._llm_logger.log_response(trace_id, "本题讨论-Agent流式汇总", {"reply": full_reply}, elapsed_ms)
         logger.info(
-            "【AI智能刷题流程-流式讨论】Agent 流式讨论完成：traceId=%s durationMs=%s replyChars=%s maxOutputTokens=%s",
+            "【AI智能刷题流程-流式讨论】Agent 流式讨论完成：traceId=%s durationMs=%s replyChars=%s maxOutputTokens=%s outputTokens=%s estimatedCost=%s",
             trace_id,
             elapsed_ms,
             len(full_reply),
             settings.ai_grading_max_output_tokens,
+            output_tokens,
+            "unavailable",
         )
         self._llm_logger.log_stream_output_tokens(trace_id, output_tokens, full_reply)
 
@@ -170,7 +169,3 @@ class PracticeDiscussionAgent:
 
         # 记录事件数和可见文本数，用于定位供应商是否支持 Agent token 流。
         logger.info("【AI智能刷题流程-流式讨论】Agent流式事件统计：traceId=%s events=%s visibleChunks=%s", trace_id, event_count, content_count)
-
-    def _new_trace_id(self) -> str:
-        """生成单次大模型调用追踪 ID。"""
-        return uuid.uuid4().hex[:12]

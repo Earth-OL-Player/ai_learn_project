@@ -84,6 +84,18 @@ class PracticeProviderAdapter:
             return self.dict_output_tokens(chunk)
         return self.message_output_tokens(chunk)
 
+    def call_token_usage(self, result: Any) -> dict[str, int | None]:
+        """从 LangChain 调用结果中读取 Token 用量。"""
+        if isinstance(result, dict):
+            messages = result.get("messages")
+            if isinstance(messages, list):
+                for message in reversed(messages):
+                    token_usage = self.message_token_usage(message)
+                    if any(value is not None for value in token_usage.values()):
+                        return token_usage
+            return self.dict_token_usage(result)
+        return self.message_token_usage(result)
+
     def message_content(self, message: Any) -> str:
         """读取 LangChain 消息内容。"""
         content = getattr(message, "content", "")
@@ -135,6 +147,37 @@ class PracticeProviderAdapter:
         response_metadata = getattr(message, "response_metadata", None)
         return self.dict_output_tokens(response_metadata)
 
+    def message_token_usage(self, message: Any) -> dict[str, int | None]:
+        """从消息对象中读取输入、输出和总 Token。"""
+        usage_metadata = getattr(message, "usage_metadata", None)
+        token_usage = self.dict_token_usage(usage_metadata)
+        if any(value is not None for value in token_usage.values()):
+            return token_usage
+
+        # 部分供应商把完整用量放在响应元数据内。
+        response_metadata = getattr(message, "response_metadata", None)
+        return self.dict_token_usage(response_metadata)
+
+    def dict_token_usage(self, value: Any) -> dict[str, int | None]:
+        """从字典结构中读取不同供应商常见的 Token 用量字段。"""
+        empty_usage: dict[str, int | None] = {"inputTokens": None, "outputTokens": None, "totalTokens": None}
+        if not isinstance(value, dict):
+            return empty_usage
+
+        # 兼容 OpenAI、LangChain 和 OpenAI 兼容供应商的字段命名。
+        input_tokens = self._first_int(value, ("input_tokens", "prompt_tokens"))
+        output_tokens = self._first_int(value, ("output_tokens", "completion_tokens"))
+        total_tokens = self._first_int(value, ("total_tokens",))
+        if input_tokens is not None or output_tokens is not None or total_tokens is not None:
+            return {"inputTokens": input_tokens, "outputTokens": output_tokens, "totalTokens": total_tokens}
+
+        # LangChain 或供应商 SDK 可能把 usage 再嵌套一层。
+        for nested_key in ("token_usage", "usage", "usage_metadata", "response_metadata"):
+            token_usage = self.dict_token_usage(value.get(nested_key))
+            if any(item is not None for item in token_usage.values()):
+                return token_usage
+        return empty_usage
+
     def dict_output_tokens(self, value: Any) -> int | None:
         """从字典结构中读取不同供应商常见的输出 Token 字段。"""
         if not isinstance(value, dict):
@@ -150,5 +193,13 @@ class PracticeProviderAdapter:
         for nested_key in ("token_usage", "usage", "usage_metadata", "response_metadata"):
             token_count = self.dict_output_tokens(value.get(nested_key))
             if token_count is not None:
+                return token_count
+        return None
+
+    def _first_int(self, value: dict[str, Any], keys: tuple[str, ...]) -> int | None:
+        """按优先级读取第一个整型字段。"""
+        for key in keys:
+            token_count = value.get(key)
+            if isinstance(token_count, int):
                 return token_count
         return None

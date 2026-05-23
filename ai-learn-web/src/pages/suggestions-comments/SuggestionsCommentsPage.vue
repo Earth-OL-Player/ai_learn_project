@@ -158,7 +158,13 @@
 </template>
 
 <script setup lang="ts">
+import { ElEmpty } from 'element-plus/es/components/empty/index.mjs';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
+import { ElPagination } from 'element-plus/es/components/pagination/index.mjs';
+import { ElSkeleton } from 'element-plus/es/components/skeleton/index.mjs';
+import 'element-plus/es/components/empty/style/css';
+import 'element-plus/es/components/pagination/style/css';
+import 'element-plus/es/components/skeleton/style/css';
 import { computed, onMounted, reactive, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { createComment, fetchComments, toggleCommentLike } from '../../api/comments';

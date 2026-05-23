@@ -1,0 +1,556 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: linear-gradient(
+    135deg,
+    var(--color-page-bg-soft) 0%,
+    var(--color-page-bg-tint) 46%,
+    var(--color-page-bg-clean) 100%
+  );
+}
+
+.skip-link {
+  position: fixed;
+  top: 12px;
+  left: 12px;
+  z-index: 1000;
+  padding: 10px 14px;
+  color: var(--color-surface);
+  font-weight: 800;
+  background: var(--color-primary-strong);
+  border-radius: var(--radius-md);
+  box-shadow: 0 12px 28px rgba(31, 111, 235, 0.24);
+  transform: translateY(-160%);
+  transition: transform 0.16s ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.app-layout {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.brand-block {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.brand-logo {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  color: var(--color-surface);
+  font-weight: 700;
+  background: var(--color-brand-gradient);
+  border-radius: var(--radius-lg);
+  place-items: center;
+}
+
+.brand-block h1 {
+  margin: 0;
+  font-size: 19px;
+  color: var(--color-heading);
+  white-space: nowrap;
+}
+
+.brand-block p {
+  margin: 5px 0 0;
+  color: var(--color-subtle);
+  font-size: 13px;
+}
+
+.layout-menu {
+  flex: 1 1 auto;
+  justify-content: center;
+  min-width: 0;
+  max-width: 640px;
+  border-right: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+.layout-menu .el-menu-item {
+  height: 44px;
+  margin: 0 4px;
+  border-bottom: 0;
+  border-radius: var(--radius-pill);
+  color: #4b5870;
+  font-weight: 600;
+}
+
+.layout-menu .el-menu-item.is-active {
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  border-bottom: 0;
+}
+
+.layout-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.layout-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 28px;
+  height: 72px;
+  padding: 0 36px;
+  // 顶部导航使用轻量玻璃质感，保持清新简约的页面风格。
+  background: rgba(255, 255, 255, 0.88);
+  border-bottom: 1px solid rgba(83, 116, 170, 0.1);
+  box-shadow: 0 12px 32px rgba(42, 84, 139, 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.header-action-area {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: flex-end;
+  min-width: 168px;
+}
+
+.header-label {
+  color: #8b98ad;
+  font-size: 13px;
+}
+
+.layout-header h2 {
+  margin: 4px 0 0;
+  font-size: 22px;
+  color: var(--color-heading);
+}
+
+.layout-content {
+  width: 100%;
+  padding: 32px 36px 40px;
+}
+
+.roadmap-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.placeholder-page {
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.page-alert {
+  margin-bottom: 18px;
+}
+
+.hero-card {
+  display: flex;
+  justify-content: space-between;
+  gap: 28px;
+  padding: 34px;
+  color: var(--color-surface);
+  background: var(--color-hero-gradient);
+  border-radius: var(--radius-hero);
+  box-shadow: var(--shadow-hero);
+}
+
+.hero-content h1 {
+  margin: 18px 0 12px;
+  font-size: 34px;
+}
+
+.hero-description,
+.hero-intro {
+  max-width: 720px;
+  margin: 10px 0 0;
+  line-height: 1.8;
+  opacity: 0.94;
+}
+
+.hero-panel {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 210px;
+  padding: 24px;
+  background: rgba(255, 255, 255, 0.16);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--radius-xl);
+}
+
+.hero-panel span,
+.hero-panel small {
+  opacity: 0.82;
+}
+
+.hero-panel strong {
+  margin: 8px 0;
+  font-size: 38px;
+}
+
+.overview-card,
+.resource-card,
+.suggestion-card,
+.placeholder-card,
+.stage-card {
+  border: 0;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+.overview-card {
+  margin-top: 22px;
+}
+
+.card-header {
+  color: var(--color-heading);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.overview-card p,
+.stage-card p {
+  margin: 0;
+  color: var(--color-muted);
+  line-height: 1.8;
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.stage-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.stage-header h3 {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 20px;
+}
+
+.stage-header span {
+  color: var(--color-subtle);
+  font-size: 13px;
+}
+
+.stage-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.resource-layout {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 20px;
+  margin-top: 22px;
+}
+
+.resource-list {
+  display: grid;
+  gap: 12px;
+}
+
+.resource-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  background: var(--color-page-bg-soft);
+  border: 1px solid #e7eef9;
+  border-radius: var(--radius-lg);
+  transition: all 0.2s ease;
+}
+
+.resource-item:hover {
+  border-color: #9ec5fe;
+  transform: translateY(-1px);
+}
+
+.resource-item strong {
+  color: var(--color-primary);
+}
+
+.resource-item span,
+.suggestion-card li {
+  color: var(--color-muted);
+  line-height: 1.7;
+}
+
+.suggestion-card ol {
+  display: grid;
+  gap: 12px;
+  padding-left: 20px;
+  margin: 0;
+}
+
+.placeholder-page {
+  display: grid;
+  min-height: 520px;
+  place-items: center;
+}
+
+.placeholder-card {
+  width: min(560px, 100%);
+  text-align: center;
+}
+
+.placeholder-icon {
+  margin-bottom: 14px;
+  font-size: 52px;
+}
+
+.placeholder-card h3 {
+  margin: 0 0 12px;
+  color: var(--color-heading);
+  font-size: 26px;
+}
+
+.placeholder-card p {
+  margin: 0 0 18px;
+  color: var(--color-muted);
+  line-height: 1.8;
+}
+
+// 品牌标题和作者信息在同一行展示，减少顶部栏高度浪费。
+.brand-title-row {
+  display: flex;
+  gap: 12px;
+  align-items: baseline;
+  white-space: nowrap;
+}
+
+.brand-title-row h1 {
+  margin: 0;
+  font-size: 20px;
+  color: var(--color-heading);
+  letter-spacing: 0;
+}
+
+.brand-title-row span {
+  color: var(--color-subtle);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+
+// 顶部栏强化品牌视觉，并保持清新简约的导航层级。
+.layout-header {
+  height: 82px;
+  padding: 0 34px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 252, 255, 0.92) 100%);
+  border-bottom: 1px solid rgba(219, 234, 254, 0.9);
+  box-shadow: 0 14px 36px rgba(47, 84, 128, 0.08);
+}
+
+.brand-block {
+  gap: 16px;
+  min-width: 360px;
+}
+
+.brand-logo {
+  width: 56px;
+  height: 56px;
+  font-size: 18px;
+  font-weight: 900;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 14px 28px rgba(47, 125, 246, 0.18);
+}
+
+.brand-title-row {
+  gap: 14px;
+  align-items: center;
+}
+
+.brand-title-row h1 {
+  font-size: 27px;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.brand-title-row span {
+  padding: 5px 10px;
+  color: #667085;
+  font-size: 14px;
+  font-weight: 700;
+  background: rgba(239, 246, 255, 0.9);
+  border: 1px solid rgba(207, 227, 255, 0.9);
+  border-radius: var(--radius-pill);
+}
+
+.layout-menu {
+  max-width: 720px;
+  padding: 6px;
+  background: rgba(248, 251, 255, 0.72);
+  border: 1px solid rgba(219, 234, 254, 0.72);
+  border-radius: var(--radius-pill);
+}
+
+.layout-menu .el-menu-item {
+  height: 42px;
+  padding: 0 22px;
+  margin: 0 2px;
+  color: #344054;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.layout-menu .el-menu-item.is-active {
+  color: var(--color-primary-strong);
+  background: var(--color-surface);
+  box-shadow: 0 8px 20px rgba(47, 125, 246, 0.12);
+}
+
+.header-action-area {
+  min-width: 230px;
+}
+
+.header-user .el-avatar {
+  width: 38px;
+  height: 38px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #d7e7ff 0%, var(--color-primary-softer) 100%);
+}
+
+.user-dropdown-button {
+  min-height: 40px;
+  padding: 8px 16px;
+  color: var(--color-heading);
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(207, 227, 255, 0.95);
+  box-shadow: 0 8px 20px rgba(47, 84, 128, 0.06);
+}
+// 导航项独立成块，头像和用户下拉保持可见且对齐。
+.layout-menu {
+  justify-content: center;
+  max-width: none;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+}
+
+.layout-menu .el-menu-item {
+  height: 44px;
+  min-width: 112px;
+  justify-content: center;
+  padding: 0 22px;
+  margin: 0 7px;
+  color: #344054;
+  font-size: 15px;
+  font-weight: 800;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(219, 234, 254, 0.92);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 20px rgba(47, 84, 128, 0.045);
+  transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+
+.layout-menu .el-menu-item:hover {
+  color: var(--color-primary-strong);
+  background: #f8fbff;
+  box-shadow: 0 10px 24px rgba(47, 125, 246, 0.1);
+  transform: translateY(-1px);
+}
+
+.layout-menu .el-menu-item.is-active {
+  color: var(--color-primary-strong);
+  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-primary-softer) 100%);
+  border-color: rgba(166, 206, 255, 0.96);
+  box-shadow: 0 12px 26px rgba(47, 125, 246, 0.14);
+}
+
+.header-user {
+  gap: 10px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.64);
+  border: 1px solid rgba(219, 234, 254, 0.86);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 8px 22px rgba(47, 84, 128, 0.055);
+}
+
+.header-user .el-avatar {
+  width: 40px;
+  height: 40px;
+  color: #2f7df6;
+  font-size: 15px;
+  font-weight: 900;
+  background: linear-gradient(135deg, var(--color-primary-softer) 0%, #dcecff 100%);
+  border: 1px solid rgba(207, 227, 255, 0.95);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.user-dropdown-button {
+  min-height: 40px;
+  gap: 8px;
+  padding: 8px 14px 8px 12px;
+  color: var(--color-heading);
+  font-size: 14px;
+  line-height: 1;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+
+.user-dropdown-button:hover {
+  color: var(--color-primary-strong);
+}
+
+.user-dropdown-arrow {
+  position: relative;
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-top: -3px;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  opacity: 0.72;
+  transform: rotate(45deg);
+}
+// 首页入口加入后压缩导航单项宽度，保证大屏顶部栏不拥挤。
+.layout-header {
+  gap: 20px;
+}
+
+.brand-block {
+  min-width: 320px;
+}
+
+.layout-menu .el-menu-item {
+  min-width: 96px;
+  padding: 0 18px;
+}
+
+.header-action-area {
+  min-width: 190px;
+}
+
+.layout-content:focus {
+  outline: none;
+}

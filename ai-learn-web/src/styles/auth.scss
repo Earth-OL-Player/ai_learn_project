@@ -1,0 +1,168 @@
+.header-auth-actions,
+.header-user {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+}
+
+.user-dropdown-button {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 12px;
+  color: var(--color-text-strong);
+  font-weight: 700;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(83, 116, 170, 0.14);
+  border-radius: var(--radius-pill);
+}
+
+.user-dropdown-arrow {
+  color: #6b7890;
+  font-size: 14px;
+}
+
+.auth-dialog .el-dialog,
+.login-guide-dialog .el-dialog {
+  border-radius: var(--radius-xl);
+}
+
+.auth-dialog-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.auth-form-error {
+  min-height: 22px;
+  margin: 0 0 12px;
+  color: #b42318;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.6;
+}
+
+.login-guide-body {
+  padding: 8px 12px 16px;
+  text-align: center;
+}
+
+.login-guide-icon {
+  margin-bottom: 12px;
+  font-size: 48px;
+}
+
+.login-guide-body h3 {
+  margin: 0 0 10px;
+  color: var(--color-heading);
+  font-size: 24px;
+}
+
+.login-guide-body p {
+  margin: 0 auto 22px;
+  color: var(--color-muted);
+  line-height: 1.8;
+}
+
+.login-guide-actions {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+}
+
+.profile-page {
+  max-width: 960px;
+  margin: 0 auto;
+}
+
+.profile-card {
+  padding: 12px;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.profile-header {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  padding: 12px 6px 28px;
+}
+
+.profile-avatar {
+  color: var(--color-surface);
+  font-size: 28px;
+  font-weight: 700;
+  background: var(--color-brand-gradient);
+}
+
+.profile-header h2 {
+  margin: 0 0 8px;
+  color: var(--color-heading);
+  font-size: 28px;
+}
+
+.profile-header p {
+  margin: 0;
+  color: #6b7890;
+}
+
+.profile-descriptions {
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+}
+
+.profile-tip {
+  margin-top: 22px;
+  border-radius: var(--radius-md);
+}
+
+// 登录注册弹框采用轻量圆角卡片，兼容窄屏和桌面浏览器。
+.modern-auth-dialog .el-dialog {
+  overflow: hidden;
+  border: 1px solid rgba(219, 234, 254, 0.95);
+  border-radius: 34px;
+  box-shadow: 0 28px 80px rgba(36, 76, 130, 0.18);
+}
+
+.modern-auth-dialog .el-dialog__header {
+  display: none;
+}
+
+.modern-auth-dialog .el-dialog__body {
+  padding: 34px 44px 8px;
+}
+
+.modern-auth-dialog .el-dialog__footer {
+  padding: 10px 44px 36px;
+}
+
+.auth-form .el-form-item__label {
+  color: #344054;
+  font-weight: 800;
+}
+
+.auth-form .el-input__wrapper {
+  border-radius: var(--radius-lg);
+  box-shadow: 0 0 0 1px #dbeafe inset;
+}
+
+.auth-form .el-input__wrapper.is-focus {
+  box-shadow: 0 0 0 1px var(--color-primary-bright) inset, 0 10px 24px rgba(58, 134, 255, 0.12);
+}
+
+.auth-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.modern-auth-footer {
+  align-items: center;
+}
+
+.modern-auth-footer .el-button {
+  min-width: 112px;
+}
+

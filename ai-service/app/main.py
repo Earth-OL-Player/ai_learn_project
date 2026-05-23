@@ -18,14 +18,17 @@ logger = configure_logger("ai_service.http")
 async def log_http_request(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
     """记录进入 Python AI 服务的 HTTP 请求，便于判断前端链路是否打到本服务。"""
     start_time = time.perf_counter()
+    trace_id = request.headers.get("x-trace-id", "")
 
     # 请求进入时先打日志，避免鉴权失败或异常时看不到链路。
-    logger.info("收到 Python AI 服务请求：method=%s path=%s client=%s", request.method, request.url.path, request.client.host if request.client else "")
+    logger.info("收到 Python AI 服务请求：traceId=%s method=%s path=%s client=%s", trace_id, request.method, request.url.path, request.client.host if request.client else "")
     response = await call_next(request)
 
     # 请求结束时输出状态码和耗时，辅助定位是否被鉴权、路由或业务逻辑拦截。
     duration_ms = round((time.perf_counter() - start_time) * 1000)
-    logger.info("Python AI 服务请求完成：method=%s path=%s status=%s durationMs=%s", request.method, request.url.path, response.status_code, duration_ms)
+    if trace_id:
+        response.headers["X-Trace-Id"] = trace_id
+    logger.info("Python AI 服务请求完成：traceId=%s method=%s path=%s status=%s durationMs=%s", trace_id, request.method, request.url.path, response.status_code, duration_ms)
     return response
 
 
@@ -34,7 +37,8 @@ async def log_validation_error(request: Request, exc: RequestValidationError) ->
     """记录 FastAPI 422 参数校验失败详情，便于排查 Java 传参问题。"""
     # 只记录元信息，不打印鉴权头和请求体，避免答案内容或 Token 出现在日志中。
     logger.warning(
-        "Python AI 服务请求参数校验失败：method=%s path=%s contentType=%s contentLength=%s errors=%s",
+        "Python AI 服务请求参数校验失败：traceId=%s method=%s path=%s contentType=%s contentLength=%s errors=%s",
+        request.headers.get("x-trace-id", ""),
         request.method,
         request.url.path,
         request.headers.get("content-type", ""),

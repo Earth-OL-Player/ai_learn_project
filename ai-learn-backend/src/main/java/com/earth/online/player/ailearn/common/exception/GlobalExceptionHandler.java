@@ -12,7 +12,6 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
-import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 /**
@@ -31,8 +30,7 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiResponse<Void>> handleBusinessException(BusinessException exception) {
-        HttpStatus status = resolveBusinessHttpStatus(exception);
-        return ResponseEntity.status(status).body(ApiResponse.failure(exception.getCode(), exception.getMessage()));
+        return buildFailureResponse(exception.getCode(), exception.getMessage());
     }
 
     /**
@@ -42,9 +40,9 @@ public class GlobalExceptionHandler {
      * @return 统一失败响应
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
-    @ResponseStatus(HttpStatus.OK)
-    public ApiResponse<Void> handleMethodArgumentNotValidException(MethodArgumentNotValidException exception) {
-        return ApiResponse.failure(ResponseCode.PARAM_INVALID.code(), resolveBindMessage(exception));
+    public ResponseEntity<ApiResponse<Void>> handleMethodArgumentNotValidException(
+            MethodArgumentNotValidException exception) {
+        return buildFailureResponse(ResponseCode.PARAM_INVALID.code(), resolveBindMessage(exception));
     }
 
     /**
@@ -54,9 +52,8 @@ public class GlobalExceptionHandler {
      * @return 统一失败响应
      */
     @ExceptionHandler(BindException.class)
-    @ResponseStatus(HttpStatus.OK)
-    public ApiResponse<Void> handleBindException(BindException exception) {
-        return ApiResponse.failure(ResponseCode.PARAM_INVALID.code(), resolveBindMessage(exception));
+    public ResponseEntity<ApiResponse<Void>> handleBindException(BindException exception) {
+        return buildFailureResponse(ResponseCode.PARAM_INVALID.code(), resolveBindMessage(exception));
     }
 
     /**
@@ -66,12 +63,12 @@ public class GlobalExceptionHandler {
      * @return 统一失败响应
      */
     @ExceptionHandler(ConstraintViolationException.class)
-    @ResponseStatus(HttpStatus.OK)
-    public ApiResponse<Void> handleConstraintViolationException(ConstraintViolationException exception) {
+    public ResponseEntity<ApiResponse<Void>> handleConstraintViolationException(
+            ConstraintViolationException exception) {
         String message = exception.getConstraintViolations().stream()
                 .map(violation -> violation.getMessage())
                 .collect(Collectors.joining("；"));
-        return ApiResponse.failure(ResponseCode.PARAM_INVALID.code(), message);
+        return buildFailureResponse(ResponseCode.PARAM_INVALID.code(), message);
     }
 
     /**
@@ -107,18 +104,44 @@ public class GlobalExceptionHandler {
     }
 
     /**
-     * 解析业务异常对应的 HTTP 状态。
+     * 构造统一失败响应并写入匹配的 HTTP 状态。
      *
-     * @param exception 业务异常
+     * @param code 统一业务错误码
+     * @param message 错误消息
+     * @return 统一失败响应
+     */
+    private ResponseEntity<ApiResponse<Void>> buildFailureResponse(String code, String message) {
+        return ResponseEntity.status(resolveHttpStatus(code)).body(ApiResponse.failure(code, message));
+    }
+
+    /**
+     * 根据统一业务码解析 HTTP 状态。
+     *
+     * @param code 统一业务错误码
      * @return HTTP 状态
      */
-    private HttpStatus resolveBusinessHttpStatus(BusinessException exception) {
-        if (ResponseCode.AUTH_UNAUTHORIZED.code().equals(exception.getCode())) {
+    private HttpStatus resolveHttpStatus(String code) {
+        if (ResponseCode.PARAM_INVALID.code().equals(code) || ResponseCode.BUSINESS_ERROR.code().equals(code)) {
+            return HttpStatus.BAD_REQUEST;
+        }
+        if (ResponseCode.AUTH_UNAUTHORIZED.code().equals(code)) {
             return HttpStatus.UNAUTHORIZED;
         }
-        if (ResponseCode.RATE_LIMITED.code().equals(exception.getCode())) {
+        if (ResponseCode.AUTH_FORBIDDEN.code().equals(code)) {
+            return HttpStatus.FORBIDDEN;
+        }
+        if (ResponseCode.RESOURCE_NOT_FOUND.code().equals(code)) {
+            return HttpStatus.NOT_FOUND;
+        }
+        if (ResponseCode.RESOURCE_CONFLICT.code().equals(code)) {
+            return HttpStatus.CONFLICT;
+        }
+        if (ResponseCode.RATE_LIMITED.code().equals(code)) {
             return HttpStatus.TOO_MANY_REQUESTS;
         }
-        return HttpStatus.OK;
+        if (ResponseCode.SYSTEM_ERROR.code().equals(code)) {
+            return HttpStatus.INTERNAL_SERVER_ERROR;
+        }
+        return HttpStatus.BAD_REQUEST;
     }
 }

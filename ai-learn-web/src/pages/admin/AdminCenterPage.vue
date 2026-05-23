@@ -1,6 +1,6 @@
 <template>
   <section class="admin-center-page">
-    <aside class="admin-sidebar">
+    <aside class="admin-sidebar" aria-label="管理者中心导航">
       <div class="admin-sidebar-header">
         <span class="admin-sidebar-icon">管</span>
         <div>
@@ -9,7 +9,7 @@
       </div>
 
       <!-- 左侧菜单仅承载当前迭代已规划的管理功能入口。 -->
-      <el-menu class="admin-menu" :default-active="route.path" router>
+      <el-menu class="admin-menu" :default-active="route.path" router aria-label="管理功能导航">
         <el-menu-item index="/admin/users">
           <span>用户管理</span>
         </el-menu-item>
@@ -19,7 +19,7 @@
       </el-menu>
     </aside>
 
-    <main class="admin-content">
+    <main class="admin-content" aria-label="管理内容区">
       <RouterView />
     </main>
   </section>

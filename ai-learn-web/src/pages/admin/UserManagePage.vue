@@ -23,7 +23,7 @@
     <el-card shadow="never" class="admin-filter-card">
       <el-form :model="filters" label-position="top" class="admin-user-filter-form">
         <el-form-item label="关键词">
-          <el-input v-model="filters.keyword" clearable placeholder="搜索用户名、昵称或邮箱" @keyup.enter="searchUsers" />
+          <el-input v-model="filters.keyword" clearable aria-label="用户关键词" placeholder="搜索用户名、昵称或邮箱" @keyup.enter="searchUsers" />
         </el-form-item>
         <el-form-item class="admin-filter-actions">
           <el-button type="primary" round :loading="loading" @click="searchUsers">查询</el-button>
@@ -33,7 +33,7 @@
     </el-card>
 
     <el-card shadow="never" class="admin-table-card">
-      <el-table v-loading="loading" :data="users" row-key="id">
+      <el-table v-loading="loading" :data="users" row-key="id" aria-label="用户管理列表">
         <el-table-column label="用户" min-width="220">
           <template #default="{ row }">
             <div class="admin-user-cell">
@@ -60,8 +60,8 @@
         <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <div class="table-action-row">
-              <el-button text type="primary" @click="openEditDialog(row)">编辑</el-button>
-              <el-button text type="danger" @click="handleDelete(row)">删除</el-button>
+              <el-button text type="primary" :aria-label="`编辑用户 ${row.username}`" @click="openEditDialog(row)">编辑</el-button>
+              <el-button text type="danger" :aria-label="`删除用户 ${row.username}`" @click="handleDelete(row)">删除</el-button>
             </div>
           </template>
         </el-table-column>
@@ -72,6 +72,7 @@
         layout="prev, pager, next, total"
         :total="page.total"
         :page-size="page.pageSize"
+        aria-label="用户管理分页"
         @current-change="loadUsers"
       />
     </el-card>
@@ -110,8 +111,20 @@
 </template>
 
 <script setup lang="ts">
+import { ElCard } from 'element-plus/es/components/card/index.mjs';
+import { ElInputNumber } from 'element-plus/es/components/input-number/index.mjs';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { ElMessageBox } from 'element-plus/es/components/message-box/index.mjs';
+import { ElPagination } from 'element-plus/es/components/pagination/index.mjs';
+import { ElSwitch } from 'element-plus/es/components/switch/index.mjs';
+import { ElTable, ElTableColumn } from 'element-plus/es/components/table/index.mjs';
+import { ElTag } from 'element-plus/es/components/tag/index.mjs';
+import 'element-plus/es/components/card/style/css';
+import 'element-plus/es/components/input-number/style/css';
+import 'element-plus/es/components/pagination/style/css';
+import 'element-plus/es/components/switch/style/css';
+import 'element-plus/es/components/table/style/css';
+import 'element-plus/es/components/tag/style/css';
 import { onMounted, reactive, ref } from 'vue';
 import {
   createAdminUser,

@@ -8,7 +8,11 @@ import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
 import com.earth.online.player.ailearn.question.infrastructure.SystemQuestionAdminMapper;
 import com.earth.online.player.ailearn.question.infrastructure.SystemQuestionRecord;
 import com.earth.online.player.ailearn.question.infrastructure.SystemQuestionWriteRecord;
+import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQuestionDiffResponse;
+import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQuestionIssueResponse;
+import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQuestionPreviewRowResponse;
 import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQuestionsResponse;
+import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQuestionsPrecheckResponse;
 import com.earth.online.player.ailearn.question.interfaces.admin.SystemQuestionRequest;
 import com.earth.online.player.ailearn.question.interfaces.admin.SystemQuestionResponse;
 import com.earth.online.player.ailearn.user.domain.User;
@@ -23,8 +27,10 @@ import java.security.SecureRandom;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -41,9 +47,31 @@ public class SystemQuestionAdminService {
     private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_IMPORT_ROWS = 1000;
     private static final long MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024L;
+    private static final int MAX_CODE_LENGTH = 64;
+    private static final int MAX_QUESTION_TYPE_LENGTH = 32;
+    private static final int MAX_LONG_TEXT_LENGTH = 10000;
     private static final BigDecimal DEFAULT_IMPORTANCE_SCORE = BigDecimal.valueOf(60).setScale(1);
     private static final int DEFAULT_OCCURRENCE_COUNT = 0;
     private static final String CSV_HEADER = "code,question,question_type,standard_answer,importance_score,occurrence_count\n";
+    private static final String ACTION_CREATE = "CREATE";
+    private static final String ACTION_UPDATE = "UPDATE";
+    private static final String ACTION_CONFLICT = "CONFLICT";
+    private static final String ACTION_ERROR = "ERROR";
+    private static final String FIELD_FILE = "file";
+    private static final String FIELD_CODE = "code";
+    private static final String FIELD_QUESTION = "question";
+    private static final String FIELD_QUESTION_TYPE = "questionType";
+    private static final String FIELD_STANDARD_ANSWER = "standardAnswer";
+    private static final String FIELD_IMPORTANCE_SCORE = "importanceScore";
+    private static final String FIELD_OCCURRENCE_COUNT = "occurrenceCount";
+    private static final String LABEL_FILE = "文件";
+    private static final String LABEL_CODE = "题目编码";
+    private static final String LABEL_QUESTION = "题目";
+    private static final String LABEL_QUESTION_TYPE = "题目分类";
+    private static final String LABEL_STANDARD_ANSWER = "参考答案";
+    private static final String LABEL_IMPORTANCE_SCORE = "重要性评分";
+    private static final String LABEL_OCCURRENCE_COUNT = "真实面试出现次数";
+    private static final String AUTO_CODE_TEXT = "导入时自动生成";
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final UserMapper userMapper;
@@ -207,6 +235,18 @@ public class SystemQuestionAdminService {
     }
 
     /**
+     * 预检系统题库 CSV。
+     *
+     * @param file CSV 文件
+     * @return 预检结果
+     */
+    public ImportSystemQuestionsPrecheckResponse precheckImportCsv(MultipartFile file) {
+        requireSuperAdmin();
+        validateImportFile(file);
+        return analyzeImportCsv(file).toPrecheckResponse();
+    }
+
+    /**
      * 导入系统题库 CSV。
      *
      * @param file CSV 文件
@@ -216,14 +256,16 @@ public class SystemQuestionAdminService {
     public ImportSystemQuestionsResponse importCsv(MultipartFile file) {
         requireSuperAdmin();
         validateImportFile(file);
-        List<SystemQuestionRequest> requests = parseCsv(file);
+        ImportAnalysis analysis = analyzeImportCsv(file);
         int createdCount = 0;
         int updatedCount = 0;
 
-        // CSV 导入按 code 执行新增或更新，便于管理员批量维护题库。
-        for (SystemQuestionRequest request : requests) {
-            SystemQuestionWriteRecord writeRecord = buildWriteRecord(request, null);
-            SystemQuestionRecord existing = systemQuestionAdminMapper.findByCodeAny(writeRecord.getCode());
+        // 只写入预检通过的行，字段错误和文件内冲突行直接跳过。
+        for (ImportCandidate candidate : analysis.importableRows()) {
+            SystemQuestionWriteRecord writeRecord = buildWriteRecord(candidate.request(), null);
+            SystemQuestionRecord existing = StringUtils.hasText(writeRecord.getCode())
+                    ? systemQuestionAdminMapper.findByCodeAny(writeRecord.getCode())
+                    : null;
             if (existing == null) {
                 systemQuestionAdminMapper.insert(writeRecord);
                 createdCount++;
@@ -233,7 +275,19 @@ public class SystemQuestionAdminService {
                 updatedCount++;
             }
         }
-        return new ImportSystemQuestionsResponse(requests.size(), createdCount, updatedCount);
+        ImportSystemQuestionsPrecheckResponse precheckResponse = analysis.toPrecheckResponse();
+        int importedCount = createdCount + updatedCount;
+        int skippedCount = precheckResponse.totalCount() - importedCount;
+        return new ImportSystemQuestionsResponse(
+                importedCount,
+                createdCount,
+                updatedCount,
+                skippedCount,
+                precheckResponse.conflictCount(),
+                precheckResponse.errorCount(),
+                precheckResponse.rows(),
+                precheckResponse.issues()
+        );
     }
 
     /**
@@ -310,55 +364,102 @@ public class SystemQuestionAdminService {
     }
 
     /**
-     * 解析 CSV 文件。
+     * 分析 CSV 导入计划。
      *
      * @param file 上传文件
-     * @return 题目请求列表
+     * @return 导入分析结果
      */
-    private List<SystemQuestionRequest> parseCsv(MultipartFile file) {
-        List<SystemQuestionRequest> requests = new ArrayList<>();
+    private ImportAnalysis analyzeImportCsv(MultipartFile file) {
+        CsvParseResult parseResult = parseCsvRows(file);
+        List<ImportCandidate> importableRows = new ArrayList<>();
+        List<ImportSystemQuestionPreviewRowResponse> previewRows = new ArrayList<>();
+        List<ImportSystemQuestionIssueResponse> allIssues = new ArrayList<>(parseResult.issues());
+        Set<String> seenCodes = new LinkedHashSet<>();
+
+        // 逐行判断新增、更新、冲突和字段错误，预检阶段不写库。
+        for (ParsedCsvRow row : parseResult.rows()) {
+            RowAnalysis rowAnalysis = analyzeParsedRow(row, seenCodes);
+            previewRows.add(rowAnalysis.previewRow());
+            allIssues.addAll(rowAnalysis.previewRow().issues());
+            if (rowAnalysis.candidate() != null) {
+                importableRows.add(rowAnalysis.candidate());
+            }
+        }
+        if (previewRows.isEmpty() && allIssues.isEmpty()) {
+            allIssues.add(issue(0, FIELD_FILE, LABEL_FILE, "CSV文件没有可导入题目"));
+        }
+        return new ImportAnalysis(previewRows, allIssues, importableRows);
+    }
+
+    /**
+     * 解析 CSV 文件为原始行。
+     *
+     * @param file 上传文件
+     * @return CSV解析结果
+     */
+    private CsvParseResult parseCsvRows(MultipartFile file) {
+        List<ParsedCsvRow> rows = new ArrayList<>();
+        List<ImportSystemQuestionIssueResponse> issues = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(file.getInputStream(), StandardCharsets.UTF_8))) {
-            String line;
-            int physicalRowIndex = 0;
-            int recordStartRowIndex = 0;
-            StringBuilder recordBuilder = new StringBuilder();
-            while ((line = reader.readLine()) != null) {
-                physicalRowIndex++;
-                if (recordBuilder.isEmpty() && !StringUtils.hasText(line)) {
-                    continue;
-                }
-
-                // CSV 字段内允许换行，必须累积到双引号闭合后再按一条记录解析。
-                if (recordBuilder.isEmpty()) {
-                    recordStartRowIndex = physicalRowIndex;
-                } else {
-                    recordBuilder.append('\n');
-                }
-                recordBuilder.append(line);
-                if (!isCompleteCsvRecord(recordBuilder)) {
-                    continue;
-                }
-
-                String record = recordBuilder.toString();
-                recordBuilder.setLength(0);
-                if (recordStartRowIndex == 1 && record.replace("\uFEFF", "").startsWith("code,")) {
-                    continue;
-                }
-                requests.add(parseCsvRow(record, recordStartRowIndex));
-                if (requests.size() > MAX_IMPORT_ROWS) {
-                    throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "单次最多导入1000道题");
-                }
-            }
-            if (!recordBuilder.isEmpty()) {
-                throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "第" + recordStartRowIndex + "行CSV引号未闭合");
-            }
+            parseCsvRecords(reader, rows);
         } catch (IOException exception) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "CSV文件读取失败");
         }
-        if (requests.isEmpty()) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "CSV文件没有可导入题目");
+        if (rows.size() > MAX_IMPORT_ROWS) {
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "单次最多导入1000道题");
         }
-        return requests;
+        return new CsvParseResult(rows, issues);
+    }
+
+    /**
+     * 从字符流中读取完整 CSV 记录。
+     *
+     * @param reader 字符读取器
+     * @param rows CSV行集合
+     * @throws IOException 文件读取异常
+     */
+    private void parseCsvRecords(BufferedReader reader, List<ParsedCsvRow> rows) throws IOException {
+        String line;
+        int physicalRowIndex = 0;
+        int recordStartRowIndex = 0;
+        StringBuilder recordBuilder = new StringBuilder();
+        while ((line = reader.readLine()) != null) {
+            physicalRowIndex++;
+            if (recordBuilder.isEmpty() && !StringUtils.hasText(line)) {
+                continue;
+            }
+
+            // CSV 字段内允许换行，必须累积到双引号闭合后再按一条记录解析。
+            if (recordBuilder.isEmpty()) {
+                recordStartRowIndex = physicalRowIndex;
+            } else {
+                recordBuilder.append('\n');
+            }
+            recordBuilder.append(line);
+            appendCompleteCsvRecord(rows, recordBuilder, recordStartRowIndex);
+        }
+        if (!recordBuilder.isEmpty()) {
+            rows.add(errorRow(recordStartRowIndex, "第" + recordStartRowIndex + "行CSV引号未闭合"));
+        }
+    }
+
+    /**
+     * 追加已读取完整的 CSV 记录。
+     *
+     * @param rows CSV行集合
+     * @param recordBuilder 当前记录
+     * @param recordStartRowIndex 起始行号
+     */
+    private void appendCompleteCsvRecord(List<ParsedCsvRow> rows, StringBuilder recordBuilder, int recordStartRowIndex) {
+        if (!isCompleteCsvRecord(recordBuilder)) {
+            return;
+        }
+        String record = recordBuilder.toString();
+        recordBuilder.setLength(0);
+        if (recordStartRowIndex == 1 && record.replace("\uFEFF", "").startsWith("code,")) {
+            return;
+        }
+        rows.add(parseCsvRow(record, recordStartRowIndex));
     }
 
     /**
@@ -388,21 +489,67 @@ public class SystemQuestionAdminService {
      *
      * @param line CSV 行
      * @param rowIndex 行号
-     * @return 题目请求
+     * @return 解析后的CSV行
      */
-    private SystemQuestionRequest parseCsvRow(String line, int rowIndex) {
+    private ParsedCsvRow parseCsvRow(String line, int rowIndex) {
         List<String> columns = splitCsvLine(line);
-        if (columns.size() < 6) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "第" + rowIndex + "行字段数量不足");
+        List<ImportSystemQuestionIssueResponse> issues = new ArrayList<>();
+        if (columns.size() != 6) {
+            issues.add(issue(rowIndex, FIELD_FILE, LABEL_FILE, "第" + rowIndex + "行字段数量应为6列"));
+            return rowWithIssues(rowIndex, columns, issues);
         }
-        return new SystemQuestionRequest(
+
+        // 数字字段先按字符串解析，错误落到当前行而不是中断整批导入。
+        BigDecimal importanceScore = parseDecimalForRow(columns.get(4), rowIndex, issues);
+        Integer occurrenceCount = parseIntegerForRow(columns.get(5), rowIndex, issues);
+        ParsedCsvRow row = new ParsedCsvRow(
+                rowIndex,
                 columns.get(0),
                 columns.get(1),
                 columns.get(2),
                 columns.get(3),
-                parseDecimal(columns.get(4), DEFAULT_IMPORTANCE_SCORE, "第" + rowIndex + "行重要性评分不合法"),
-                parseInteger(columns.get(5), DEFAULT_OCCURRENCE_COUNT, "第" + rowIndex + "行真实面试出现次数不合法")
+                importanceScore,
+                occurrenceCount,
+                issues
         );
+        validateParsedRow(row, issues);
+        return row;
+    }
+
+    /**
+     * 构造带字段错误的CSV行。
+     *
+     * @param rowIndex 行号
+     * @param columns 原始列
+     * @param issues 字段问题
+     * @return 解析后的CSV行
+     */
+    private ParsedCsvRow rowWithIssues(
+            int rowIndex,
+            List<String> columns,
+            List<ImportSystemQuestionIssueResponse> issues) {
+        return new ParsedCsvRow(
+                rowIndex,
+                getColumn(columns, 0),
+                getColumn(columns, 1),
+                getColumn(columns, 2),
+                getColumn(columns, 3),
+                null,
+                null,
+                issues
+        );
+    }
+
+    /**
+     * 构造整行错误的CSV行。
+     *
+     * @param rowIndex 行号
+     * @param message 错误说明
+     * @return 解析后的CSV行
+     */
+    private ParsedCsvRow errorRow(int rowIndex, String message) {
+        List<ImportSystemQuestionIssueResponse> issues = List.of(issue(rowIndex, FIELD_FILE, LABEL_FILE, message));
+        return new ParsedCsvRow(rowIndex, "", "", "", "", null, null, issues);
     }
 
     /**
@@ -436,40 +583,160 @@ public class SystemQuestionAdminService {
     }
 
     /**
-     * 解析整数。
+     * 分析单个 CSV 题目行。
      *
-     * @param value 原始值
-     * @param defaultValue 默认值
-     * @param message 错误提示
-     * @return 整数值
+     * @param row CSV行
+     * @param seenCodes 已出现编码
+     * @return 行分析结果
      */
-    private int parseInteger(String value, int defaultValue, String message) {
-        if (!StringUtils.hasText(value)) {
-            return defaultValue;
+    private RowAnalysis analyzeParsedRow(ParsedCsvRow row, Set<String> seenCodes) {
+        List<ImportSystemQuestionIssueResponse> issues = new ArrayList<>(row.issues());
+        if (!issues.isEmpty()) {
+            return new RowAnalysis(buildPreviewRow(row, ACTION_ERROR, false, List.of(), issues), null);
         }
-        try {
-            return Integer.parseInt(value.trim());
-        } catch (NumberFormatException exception) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), message);
+        SystemQuestionRequest request = toRequest(row);
+        String code = trimToNull(request.code());
+        if (StringUtils.hasText(code) && !seenCodes.add(code)) {
+            issues.add(issue(row.rowIndex(), FIELD_CODE, LABEL_CODE, "题目编码在当前CSV中重复"));
+            return new RowAnalysis(buildPreviewRow(row, ACTION_CONFLICT, false, List.of(), issues), null);
+        }
+
+        // 与数据库比对后生成新增或更新预览，管理员可先看影响范围。
+        SystemQuestionRecord existing = StringUtils.hasText(code) ? systemQuestionAdminMapper.findByCodeAny(code) : null;
+        String action = existing == null ? ACTION_CREATE : ACTION_UPDATE;
+        List<ImportSystemQuestionDiffResponse> diffs = existing == null ? List.of() : buildDiffs(existing, request);
+        ImportCandidate candidate = new ImportCandidate(request);
+        return new RowAnalysis(buildPreviewRow(row, action, true, diffs, issues), candidate);
+    }
+
+    /**
+     * 转换为保存请求。
+     *
+     * @param row CSV行
+     * @return 保存请求
+     */
+    private SystemQuestionRequest toRequest(ParsedCsvRow row) {
+        return new SystemQuestionRequest(
+                normalizeCode(row.code()),
+                requireText(row.question(), "题目不能为空"),
+                normalizeQuestionType(row.questionType()),
+                requireText(row.standardAnswer(), "参考答案不能为空"),
+                normalizeImportanceScore(row.importanceScore()),
+                normalizeOccurrenceCount(row.occurrenceCount())
+        );
+    }
+
+    /**
+     * 构建预览行。
+     *
+     * @param row CSV行
+     * @param action 动作
+     * @param importable 是否可导入
+     * @param diffs 差异
+     * @param issues 字段问题
+     * @return 预览行
+     */
+    private ImportSystemQuestionPreviewRowResponse buildPreviewRow(
+            ParsedCsvRow row,
+            String action,
+            boolean importable,
+            List<ImportSystemQuestionDiffResponse> diffs,
+            List<ImportSystemQuestionIssueResponse> issues) {
+        return new ImportSystemQuestionPreviewRowResponse(
+                row.rowIndex(),
+                action,
+                actionText(action),
+                importable,
+                StringUtils.hasText(row.code()) ? row.code().trim().toUpperCase(Locale.ROOT) : AUTO_CODE_TEXT,
+                row.question(),
+                row.questionType(),
+                row.standardAnswer(),
+                row.importanceScore(),
+                row.occurrenceCount(),
+                diffs,
+                issues
+        );
+    }
+
+    /**
+     * 生成更新差异。
+     *
+     * @param existing 已存在题目
+     * @param request CSV题目
+     * @return 字段差异
+     */
+    private List<ImportSystemQuestionDiffResponse> buildDiffs(SystemQuestionRecord existing, SystemQuestionRequest request) {
+        List<ImportSystemQuestionDiffResponse> diffs = new ArrayList<>();
+        addDiff(diffs, FIELD_QUESTION, LABEL_QUESTION, existing.getQuestion(), request.question());
+        addDiff(diffs, FIELD_QUESTION_TYPE, LABEL_QUESTION_TYPE, existing.getQuestionType(), request.questionType());
+        addDiff(diffs, FIELD_STANDARD_ANSWER, LABEL_STANDARD_ANSWER, existing.getStandardAnswer(), request.standardAnswer());
+        addDiff(diffs, FIELD_IMPORTANCE_SCORE, LABEL_IMPORTANCE_SCORE, existing.getImportanceScore(), request.importanceScore());
+        addDiff(diffs, FIELD_OCCURRENCE_COUNT, LABEL_OCCURRENCE_COUNT, existing.getOccurrenceCount(), request.occurrenceCount());
+        if (Boolean.TRUE.equals(existing.getDeleted())) {
+            diffs.add(new ImportSystemQuestionDiffResponse("deleted", "删除状态", "已删除", "恢复可用"));
+        }
+        return diffs;
+    }
+
+    /**
+     * 按需追加字段差异。
+     *
+     * @param diffs 差异集合
+     * @param fieldName 字段名
+     * @param fieldLabel 字段中文名
+     * @param oldValue 旧值
+     * @param newValue 新值
+     */
+    private void addDiff(
+            List<ImportSystemQuestionDiffResponse> diffs,
+            String fieldName,
+            String fieldLabel,
+            Object oldValue,
+            Object newValue) {
+        String oldText = valueToText(oldValue);
+        String newText = valueToText(newValue);
+        if (!oldText.equals(newText)) {
+            diffs.add(new ImportSystemQuestionDiffResponse(fieldName, fieldLabel, oldText, newText));
         }
     }
 
     /**
-     * 解析小数。
+     * 解析行内整数。
      *
      * @param value 原始值
-     * @param defaultValue 默认值
-     * @param message 错误提示
+     * @param rowIndex 行号
+     * @param issues 字段问题
+     * @return 整数值
+     */
+    private Integer parseIntegerForRow(String value, int rowIndex, List<ImportSystemQuestionIssueResponse> issues) {
+        if (!StringUtils.hasText(value)) {
+            return DEFAULT_OCCURRENCE_COUNT;
+        }
+        try {
+            return Integer.parseInt(value.trim());
+        } catch (NumberFormatException exception) {
+            issues.add(issue(rowIndex, FIELD_OCCURRENCE_COUNT, LABEL_OCCURRENCE_COUNT, "真实面试出现次数必须是整数"));
+            return null;
+        }
+    }
+
+    /**
+     * 解析行内小数。
+     *
+     * @param value 原始值
+     * @param rowIndex 行号
+     * @param issues 字段问题
      * @return 小数值
      */
-    private BigDecimal parseDecimal(String value, BigDecimal defaultValue, String message) {
+    private BigDecimal parseDecimalForRow(String value, int rowIndex, List<ImportSystemQuestionIssueResponse> issues) {
         if (!StringUtils.hasText(value)) {
-            return defaultValue;
+            return DEFAULT_IMPORTANCE_SCORE;
         }
         try {
             return new BigDecimal(value.trim());
         } catch (NumberFormatException exception) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), message);
+            issues.add(issue(rowIndex, FIELD_IMPORTANCE_SCORE, LABEL_IMPORTANCE_SCORE, "重要性评分必须是数字"));
+            return null;
         }
     }
 
@@ -566,7 +833,7 @@ public class SystemQuestionAdminService {
             return null;
         }
         String safeCode = code.trim().toUpperCase(Locale.ROOT);
-        if (safeCode.length() > 64) {
+        if (safeCode.length() > MAX_CODE_LENGTH) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目编码不能超过64个字符");
         }
         return safeCode;
@@ -580,7 +847,7 @@ public class SystemQuestionAdminService {
      */
     private String normalizeQuestionType(String questionType) {
         String safeType = requireText(questionType, "题目分类不能为空").trim();
-        if (safeType.length() > 32) {
+        if (safeType.length() > MAX_QUESTION_TYPE_LENGTH) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目分类不能超过32个字符");
         }
         return safeType;
@@ -622,5 +889,235 @@ public class SystemQuestionAdminService {
      */
     private String trimToNull(String value) {
         return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    /**
+     * 校验解析后的CSV行。
+     *
+     * @param row CSV行
+     * @param issues 字段问题
+     */
+    private void validateParsedRow(ParsedCsvRow row, List<ImportSystemQuestionIssueResponse> issues) {
+        validateText(row.rowIndex(), FIELD_QUESTION, LABEL_QUESTION, row.question(), MAX_LONG_TEXT_LENGTH, true, issues);
+        validateText(row.rowIndex(), FIELD_QUESTION_TYPE, LABEL_QUESTION_TYPE, row.questionType(), MAX_QUESTION_TYPE_LENGTH, true, issues);
+        validateText(row.rowIndex(), FIELD_STANDARD_ANSWER, LABEL_STANDARD_ANSWER, row.standardAnswer(), MAX_LONG_TEXT_LENGTH, true, issues);
+        validateText(row.rowIndex(), FIELD_CODE, LABEL_CODE, row.code(), MAX_CODE_LENGTH, false, issues);
+        validateScore(row.rowIndex(), row.importanceScore(), issues);
+        validateOccurrenceCount(row.rowIndex(), row.occurrenceCount(), issues);
+    }
+
+    /**
+     * 校验文本字段。
+     *
+     * @param rowIndex 行号
+     * @param fieldName 字段名
+     * @param fieldLabel 字段中文名
+     * @param value 字段值
+     * @param maxLength 最大长度
+     * @param required 是否必填
+     * @param issues 字段问题
+     */
+    private void validateText(
+            int rowIndex,
+            String fieldName,
+            String fieldLabel,
+            String value,
+            int maxLength,
+            boolean required,
+            List<ImportSystemQuestionIssueResponse> issues) {
+        if (required && !StringUtils.hasText(value)) {
+            issues.add(issue(rowIndex, fieldName, fieldLabel, fieldLabel + "不能为空"));
+            return;
+        }
+        if (StringUtils.hasText(value) && value.trim().length() > maxLength) {
+            issues.add(issue(rowIndex, fieldName, fieldLabel, fieldLabel + "不能超过" + maxLength + "个字符"));
+        }
+    }
+
+    /**
+     * 校验重要性评分。
+     *
+     * @param rowIndex 行号
+     * @param value 评分
+     * @param issues 字段问题
+     */
+    private void validateScore(int rowIndex, BigDecimal value, List<ImportSystemQuestionIssueResponse> issues) {
+        if (value == null) {
+            return;
+        }
+        if (value.compareTo(BigDecimal.ZERO) < 0 || value.compareTo(BigDecimal.valueOf(100)) > 0) {
+            issues.add(issue(rowIndex, FIELD_IMPORTANCE_SCORE, LABEL_IMPORTANCE_SCORE, "重要性评分必须在0到100之间"));
+        }
+    }
+
+    /**
+     * 校验真实面试出现次数。
+     *
+     * @param rowIndex 行号
+     * @param value 次数
+     * @param issues 字段问题
+     */
+    private void validateOccurrenceCount(int rowIndex, Integer value, List<ImportSystemQuestionIssueResponse> issues) {
+        if (value != null && value < 0) {
+            issues.add(issue(rowIndex, FIELD_OCCURRENCE_COUNT, LABEL_OCCURRENCE_COUNT, "真实面试出现次数不能小于0"));
+        }
+    }
+
+    /**
+     * 获取指定列。
+     *
+     * @param columns 列集合
+     * @param index 下标
+     * @return 列值
+     */
+    private String getColumn(List<String> columns, int index) {
+        return index < columns.size() ? columns.get(index) : "";
+    }
+
+    /**
+     * 构造字段问题。
+     *
+     * @param rowIndex 行号
+     * @param fieldName 字段名
+     * @param fieldLabel 字段中文名
+     * @param message 问题说明
+     * @return 字段问题
+     */
+    private ImportSystemQuestionIssueResponse issue(int rowIndex, String fieldName, String fieldLabel, String message) {
+        return new ImportSystemQuestionIssueResponse(rowIndex, fieldName, fieldLabel, message);
+    }
+
+    /**
+     * 转换动作中文文案。
+     *
+     * @param action 动作
+     * @return 中文文案
+     */
+    private String actionText(String action) {
+        return switch (action) {
+            case ACTION_CREATE -> "新增";
+            case ACTION_UPDATE -> "更新";
+            case ACTION_CONFLICT -> "冲突";
+            default -> "错误";
+        };
+    }
+
+    /**
+     * 转换预览展示文本。
+     *
+     * @param value 原始值
+     * @return 展示文本
+     */
+    private String valueToText(Object value) {
+        if (value == null) {
+            return "";
+        }
+        if (value instanceof BigDecimal decimal) {
+            return decimal.stripTrailingZeros().toPlainString();
+        }
+        return String.valueOf(value);
+    }
+
+    /**
+     * CSV解析结果。
+     *
+     * @param rows CSV行
+     * @param issues 文件级问题
+     */
+    private record CsvParseResult(List<ParsedCsvRow> rows, List<ImportSystemQuestionIssueResponse> issues) {
+    }
+
+    /**
+     * 解析后的CSV行。
+     *
+     * @param rowIndex 行号
+     * @param code 题目编码
+     * @param question 题目
+     * @param questionType 题目分类
+     * @param standardAnswer 参考答案
+     * @param importanceScore 重要性评分
+     * @param occurrenceCount 真实面试出现次数
+     * @param issues 字段问题
+     */
+    private record ParsedCsvRow(
+            int rowIndex,
+            String code,
+            String question,
+            String questionType,
+            String standardAnswer,
+            BigDecimal importanceScore,
+            Integer occurrenceCount,
+            List<ImportSystemQuestionIssueResponse> issues) {
+    }
+
+    /**
+     * 单行分析结果。
+     *
+     * @param previewRow 预览行
+     * @param candidate 可导入候选
+     */
+    private record RowAnalysis(ImportSystemQuestionPreviewRowResponse previewRow, ImportCandidate candidate) {
+    }
+
+    /**
+     * 可导入候选行。
+     *
+     * @param request 保存请求
+     */
+    private record ImportCandidate(SystemQuestionRequest request) {
+    }
+
+    /**
+     * 导入分析结果。
+     *
+     * @param rows 预览行
+     * @param issues 字段问题
+     * @param importableRows 可导入行
+     */
+    private record ImportAnalysis(
+            List<ImportSystemQuestionPreviewRowResponse> rows,
+            List<ImportSystemQuestionIssueResponse> issues,
+            List<ImportCandidate> importableRows) {
+
+        /**
+         * 转换为预检响应。
+         *
+         * @return 预检响应
+         */
+        private ImportSystemQuestionsPrecheckResponse toPrecheckResponse() {
+            int createdCount = countAction(ACTION_CREATE);
+            int updatedCount = countAction(ACTION_UPDATE);
+            int conflictCount = countAction(ACTION_CONFLICT);
+            int errorCount = countAction(ACTION_ERROR) + Math.max(0, issues.size() - rowIssueCount());
+            return new ImportSystemQuestionsPrecheckResponse(
+                    rows.size(),
+                    createdCount + updatedCount,
+                    createdCount,
+                    updatedCount,
+                    conflictCount,
+                    errorCount,
+                    rows,
+                    issues
+            );
+        }
+
+        /**
+         * 统计指定动作数量。
+         *
+         * @param action 动作
+         * @return 数量
+         */
+        private int countAction(String action) {
+            return (int) rows.stream().filter(row -> action.equals(row.action())).count();
+        }
+
+        /**
+         * 统计行内问题数量。
+         *
+         * @return 行内问题数量
+         */
+        private int rowIssueCount() {
+            return rows.stream().mapToInt(row -> row.issues().size()).sum();
+        }
     }
 }

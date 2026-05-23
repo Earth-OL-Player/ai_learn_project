@@ -52,9 +52,12 @@ const SAFE_MARKDOWN_ALLOWED_ATTRIBUTES = [
   'class',
   'href',
   'id',
+  'decoding',
   'rel',
+  'loading',
   'src',
   'target',
+  'tabindex',
   'title',
 ];
 

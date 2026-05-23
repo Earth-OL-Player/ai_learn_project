@@ -68,7 +68,15 @@
 </template>
 
 <script setup lang="ts">
+import { ElCard } from 'element-plus/es/components/card/index.mjs';
+import { ElEmpty } from 'element-plus/es/components/empty/index.mjs';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
+import { ElProgress } from 'element-plus/es/components/progress/index.mjs';
+import { ElSkeleton } from 'element-plus/es/components/skeleton/index.mjs';
+import 'element-plus/es/components/card/style/css';
+import 'element-plus/es/components/empty/style/css';
+import 'element-plus/es/components/progress/style/css';
+import 'element-plus/es/components/skeleton/style/css';
 import { computed, onMounted, ref } from 'vue';
 import { fetchMyGrowth } from '../../../api/practice';
 import RealmCharacterCard from '../../../components/growth/RealmCharacterCard.vue';

@@ -2,6 +2,7 @@
   <el-dialog
     v-model="dialogVisible"
     class="badge-award-dialog"
+    title="获得新勋章"
     width="560px"
     align-center
     :show-close="false"
@@ -10,7 +11,7 @@
   >
     <template #header>
       <div class="badge-award-header">
-        <span class="badge-award-medal">🏅</span>
+        <span class="badge-award-medal" aria-hidden="true">🏅</span>
         <div>
           <strong>恭喜获得新勋章</strong>
           <p>{{ subtitle }}</p>
@@ -30,7 +31,7 @@
     </div>
 
     <template #footer>
-      <el-button class="badge-award-confirm" type="primary" round @click="dialogVisible = false">继续刷题</el-button>
+      <el-button class="badge-award-confirm" type="primary" round aria-label="关闭勋章弹窗并继续刷题" @click="dialogVisible = false">继续刷题</el-button>
     </template>
   </el-dialog>
 </template>

@@ -8,17 +8,25 @@
       >
         <div class="markdown-toc-header">
           <h3 v-if="!isTocCollapsed">分类</h3>
-          <button type="button" class="markdown-toc-toggle" @click="toggleToc">
+          <button
+            type="button"
+            class="markdown-toc-toggle"
+            :aria-expanded="!isTocCollapsed"
+            aria-controls="interview-category-list"
+            :aria-label="isTocCollapsed ? '展开热门面试题分类' : '收起热门面试题分类'"
+            @click="toggleToc"
+          >
             {{ isTocCollapsed ? '展开' : '收起' }}
           </button>
         </div>
 
-        <div v-show="!isTocCollapsed" class="markdown-toc-list interview-category-list">
+        <div id="interview-category-list" v-show="!isTocCollapsed" class="markdown-toc-list interview-category-list">
           <button
             v-for="questionType in questionTypes"
             :key="questionType"
             type="button"
             :class="['markdown-toc-link interview-category-button', { 'is-active': activeQuestionType === questionType }]"
+            :aria-pressed="activeQuestionType === questionType"
             @click="handleCategoryChange(questionType)"
           >
             {{ questionType }}
@@ -29,7 +37,7 @@
       <article class="markdown-card interview-document-card">
         <el-skeleton :loading="loading" animated :rows="10">
           <el-empty v-if="!activeQuestionType" description="暂无热门面试题内容，管理员补充题库后将自动展示" />
-          <div v-else class="markdown-body interview-markdown-body">
+          <div v-else class="markdown-body interview-markdown-body" aria-live="polite">
             <section class="interview-category-section">
               <h2>{{ activeQuestionType }}</h2>
 
@@ -63,7 +71,11 @@
 </template>
 
 <script setup lang="ts">
+import { ElEmpty } from 'element-plus/es/components/empty/index.mjs';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
+import { ElSkeleton } from 'element-plus/es/components/skeleton/index.mjs';
+import 'element-plus/es/components/empty/style/css';
+import 'element-plus/es/components/skeleton/style/css';
 import { onMounted, ref } from 'vue';
 import { fetchInterviewQuestionDocument, fetchPublicQuestionTypes } from '../../api/questions';
 import type { QuestionDetail } from '../../types/question';

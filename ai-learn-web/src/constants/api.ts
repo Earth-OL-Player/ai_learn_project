@@ -9,6 +9,11 @@ export const API_SUCCESS_CODE = 'SUCCESS';
 export const REFRESH_TOKEN_HEADER = 'X-Refresh-Token';
 
 /**
+ * 全链路追踪请求头。
+ */
+export const TRACE_ID_HEADER = 'X-Trace-Id';
+
+/**
  * 默认后端接口基础路径。
  */
 export const DEFAULT_API_BASE_URL = '/api/v1';

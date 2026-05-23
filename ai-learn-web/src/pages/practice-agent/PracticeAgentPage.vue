@@ -1,6 +1,6 @@
 <template>
   <section class="practice-chat-page">
-    <aside class="practice-side-card">
+    <aside class="practice-side-card" aria-label="学习成长信息">
       <div class="filter-card-title">
         <strong>昨日因,今日果,前尘不咎</strong>
         <strong>今日因,明日果,当下即道</strong>
@@ -20,7 +20,7 @@
       />
     </aside>
 
-    <main class="practice-chat-card">
+    <main class="practice-chat-card" aria-label="AI智能刷题对话区">
       <div class="practice-chat-header">
         <PracticeCategorySelector
           v-model="selectedCategories"
@@ -28,8 +28,26 @@
           @visible-change="handleCategoryVisibleChange"
           @change="handleCategoryChange"
         />
-        <el-button class="main-action-button" type="primary" round :loading="loading" @click="handleNextQuestion">{{ nextButtonText }}</el-button>
-        <el-button class="sub-action-button" round :disabled="retryButtonDisabled" :loading="loading" @click="handleRetry">重答本题</el-button>
+        <el-button
+          class="main-action-button"
+          type="primary"
+          round
+          :loading="loading"
+          :aria-label="nextButtonText"
+          @click="handleNextQuestion"
+        >
+          {{ nextButtonText }}
+        </el-button>
+        <el-button
+          class="sub-action-button"
+          round
+          :disabled="retryButtonDisabled"
+          :loading="loading"
+          aria-label="重答本题"
+          @click="handleRetry"
+        >
+          重答本题
+        </el-button>
       </div>
 
       <PracticeMessageList

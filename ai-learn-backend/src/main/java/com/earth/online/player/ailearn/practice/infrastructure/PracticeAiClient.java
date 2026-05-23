@@ -4,6 +4,7 @@ import com.earth.online.player.ailearn.ai.AiServiceConstants;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.earth.online.player.ailearn.common.exception.ClientStreamClosedException;
+import com.earth.online.player.ailearn.common.trace.TraceContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -14,6 +15,7 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -34,6 +36,11 @@ import org.springframework.util.StringUtils;
 public class PracticeAiClient {
 
     private static final Logger LOGGER = LoggerFactory.getLogger(PracticeAiClient.class);
+    private static final String ERROR_CATEGORY_HTTP_STATUS = "HTTP_STATUS";
+    private static final String ERROR_CATEGORY_TIMEOUT = "TIMEOUT";
+    private static final String ERROR_CATEGORY_EXCEPTION = "EXCEPTION";
+    private static final String ERROR_CATEGORY_BUSINESS = "BUSINESS_ERROR";
+    private static final String UNAVAILABLE = "unavailable";
 
     private final AiServiceProperties properties;
     private final ObjectMapper objectMapper;
@@ -129,28 +136,34 @@ public class PracticeAiClient {
      * @return 响应 data 节点
      */
     private Optional<JsonNode> postJson(String path, JsonNode payload) {
+        long startMillis = System.currentTimeMillis();
+        String traceId = currentTraceId();
         try {
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
                     .uri(URI.create(normalizeBaseUrl() + path))
                     .timeout(timeout())
                     .version(HttpClient.Version.HTTP_1_1)
                     .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
                     .header("Accept", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken())
+                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken()), traceId)
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                logJsonObservability(path, traceId, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_HTTP_STATUS, null);
                 LOGGER.warn("AI 服务调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
                 return Optional.empty();
             }
             JsonNode root = objectMapper.readTree(response.body());
             if (!AiServiceConstants.SUCCESS_CODE.equals(root.path("code").asText())) {
+                logJsonObservability(path, traceId, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_BUSINESS, root.path("observability"));
                 LOGGER.warn("AI 服务业务响应失败，已进入本地兜底：path={} code={}", path, root.path("code").asText());
                 return Optional.empty();
             }
+            logJsonObservability(path, traceId, true, false, response.statusCode(), startMillis, "", root.path("observability"));
             return Optional.ofNullable(root.get("data"));
         } catch (Exception exception) {
+            logJsonObservability(path, traceId, false, true, 0, startMillis, errorCategory(exception), null);
             LOGGER.warn("AI 服务调用异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         }
@@ -165,28 +178,32 @@ public class PracticeAiClient {
      * @return 完整文本
      */
     private Optional<String> postEventStream(String path, JsonNode payload, Consumer<String> chunkConsumer) {
+        long startMillis = System.currentTimeMillis();
+        String traceId = currentTraceId();
         try {
-            long startMillis = System.currentTimeMillis();
-            HttpRequest request = HttpRequest.newBuilder()
+            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
                     .uri(URI.create(normalizeBaseUrl() + path))
                     .timeout(timeout())
                     .version(HttpClient.Version.HTTP_1_1)
                     .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
                     .header("Accept", AiServiceConstants.EVENT_STREAM_CONTENT_TYPE)
-                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken())
+                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken()), traceId)
                     .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                logStreamObservability(path, traceId, false, true, response.statusCode(), startMillis, -1L, ERROR_CATEGORY_HTTP_STATUS);
                 LOGGER.warn("AI 服务流式调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
                 return Optional.empty();
             }
             return readEventStream(response, chunkConsumer, startMillis);
         } catch (IOException exception) {
+            logStreamObservability(path, traceId, false, true, 0, startMillis, -1L, errorCategory(exception));
             LOGGER.warn("AI 服务流式调用 IO 异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
+            logStreamObservability(path, traceId, false, true, 0, startMillis, -1L, ERROR_CATEGORY_EXCEPTION);
             LOGGER.warn("AI 服务流式调用被中断，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         }
@@ -208,11 +225,12 @@ public class PracticeAiClient {
         String eventName = "message";
         StringBuilder dataBuilder = new StringBuilder();
         AtomicInteger chunkCount = new AtomicInteger(0);
+        long[] firstChunkMillisHolder = new long[] {-1L};
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(response.body(), StandardCharsets.UTF_8))) {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
-                    processStreamEvent(eventName, dataBuilder.toString(), replyBuilder, chunkConsumer, chunkCount, startMillis);
+                    processStreamEvent(eventName, dataBuilder.toString(), replyBuilder, chunkConsumer, chunkCount, startMillis, firstChunkMillisHolder);
                     eventName = "message";
                     dataBuilder.setLength(0);
                     continue;
@@ -224,7 +242,16 @@ public class PracticeAiClient {
                 }
             }
         }
-        LOGGER.info("Java 后端读取 AI 服务流式响应完成：chunks={} chars={} elapsedMs={}", chunkCount.get(), replyBuilder.length(), System.currentTimeMillis() - startMillis);
+        logStreamObservability(
+                AiServiceConstants.PRACTICE_DISCUSS_STREAM_PATH,
+                currentTraceId(),
+                !replyBuilder.isEmpty(),
+                replyBuilder.isEmpty(),
+                response.statusCode(),
+                startMillis,
+                firstChunkMillisHolder[0],
+                replyBuilder.isEmpty() ? "EMPTY_STREAM" : ""
+        );
         return replyBuilder.isEmpty() ? Optional.empty() : Optional.of(replyBuilder.toString());
     }
 
@@ -244,7 +271,8 @@ public class PracticeAiClient {
             StringBuilder replyBuilder,
             Consumer<String> chunkConsumer,
             AtomicInteger chunkCount,
-            long startMillis) {
+            long startMillis,
+            long[] firstChunkMillisHolder) {
         if (!"message".equals(eventName) || !StringUtils.hasText(data)) {
             return;
         }
@@ -253,7 +281,11 @@ public class PracticeAiClient {
             String content = node.path("content").asText("");
             if (!content.isEmpty()) {
                 replyBuilder.append(content);
-                logReceivedChunk(content, chunkCount.incrementAndGet(), startMillis);
+                int currentChunkCount = chunkCount.incrementAndGet();
+                if (currentChunkCount == 1) {
+                    firstChunkMillisHolder[0] = System.currentTimeMillis() - startMillis;
+                }
+                logReceivedChunk(content, currentChunkCount, startMillis);
                 chunkConsumer.accept(content);
             }
         } catch (IOException exception) {
@@ -275,7 +307,8 @@ public class PracticeAiClient {
 
         // 只记录片段长度和耗时，避免模型回答正文进入日志。
         LOGGER.info(
-                "Java 后端收到 AI 服务流式片段：count={} chars={} elapsedMs={}",
+                "Java 后端收到 AI 服务流式片段：traceId={} count={} chars={} elapsedMs={}",
+                currentTraceId(),
                 chunkCount,
                 content.length(),
                 System.currentTimeMillis() - startMillis
@@ -327,6 +360,146 @@ public class PracticeAiClient {
             LOGGER.warn("当前题讨论历史解析失败，已忽略历史上下文", exception);
             return objectMapper.createArrayNode();
         }
+    }
+
+    /**
+     * 补充内部调用通用 Header。
+     *
+     * @param builder 请求构造器
+     * @param traceId 请求链路标识
+     * @return 请求构造器
+     */
+    private HttpRequest.Builder addCommonHeaders(HttpRequest.Builder builder, String traceId) {
+        if (StringUtils.hasText(traceId)) {
+            builder.header(TraceContext.TRACE_ID_HEADER, traceId);
+        }
+        return builder;
+    }
+
+    /**
+     * 记录 JSON AI 调用观测事件。
+     *
+     * @param path 请求路径
+     * @param traceId 请求链路标识
+     * @param success 是否调用成功
+     * @param fallbackUsed 是否进入兜底
+     * @param status HTTP 状态码
+     * @param startMillis 开始时间
+     * @param errorCategory 错误分类
+     * @param observability Python 返回的观测元数据
+     */
+    private void logJsonObservability(
+            String path,
+            String traceId,
+            boolean success,
+            boolean fallbackUsed,
+            int status,
+            long startMillis,
+            String errorCategory,
+            JsonNode observability) {
+        LOGGER.info(
+                "AI 调用观测：traceId={} path={} stream=false success={} fallbackUsed={} status={} durationMs={} model={} inputTokens={} outputTokens={} totalTokens={} estimatedCost={} errorCategory={}",
+                traceId,
+                path,
+                success,
+                fallbackUsed,
+                status,
+                System.currentTimeMillis() - startMillis,
+                observabilityText(observability, "model"),
+                observabilityInt(observability, "inputTokens"),
+                observabilityInt(observability, "outputTokens"),
+                observabilityInt(observability, "totalTokens"),
+                observabilityText(observability, "estimatedCost"),
+                errorCategory
+        );
+    }
+
+    /**
+     * 记录流式 AI 调用观测事件。
+     *
+     * @param path 请求路径
+     * @param traceId 请求链路标识
+     * @param success 是否调用成功
+     * @param fallbackUsed 是否进入兜底
+     * @param status HTTP 状态码
+     * @param startMillis 开始时间
+     * @param firstChunkMs 首包耗时
+     * @param errorCategory 错误分类
+     */
+    private void logStreamObservability(
+            String path,
+            String traceId,
+            boolean success,
+            boolean fallbackUsed,
+            int status,
+            long startMillis,
+            long firstChunkMs,
+            String errorCategory) {
+        LOGGER.info(
+                "AI 调用观测：traceId={} path={} stream=true success={} fallbackUsed={} status={} firstTokenMs={} durationMs={} model={} outputTokens={} estimatedCost={} errorCategory={}",
+                traceId,
+                path,
+                success,
+                fallbackUsed,
+                status,
+                firstChunkMs < 0 ? UNAVAILABLE : firstChunkMs,
+                System.currentTimeMillis() - startMillis,
+                UNAVAILABLE,
+                UNAVAILABLE,
+                UNAVAILABLE,
+                errorCategory
+        );
+    }
+
+    /**
+     * 读取当前线程 traceId。
+     *
+     * @return traceId
+     */
+    private String currentTraceId() {
+        return Optional.ofNullable(TraceContext.getTraceId()).orElse("");
+    }
+
+    /**
+     * 读取观测元数据文本字段。
+     *
+     * @param observability 观测元数据
+     * @param field 字段名
+     * @return 文本值
+     */
+    private String observabilityText(JsonNode observability, String field) {
+        if (observability == null || observability.isMissingNode() || observability.path(field).isMissingNode()) {
+            return UNAVAILABLE;
+        }
+        String value = observability.path(field).asText("");
+        return StringUtils.hasText(value) ? value : UNAVAILABLE;
+    }
+
+    /**
+     * 读取观测元数据整数字段。
+     *
+     * @param observability 观测元数据
+     * @param field 字段名
+     * @return 整数值
+     */
+    private String observabilityInt(JsonNode observability, String field) {
+        if (observability == null || observability.isMissingNode() || !observability.path(field).isNumber()) {
+            return UNAVAILABLE;
+        }
+        return observability.path(field).asText();
+    }
+
+    /**
+     * 归类 AI 服务调用异常。
+     *
+     * @param exception 异常
+     * @return 错误分类
+     */
+    private String errorCategory(Exception exception) {
+        if (exception instanceof HttpTimeoutException) {
+            return ERROR_CATEGORY_TIMEOUT;
+        }
+        return ERROR_CATEGORY_EXCEPTION;
     }
 
     /**

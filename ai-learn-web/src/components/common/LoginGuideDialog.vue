@@ -1,7 +1,7 @@
 <template>
-  <el-dialog v-model="visible" width="420px" class="login-guide-dialog" destroy-on-close>
+  <el-dialog v-model="visible" title="登录提醒" width="420px" class="login-guide-dialog" destroy-on-close>
     <div class="login-guide-body">
-      <div class="login-guide-icon">🔐</div>
+      <div class="login-guide-icon" aria-hidden="true">🔐</div>
       <h3>登录后即可使用该功能</h3>
       <p>登录后可以访问热门面试题、AI智能刷题和个人中心，后续学习记录也会自动沉淀。</p>
       <div class="login-guide-actions">

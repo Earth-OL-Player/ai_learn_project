@@ -1,6 +1,12 @@
 import { del, get, getBlob, post, postForm, put } from './http';
 import type { PageResponse } from '../types/page';
-import type { ImportSystemQuestionsResult, SystemQuestionItem, SystemQuestionPayload, SystemQuestionQuery } from '../types/system-question';
+import type {
+  ImportSystemQuestionsPrecheckResult,
+  ImportSystemQuestionsResult,
+  SystemQuestionItem,
+  SystemQuestionPayload,
+  SystemQuestionQuery,
+} from '../types/system-question';
 
 /**
  * 分页查询系统题库。
@@ -54,6 +60,15 @@ export function clearSystemQuestions(): Promise<boolean> {
  */
 export function downloadSystemQuestionTemplate(): Promise<Blob> {
   return getBlob('/admin/system-questions/template');
+}
+
+/**
+ * 预检系统题库 CSV。
+ */
+export function precheckImportSystemQuestions(file: File): Promise<ImportSystemQuestionsPrecheckResult> {
+  const formData = new FormData();
+  formData.append('file', file);
+  return postForm<ImportSystemQuestionsPrecheckResult>('/admin/system-questions/import/precheck', formData);
 }
 
 /**

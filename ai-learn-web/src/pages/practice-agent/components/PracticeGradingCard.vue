@@ -1,5 +1,5 @@
 <template>
-  <div class="grading-bubble-card">
+  <section class="grading-bubble-card" :aria-label="`本次评分 ${grading.score} 分`">
     <div class="grading-score-row">
       <strong>{{ grading.score }} 分</strong>
       <el-tag :type="scoreTagType(grading.score)" effect="light">
@@ -7,7 +7,12 @@
       </el-tag>
       <el-tag v-if="grading.fallbackUsed" type="info" effect="plain">本地兜底评分</el-tag>
       <el-tooltip :content="experienceTooltip(grading)" placement="top" effect="light">
-        <div class="experience-float" :class="grading.earnedExperience > 0 ? 'gain' : 'same'">
+        <div
+          class="experience-float"
+          :class="grading.earnedExperience > 0 ? 'gain' : 'same'"
+          tabindex="0"
+          :aria-label="experienceTooltip(grading)"
+        >
           <span v-if="grading.earnedExperience > 0">↗ +{{ grading.earnedExperience }} 经验</span>
           <span v-else>经验不变</span>
         </div>
@@ -43,10 +48,16 @@
         </section>
       </el-collapse-item>
     </el-collapse>
-  </div>
+  </section>
 </template>
 
 <script setup lang="ts">
+import { ElCollapse, ElCollapseItem } from 'element-plus/es/components/collapse/index.mjs';
+import { ElTag } from 'element-plus/es/components/tag/index.mjs';
+import { ElTooltip } from 'element-plus/es/components/tooltip/index.mjs';
+import 'element-plus/es/components/collapse/style/css';
+import 'element-plus/es/components/tag/style/css';
+import 'element-plus/es/components/tooltip/style/css';
 import type { PracticeGrading } from '../../../api/practice';
 import {
   experienceTooltip,

@@ -46,7 +46,13 @@
 </template>
 
 <script setup lang="ts">
+import { ElCard } from 'element-plus/es/components/card/index.mjs';
+import { ElDescriptions, ElDescriptionsItem } from 'element-plus/es/components/descriptions/index.mjs';
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
+import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs';
+import 'element-plus/es/components/card/style/css';
+import 'element-plus/es/components/descriptions/style/css';
+import 'element-plus/es/components/select/style/css';
 import { computed, reactive, ref, watch } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import type { GenderCode } from '../../api/user';

@@ -1,6 +1,8 @@
 <template>
   <div class="app-layout">
-    <header class="layout-header">
+    <a class="skip-link" href="#main-content">跳到正文</a>
+
+    <header class="layout-header" role="banner">
       <!-- 顶部左侧保留平台品牌信息，替代原来的侧边栏品牌区。 -->
       <div class="brand-block">
         <div class="brand-logo">AI</div>
@@ -16,6 +18,7 @@
         :default-active="activeMenu"
         mode="horizontal"
         router
+        aria-label="主导航"
       >
         <el-menu-item index="/home">首页</el-menu-item>
         <el-menu-item index="/learning-roadmap">路线和资料</el-menu-item>
@@ -29,7 +32,12 @@
         <div v-if="authStore.isLoggedIn" class="header-user">
           <el-avatar :size="32" :src="authStore.user?.avatar || undefined">{{ avatarText }}</el-avatar>
           <el-dropdown trigger="click" @command="handleUserCommand">
-            <button class="user-dropdown-button" type="button">
+            <button
+              class="user-dropdown-button"
+              type="button"
+              aria-haspopup="menu"
+              :aria-label="`${displayName} 的用户菜单`"
+            >
               {{ displayName }}
               <span class="user-dropdown-arrow" aria-hidden="true"></span>
             </button>
@@ -43,14 +51,14 @@
           </el-dropdown>
         </div>
         <div v-else class="header-auth-actions">
-          <el-button plain round @click="showRegisterDialog = true">注册</el-button>
-          <el-button type="primary" plain round @click="showLoginDialog = true">登录</el-button>
+          <el-button plain round aria-label="打开注册弹窗" @click="showRegisterDialog = true">注册</el-button>
+          <el-button type="primary" plain round aria-label="打开登录弹窗" @click="showLoginDialog = true">登录</el-button>
         </div>
       </div>
     </header>
 
     <section class="layout-main">
-      <main class="layout-content">
+      <main id="main-content" class="layout-content" tabindex="-1">
         <RouterView v-slot="{ Component, route }">
           <KeepAlive>
             <component :is="Component" v-if="route.meta.keepAlive" />

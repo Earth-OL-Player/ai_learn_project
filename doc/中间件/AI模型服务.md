@@ -1,6 +1,6 @@
 # AI模型服务配置说明
 
-版本：v1.9
+版本：v1.10
 日期：2026-05-23
 适用工程：`ai-service`、`ai-learn-backend`  
 适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
@@ -76,6 +76,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 5. 评分后追问“我刚刚回答的答案是什么”，真实模型启用时应能结合当前题最近答案回复。
 6. 在答题或讨论阶段输入明显无关内容，应由 Java 后端本地关键词直接拦截，不再调用 AI 服务相关性接口。
 7. 停止 `ai-service` 或关闭 `AI_SERVICE_ENABLED` 后，后端仍应使用本地规则兜底评分，并用关键词兜底拦截明显无关内容。
+8. 打开浏览器控制台，提交一次答案或本题追问，复制日志中的 `traceId`，应能在 Java 后端日志、Python AI 服务日志和模型调用日志中按同一个 `traceId` 检索到完整链路。
 
 ## 8. 后续部署到服务器注意事项
 
@@ -87,6 +88,8 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 - 评分结构化输出通过 LangChain `with_structured_output(..., method="json_mode")` 解析，避免 DeepSeek reasoning 模型触发工具调用 `tool_choice` 兼容问题；仍需要保留兜底，避免模型异常输出影响刷题主流程。
 - DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
 - Java 后端内部调用路径、Header、响应码和内容类型集中在 `AiServiceConstants`，新增 AI 内部接口时需同步维护该常量类与本文档。
+- Java 后端调用 Python AI 服务时必须透传 `X-Trace-Id`；Python AI 服务响应和日志也必须继续携带同一个 `traceId`。
+- 当前观测看板先以结构化日志作为数据源，字段包含评分成功率所需的 `success`、兜底率所需的 `fallbackUsed`、超时率所需的 `errorCategory=TIMEOUT`、流式首包 `firstTokenMs`、总耗时 `durationMs`、模型名、Token 用量和成本占位。生产接入 Prometheus、ELK、Grafana 或云厂商 APM 时，应直接按这些字段聚合 P95、超时率、兜底率和成本看板。
 
 ## 9. sprint202614 本地联调和 422 排查补充
 
@@ -94,6 +97,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 
 - Java 后端固定使用 HTTP/1.1 调用 `ai-service`，避免本地 Uvicorn 出现 `Unsupported upgrade request` 后影响请求体解析。
 - 请求头使用 `Content-Type: application/json; charset=utf-8`，请求体统一使用 UTF-8 JSON。
+- 请求头必须包含 `X-Trace-Id`，该值来自浏览器请求或 Java 后端过滤器生成；Python AI 服务不得重新生成覆盖已有链路标识。
 - `AI_SERVICE_TOKEN` 必须在 Java 后端和 Python AI 服务两侧保持一致；示例值只能使用占位符，真实值请在本地或服务器环境变量中配置。
 - 如果 Python 日志出现 422 参数校验失败，请优先检查 `contentType`、`contentLength`、`AI_SERVICE_ENABLED`、`AI_SERVICE_BASE_URL` 和内部 Token 是否配置正确。
 - 排查日志不得打印用户答案全文、真实 Token、真实模型 Key 或生产服务地址。
@@ -105,6 +109,17 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 3. 在前端 AI 智能刷题页面提交答案。
 4. Python 日志应能看到 `/internal/v1/practice/answer/grade` 返回 200；如果真实模型未配置，Python 会使用本地规则评分。
 5. 如果停止 Python AI 服务，Java 后端应自动切换为本地评分兜底，前端仍能看到评分结果。
+
+## 11. P1-08 AI 调用可观测性补充
+
+本期补齐浏览器、Java 后端、Python AI 服务和模型调用日志之间的 traceId 透传与观测字段：
+
+1. 浏览器请求统一生成 `X-Trace-Id`，普通接口和 SSE 流式接口都会在控制台记录 `traceId`、接口路径、HTTP 状态和耗时。
+2. Java 后端继续通过 `TraceIdFilter` 接收或生成 traceId，并在调用 `ai-service` 的内部请求中透传 `X-Trace-Id`。
+3. Python AI 服务优先使用 Java 透传的 `X-Trace-Id`，HTTP 入站日志、评分日志、流式讨论日志和模型调用日志使用同一个 traceId。
+4. Java 后端新增 `AI 调用观测` 日志，字段包括 `traceId`、`path`、`stream`、`success`、`fallbackUsed`、`status`、`firstTokenMs`、`durationMs`、`model`、`inputTokens`、`outputTokens`、`totalTokens`、`estimatedCost`、`errorCategory`。
+5. Python 评分接口在统一响应中返回 `observability` 元数据，Java 后端会读取其中的模型和 Token 用量并落日志；没有供应商用量时字段为 `unavailable`。
+6. 当前没有引入新的中间件；后续接入指标看板时，可从 Java/Python 日志聚合 P95、评分成功率、超时率、兜底率、Token 用量和成本。
 
 ## 10. sprint2616 答题上下文与智能拦截补充
 

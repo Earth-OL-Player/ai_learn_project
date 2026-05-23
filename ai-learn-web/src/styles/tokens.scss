@@ -1,0 +1,95 @@
+:root {
+  color: var(--color-text);
+  background: var(--color-page-bg);
+  font-family: var(--font-family-base);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+
+  // 颜色令牌统一承接页面、Markdown 和 Element Plus 主题。
+  --color-page-bg: #f5f7fb;
+  --color-page-bg-soft: #f7fbff;
+  --color-page-bg-tint: #eef4ff;
+  --color-page-bg-clean: #f9fbff;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8fbff;
+  --color-heading: #17233d;
+  --color-text: #1f2a44;
+  --color-text-strong: #25324b;
+  --color-muted: #5d6b82;
+  --color-subtle: #7a8aa0;
+  --color-primary: #1f6feb;
+  --color-primary-strong: #0f63d6;
+  --color-primary-bright: #3a86ff;
+  --color-primary-soft: #eaf3ff;
+  --color-primary-softer: #eef6ff;
+  --color-accent: #5bd8a6;
+  --color-brand-gradient: linear-gradient(135deg, #3a86ff, #5bd8a6);
+  --color-hero-gradient: linear-gradient(135deg, #2266e3 0%, #39b7a5 100%);
+  --color-border: #e8eef7;
+  --color-border-soft: rgba(83, 116, 170, 0.12);
+
+  // 圆角、阴影、间距和字体等级令牌保持 4/8px 节奏。
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --radius-2xl: 24px;
+  --radius-hero: 28px;
+  --radius-pill: 999px;
+  --shadow-card: 0 12px 32px rgba(61, 91, 132, 0.08);
+  --shadow-panel: 0 18px 46px rgba(48, 84, 135, 0.1);
+  --shadow-hero: 0 18px 46px rgba(48, 115, 210, 0.22);
+  --space-page-x: 36px;
+  --space-page-y: 32px;
+  --font-family-base: "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-base: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 20px;
+  --font-size-2xl: 24px;
+  --font-size-3xl: 30px;
+  --font-size-hero: 34px;
+
+  // Element Plus 主题变量跟随平台令牌，减少局部覆盖。
+  --el-color-primary: var(--color-primary);
+  --el-color-primary-light-9: var(--color-primary-soft);
+  --el-border-radius-base: var(--radius-md);
+  --el-font-family: var(--font-family-base);
+}
+
+:focus-visible {
+  outline: 3px solid rgba(31, 111, 235, 0.78);
+  outline-offset: 3px;
+}
+
+.el-button:focus-visible,
+.el-input__wrapper.is-focus,
+.el-select__wrapper.is-focused,
+.el-textarea__inner:focus-visible {
+  box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.24);
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+}

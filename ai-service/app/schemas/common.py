@@ -1,4 +1,4 @@
-from typing import Generic, TypeVar
+from typing import Any, Generic, TypeVar
 
 from pydantic import BaseModel
 
@@ -12,3 +12,4 @@ class ApiResponse(BaseModel, Generic[T]):
     message: str = "操作成功"
     data: T | None = None
     traceId: str = "ai-service-trace"
+    observability: dict[str, Any] | None = None
