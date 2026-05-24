@@ -57,15 +57,17 @@ public class UserService {
         User user = findCurrentUser();
         String nickname = normalizeNickname(request.nickname());
         String gender = normalizeGender(request.gender());
+        String motto = normalizeMotto(request.motto());
         validateNicknameUnique(nickname, user.getId());
 
-        // 用户资料只允许本人维护昵称和性别，成长字段仍由刷题链路刷新。
-        int affected = userMapper.updateProfile(user.getId(), nickname, gender);
+        // 用户资料只允许本人维护基础展示字段，成长字段仍由刷题链路刷新。
+        int affected = userMapper.updateProfile(user.getId(), nickname, gender, motto);
         if (affected == 0) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "用户不存在或已删除");
         }
         user.setNickname(nickname);
         user.setGender(gender);
+        user.setMotto(motto);
         return UserSummaryConverter.toSummary(user);
     }
 
@@ -131,6 +133,25 @@ public class UserService {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "性别只能选择男、女或留空");
         }
         return normalizedGender;
+    }
+
+    /**
+     * 规整用户座右铭。
+     *
+     * @param motto 原始座右铭
+     * @return 安全座右铭
+     */
+    private String normalizeMotto(String motto) {
+        if (!StringUtils.hasText(motto)) {
+            return null;
+        }
+
+        // 座右铭允许留空，填写时限制长度，避免挤压 AI 刷题页侧栏展示。
+        String normalizedMotto = motto.trim();
+        if (normalizedMotto.length() > 60) {
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "座右铭不能超过60位");
+        }
+        return normalizedMotto;
     }
 
 }

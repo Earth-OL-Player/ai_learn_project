@@ -1,0 +1,2 @@
+ALTER TABLE users
+    ADD COLUMN motto VARCHAR(120) NULL COMMENT '用户座右铭，NULL表示未设置' AFTER gender;

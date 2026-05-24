@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
  *
  * @param nickname 昵称
  * @param gender 性别编码
+ * @param motto 用户座右铭
  */
 public record UpdateProfileRequest(
         @NotBlank(message = "昵称不能为空")
@@ -15,6 +16,9 @@ public record UpdateProfileRequest(
         String nickname,
 
         @Size(max = 16, message = "性别编码不能超过16位")
-        String gender
+        String gender,
+
+        @Size(max = 60, message = "座右铭不能超过60位")
+        String motto
 ) {
 }

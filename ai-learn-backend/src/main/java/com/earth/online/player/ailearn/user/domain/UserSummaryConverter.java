@@ -33,6 +33,7 @@ public final class UserSummaryConverter {
                 user.getNickname(),
                 user.getAvatar(),
                 user.getGender(),
+                user.getMotto(),
                 user.getEmail(),
                 experience,
                 level.displayCode(),

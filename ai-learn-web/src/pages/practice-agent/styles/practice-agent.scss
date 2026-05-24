@@ -78,8 +78,10 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
+  box-sizing: border-box;
+  width: 240px;
   min-height: 124px;
-  padding: 22px 24px;
+  padding: 22px 10px;
   border: 1px solid var(--color-border-soft);
   border-radius: 24px;
   background:
@@ -95,6 +97,13 @@
   font-weight: 800;
   letter-spacing: 0;
   line-height: 1.75;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.filter-card-title.is-default-motto strong {
+  // 默认座右铭固定为两行，自定义长句仍按同一宽度自然换行。
   white-space: nowrap;
 }
 
@@ -351,52 +360,26 @@
 .streaming-placeholder {
   // 首包到达前给出稳定占位，避免用户误以为卡死。
   display: inline-flex;
-  gap: 9px;
+  gap: 10px;
   align-items: center;
   color: var(--color-muted);
   font-weight: 600;
 }
 
 .streaming-spinner {
+  // AI 思考态圆环放在文案右侧，使用明显缺口保证肉眼能看到旋转。
   display: inline-block;
-  width: 16px;
-  height: 16px;
-  border: 2px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 18%, var(--color-border));
   border-top-color: var(--color-primary);
-  border-right-color: color-mix(in srgb, var(--color-accent) 82%, var(--color-primary));
+  border-right-color: transparent;
+  border-bottom-color: color-mix(in srgb, var(--color-accent) 88%, var(--color-primary));
   border-radius: 50%;
+  background: color-mix(in srgb, var(--color-surface) 82%, transparent);
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 8%, transparent);
-  animation: streaming-spinner-rotate 0.9s linear infinite;
-}
-
-.stream-cursor {
-  // 光标提供“正在生成”的轻量反馈，整体风格保持清新简约。
-  display: inline-block;
-  width: 2px;
-  height: 1.16em;
-  margin-left: 4px;
-  border-radius: 999px;
-  background: var(--color-brand-gradient);
-  vertical-align: -0.2em;
-  box-shadow: 0 0 12px rgba(47, 125, 246, 0.24);
-  animation: stream-cursor-breathe 0.82s ease-in-out infinite;
-}
-
-@keyframes stream-cursor-breathe {
-  0%,
-  100% {
-    opacity: 0.28;
-  }
-
-  50% {
-    opacity: 1;
-  }
-}
-
-@keyframes streaming-spinner-rotate {
-  to {
-    transform: rotate(360deg);
-  }
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -404,14 +387,6 @@
   .practice-side-card,
   .practice-side-toggle {
     transition: none;
-  }
-
-  .stream-cursor {
-    animation: none;
-  }
-
-  .streaming-spinner {
-    animation: none;
   }
 }
 

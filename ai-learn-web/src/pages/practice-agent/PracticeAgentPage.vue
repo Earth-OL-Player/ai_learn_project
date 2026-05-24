@@ -15,9 +15,8 @@
       </div>
 
       <div id="practice-growth-panel" v-show="!isGrowthPanelCollapsed" class="practice-side-content">
-        <div class="filter-card-title">
-          <strong>昨日因,今日果,前尘不咎</strong>
-          <strong>今日因,明日果,当下即道</strong>
+        <div :class="['filter-card-title', { 'is-default-motto': !hasCustomMotto }]">
+          <strong v-for="(line, index) in mottoLines" :key="`${line}-${index}`">{{ line }}</strong>
         </div>
 
         <RealmCharacterCard
@@ -99,7 +98,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { computed, ref } from 'vue';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
 import ModelEntitlementSummary from '../../components/model/ModelEntitlementSummary.vue';
 import PracticeBadgeDialog from './components/PracticeBadgeDialog.vue';
@@ -140,6 +139,20 @@ const {
   sendMessage,
   streamingPlaceholderText,
 } = usePracticeChat();
+
+const DEFAULT_MOTTO_LINES = ['昨日因,今日果,前尘不咎', '今日因,明日果,当下即道'] as const;
+const hasCustomMotto = computed(() => Boolean(authStore.user?.motto?.trim()));
+
+// 有用户自定义座右铭时优先展示自定义内容，否则保持默认两行文案。
+const mottoLines = computed(() => {
+  if (!hasCustomMotto.value) {
+    return [...DEFAULT_MOTTO_LINES];
+  }
+
+  // 支持用户在文本域中换行输入，页面按有效行展示。
+  const customMotto = authStore.user?.motto?.trim() || '';
+  return customMotto.split(/\r?\n/u).map((line) => line.trim()).filter(Boolean);
+});
 
 /**
  * 统一切换左侧座右铭和人物段位形象。

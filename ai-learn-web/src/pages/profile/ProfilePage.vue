@@ -16,6 +16,9 @@
         <el-descriptions-item label="用户名">{{ authStore.user?.username }}</el-descriptions-item>
         <el-descriptions-item label="昵称">{{ authStore.user?.nickname || '暂未设置' }}</el-descriptions-item>
         <el-descriptions-item label="性别">{{ genderText }}</el-descriptions-item>
+        <el-descriptions-item label="座右铭" :span="profileDescriptionColumn">
+          <span class="profile-motto-text">{{ authStore.user?.motto || '暂未设置' }}</span>
+        </el-descriptions-item>
         <el-descriptions-item label="邮箱">{{ authStore.user?.email || '暂未绑定' }}</el-descriptions-item>
         <el-descriptions-item label="注册时间">{{ formattedCreatedAt }}</el-descriptions-item>
       </el-descriptions>
@@ -29,6 +32,16 @@
             <el-select v-model="profileForm.gender" clearable placeholder="-" size="large">
               <el-option v-for="item in genderOptions" :key="item.value" :label="item.label" :value="item.value" />
             </el-select>
+          </el-form-item>
+          <el-form-item label="座右铭">
+            <el-input
+              v-model.trim="profileForm.motto"
+              maxlength="60"
+              show-word-limit
+              clearable
+              placeholder="请输入座右铭"
+              size="large"
+            />
           </el-form-item>
         </el-form>
 
@@ -98,9 +111,10 @@ const genderOptions = [
 ] as const;
 
 // 资料表单只维护用户允许本人修改的字段。
-const profileForm = reactive<{ nickname: string; gender: GenderCode | '' }>({
+const profileForm = reactive<{ nickname: string; gender: GenderCode | ''; motto: string }>({
   nickname: '',
   gender: '',
+  motto: '',
 });
 const redeemForm = reactive({ code: '' });
 
@@ -132,6 +146,7 @@ function openProfileDialog(): void {
 function resetProfileForm(): void {
   profileForm.nickname = authStore.user?.nickname || '';
   profileForm.gender = authStore.user?.gender || '';
+  profileForm.motto = authStore.user?.motto || '';
 }
 
 /**
@@ -143,12 +158,19 @@ async function saveProfile(): Promise<void> {
     ElMessage.warning('昵称不能为空，且不能超过64位');
     return;
   }
+  if (profileForm.motto.trim().length > 60) {
+    ElMessage.warning('座右铭不能超过60位');
+    return;
+  }
 
   savingProfile.value = true;
   try {
+    // 空座右铭按未设置处理，由 AI 刷题页展示默认文案。
+    const motto = profileForm.motto.trim();
     await authStore.updateProfile({
       nickname,
       gender: profileForm.gender || null,
+      motto: motto || null,
     });
     profileDialogVisible.value = false;
     resetProfileForm();
@@ -218,7 +240,7 @@ function syncProfileViewport(event?: MediaQueryListEvent): void {
 }
 
 watch(
-  () => [authStore.user?.nickname, authStore.user?.gender] as const,
+  () => [authStore.user?.nickname, authStore.user?.gender, authStore.user?.motto] as const,
   () => resetProfileForm(),
   { immediate: true },
 );
@@ -306,6 +328,44 @@ onBeforeUnmount(() => {
   font-weight: 700;
 }
 
+.profile-descriptions {
+  // 个人资料表格使用固定布局，右侧内容列预留更多空间承载座右铭。
+  :deep(.el-descriptions__table) {
+    table-layout: fixed;
+    width: 100%;
+  }
+
+  :deep(col:nth-child(1)),
+  :deep(col:nth-child(3)) {
+    width: 8%;
+  }
+
+  :deep(col:nth-child(2)) {
+    width: 32%;
+  }
+
+  :deep(col:nth-child(4)) {
+    width: 52%;
+  }
+
+  :deep(.el-descriptions__cell) {
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  :deep(.el-descriptions__label) {
+    white-space: nowrap;
+  }
+
+  :deep(.el-descriptions__cell:nth-child(2)) {
+    width: 32%;
+  }
+
+  :deep(.el-descriptions__cell:nth-child(4)) {
+    width: 52%;
+  }
+}
+
 .profile-edit-form {
   // 弹窗内只保留用户可编辑资料，避免混入系统内部形象逻辑。
   display: flex;
@@ -315,6 +375,15 @@ onBeforeUnmount(() => {
 
 .profile-edit-form :deep(.el-select) {
   width: 100%;
+}
+
+.profile-motto-text {
+  // 座右铭展示占满资料单元格，避免固定窄宽导致右侧留白过大。
+  display: block;
+  width: 100%;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
 .profile-edit-actions {
@@ -351,6 +420,25 @@ onBeforeUnmount(() => {
   .profile-edit-button {
     width: 100%;
     margin-left: 0;
+  }
+
+  .profile-descriptions {
+    :deep(.el-descriptions__table) {
+      table-layout: auto;
+    }
+
+    :deep(.el-descriptions__label) {
+      width: 88px;
+    }
+
+    :deep(col:nth-child(1)),
+    :deep(col:nth-child(2)),
+    :deep(col:nth-child(3)),
+    :deep(col:nth-child(4)),
+    :deep(.el-descriptions__cell:nth-child(2)),
+    :deep(.el-descriptions__cell:nth-child(4)) {
+      width: auto;
+    }
   }
 
   .profile-edit-actions {

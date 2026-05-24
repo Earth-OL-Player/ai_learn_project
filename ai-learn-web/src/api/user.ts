@@ -8,6 +8,7 @@ export interface CurrentUser {
   nickname: string | null;
   avatar: string | null;
   gender: GenderCode | null;
+  motto: string | null;
   email: string | null;
   experience: number;
   level: string;
@@ -25,6 +26,7 @@ export interface CurrentUser {
 export interface UpdateProfilePayload {
   nickname: string;
   gender?: GenderCode | null;
+  motto?: string | null;
 }
 
 /**

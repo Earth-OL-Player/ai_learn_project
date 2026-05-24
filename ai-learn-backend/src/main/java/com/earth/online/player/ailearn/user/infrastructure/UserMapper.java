@@ -33,7 +33,7 @@ public interface UserMapper {
      */
     @Select("""
             <script>
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE deleted = 0
@@ -75,7 +75,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE id = #{id} AND deleted = 0
@@ -89,7 +89,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE id = #{id} AND deleted = 0
@@ -104,7 +104,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE username = #{username} AND deleted = 0
@@ -118,7 +118,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE nickname = #{nickname} AND deleted = 0
@@ -132,7 +132,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE email = #{email} AND deleted = 0
@@ -146,7 +146,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE username = #{username}
@@ -161,7 +161,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE nickname = #{nickname}
@@ -176,7 +176,7 @@ public interface UserMapper {
      * @return 用户信息
      */
     @Select("""
-            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
                    created_at, updated_at, deleted
             FROM users
             WHERE email = #{email}
@@ -191,8 +191,8 @@ public interface UserMapper {
      * @return 影响行数
      */
     @Insert("""
-            INSERT INTO users(username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin)
-            VALUES(#{username}, #{nickname}, #{avatar}, #{gender}, #{email}, #{passwordHash}, #{experience}, #{levelCode}, #{rankCode}, #{superAdmin})
+            INSERT INTO users(username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin)
+            VALUES(#{username}, #{nickname}, #{avatar}, #{gender}, #{motto}, #{email}, #{passwordHash}, #{experience}, #{levelCode}, #{rankCode}, #{superAdmin})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insert(User user);
@@ -224,18 +224,21 @@ public interface UserMapper {
      * @param id 用户ID
      * @param nickname 昵称
      * @param gender 性别编码
+     * @param motto 用户座右铭
      * @return 影响行数
      */
     @Update("""
             UPDATE users
             SET nickname = #{nickname},
-                gender = #{gender}
+                gender = #{gender},
+                motto = #{motto}
             WHERE id = #{id} AND deleted = 0
             """)
     int updateProfile(
             @Param("id") Long id,
             @Param("nickname") String nickname,
-            @Param("gender") String gender
+            @Param("gender") String gender,
+            @Param("motto") String motto
     );
 
     /**

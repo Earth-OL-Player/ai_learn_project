@@ -10,6 +10,7 @@ import java.time.OffsetDateTime;
  * @param nickname 昵称
  * @param avatar 头像地址
  * @param gender 性别编码
+ * @param motto 用户座右铭
  * @param email 邮箱
  * @param experience 经验值
  * @param level 等级展示编码
@@ -29,6 +30,7 @@ public record UserSummary(
         String nickname,
         String avatar,
         String gender,
+        String motto,
         String email,
         Integer experience,
         String level,

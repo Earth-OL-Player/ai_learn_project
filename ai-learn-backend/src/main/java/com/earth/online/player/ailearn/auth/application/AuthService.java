@@ -80,6 +80,7 @@ public class AuthService {
         user.setNickname(nickname);
         user.setEmail(email);
         user.setGender(null);
+        user.setMotto(null);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setExperience(AuthConstants.DEFAULT_EXPERIENCE);
         user.setLevelCode(AuthConstants.DEFAULT_LEVEL_CODE);

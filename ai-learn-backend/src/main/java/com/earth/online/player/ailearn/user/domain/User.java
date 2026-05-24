@@ -12,6 +12,7 @@ public class User {
     private String nickname;
     private String avatar;
     private String gender;
+    private String motto;
     private String email;
     private String passwordHash;
     private Integer experience;
@@ -110,6 +111,24 @@ public class User {
      */
     public void setGender(String gender) {
         this.gender = gender;
+    }
+
+    /**
+     * 获取用户座右铭。
+     *
+     * @return 用户座右铭
+     */
+    public String getMotto() {
+        return motto;
+    }
+
+    /**
+     * 设置用户座右铭。
+     *
+     * @param motto 用户座右铭
+     */
+    public void setMotto(String motto) {
+        this.motto = motto;
     }
 
     /**
