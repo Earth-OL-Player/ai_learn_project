@@ -1,7 +1,6 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
 
-from app.config.settings import settings
 from app.practice.discussion_agent import PracticeDiscussionAgent
 from app.practice.grading_agent import PracticeGradingAgent
 from app.practice.llm_logger import PracticeLlmLogger, PracticeLogSanitizer, logger
@@ -64,23 +63,23 @@ class PracticeAgentService:
             trace_id,
             request.userId,
             request.questionCode,
-            self._provider_adapter.is_llm_enabled(),
+            self._provider_adapter.is_llm_enabled(request.modelConfig),
         )
 
-        if self._provider_adapter.is_llm_enabled():
+        if self._provider_adapter.is_llm_enabled(request.modelConfig):
             return self._grading_agent.grade_answer(request, trace_id)
 
         logger.info(
             "【AI智能刷题流程-评分】未启用真实 Agent，返回失败并交由 Java 后端本地兜底：traceId=%s model=%s baseUrlConfigured=%s",
             trace_id,
-            settings.ai_grading_model,
-            bool(settings.ai_grading_base_url),
+            self._provider_adapter.model_name(request.modelConfig),
+            bool(self._provider_adapter.base_url(request.modelConfig)),
         )
         metrics = PracticeAiCallMetrics(
             traceId=trace_id,
             scene="practice_grade",
-            model=settings.ai_grading_model,
-            modelProvider=settings.ai_grading_model_provider,
+            model=self._provider_adapter.model_name(request.modelConfig),
+            modelProvider=self._provider_adapter.model_provider(),
             success=False,
             fallbackUsed=True,
             durationMs=0,
@@ -95,11 +94,11 @@ class PracticeAgentService:
             trace_id,
             request.questionCode,
             len(request.conversationHistory),
-            self._provider_adapter.is_llm_enabled(),
+            self._provider_adapter.is_llm_enabled(request.modelConfig),
         )
 
         # 流式接口只在最终完成时打印汇总结果，避免 token 级日志刷屏。
-        if self._provider_adapter.is_llm_enabled():
+        if self._provider_adapter.is_llm_enabled(request.modelConfig):
             yield from self._discussion_agent.stream_discuss(request, trace_id)
             return
 
@@ -107,8 +106,8 @@ class PracticeAgentService:
         logger.info(
             "【AI智能刷题流程-流式讨论】未调用真实 Agent，流式返回讨论不可用提示：traceId=%s model=%s baseUrlConfigured=%s",
             trace_id,
-            settings.ai_grading_model,
-            bool(settings.ai_grading_base_url),
+            self._provider_adapter.model_name(request.modelConfig),
+            bool(self._provider_adapter.base_url(request.modelConfig)),
         )
         fallback_response = self._local_fallback.discuss(request)
         yield self._sse_encoder.message(fallback_response.reply)

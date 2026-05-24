@@ -41,6 +41,29 @@
       </el-dialog>
     </el-card>
 
+    <el-card shadow="never" class="profile-model-card">
+      <div class="profile-model-header">
+        <div>
+          <h3>AI刷题模型</h3>
+        </div>
+      </div>
+
+      <ModelEntitlementSummary :status="modelEntitlementStatus" @authorize="handleModelAuthorize" />
+
+      <div class="profile-redeem-panel">
+        <el-input
+          v-model.trim="redeemForm.code"
+          maxlength="32"
+          clearable
+          size="large"
+          placeholder="请输入授权码"
+          aria-label="授权码"
+          @keyup.enter="redeemCode"
+        />
+        <el-button type="primary" round size="large" :loading="redeeming" @click="redeemCode">授权</el-button>
+      </div>
+    </el-card>
+
     <GrowthOverviewPanel />
   </section>
 </template>
@@ -54,15 +77,20 @@ import 'element-plus/es/components/card/style/css';
 import 'element-plus/es/components/descriptions/style/css';
 import 'element-plus/es/components/select/style/css';
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
+import { fetchModelEntitlementStatus, redeemModelCode, type ModelEntitlementStatus } from '../../api/modelEntitlements';
 import { useAuthStore } from '../../stores/auth';
+import ModelEntitlementSummary from '../../components/model/ModelEntitlementSummary.vue';
 import type { GenderCode } from '../../api/user';
 import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
+import { openModelAuthorization } from '../../utils/modelAuthorization';
 
 const PROFILE_MOBILE_QUERY = '(max-width: 720px)';
 const authStore = useAuthStore();
 const savingProfile = ref(false);
+const redeeming = ref(false);
 const profileDialogVisible = ref(false);
 const isProfileMobile = ref(false);
+const modelEntitlementStatus = ref<ModelEntitlementStatus | null>(null);
 let profileMediaQuery: MediaQueryList | null = null;
 const genderOptions = [
   { label: '男', value: 'MALE' },
@@ -74,6 +102,7 @@ const profileForm = reactive<{ nickname: string; gender: GenderCode | '' }>({
   nickname: '',
   gender: '',
 });
+const redeemForm = reactive({ code: '' });
 
 // 展示名优先使用昵称，未设置时回退用户名。
 const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
@@ -131,6 +160,42 @@ async function saveProfile(): Promise<void> {
 }
 
 /**
+ * 加载模型权益信息。
+ */
+async function loadModelEntitlementStatus(): Promise<void> {
+  modelEntitlementStatus.value = await fetchModelEntitlementStatus();
+}
+
+/**
+ * 打开模型授权入口。
+ */
+async function handleModelAuthorize(): Promise<void> {
+  await openModelAuthorization(modelEntitlementStatus.value);
+}
+
+/**
+ * 授权模型权益授权码。
+ */
+async function redeemCode(): Promise<void> {
+  const code = redeemForm.code.trim();
+  if (!code) {
+    ElMessage.warning('请输入授权码');
+    return;
+  }
+  redeeming.value = true;
+  try {
+    const result = await redeemModelCode(code);
+    modelEntitlementStatus.value = result.entitlement;
+    redeemForm.code = '';
+    ElMessage.success(result.message);
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '授权失败');
+  } finally {
+    redeeming.value = false;
+  }
+}
+
+/**
  * 解析性别展示文案。
  */
 function resolveGenderText(gender: GenderCode | null): string {
@@ -163,6 +228,9 @@ onMounted(() => {
   profileMediaQuery = window.matchMedia(PROFILE_MOBILE_QUERY);
   syncProfileViewport();
   profileMediaQuery.addEventListener('change', syncProfileViewport);
+  loadModelEntitlementStatus().catch((error: unknown) => {
+    ElMessage.error(error instanceof Error ? error.message : '模型权益加载失败');
+  });
 });
 
 onBeforeUnmount(() => {
@@ -181,6 +249,37 @@ onBeforeUnmount(() => {
 .profile-card {
   border: 1px solid var(--color-border);
   border-radius: 18px;
+}
+
+.profile-model-card {
+  border: 1px solid var(--color-border);
+  border-radius: 18px;
+}
+
+.profile-model-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+  margin-bottom: 16px;
+}
+
+.profile-model-header h3 {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 20px;
+}
+
+.profile-redeem-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.profile-redeem-panel .el-button {
+  min-width: 112px;
+  font-weight: 800;
 }
 
 .profile-header {
@@ -260,6 +359,15 @@ onBeforeUnmount(() => {
 
   .profile-edit-actions .el-button {
     flex: 1;
+    min-height: 44px;
+  }
+
+  .profile-redeem-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-redeem-panel .el-button {
+    width: 100%;
     min-height: 44px;
   }
 }

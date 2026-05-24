@@ -13,8 +13,10 @@ import {
   type PracticeQuestion,
   type PracticeState,
 } from '../../api/practice';
+import { fetchModelEntitlementStatus, type ModelEntitlementStatus } from '../../api/modelEntitlements';
 import { useAuthStore } from '../../stores/auth';
 import type { BadgeInfo, GrowthInfo } from '../../types/growth';
+import { openModelAuthorization } from '../../utils/modelAuthorization';
 import type { ChatMessage } from './types';
 import { usePracticeSnapshot } from './usePracticeSnapshot';
 import { useStreamTypewriter } from './useStreamTypewriter';
@@ -32,6 +34,7 @@ export function usePracticeChat() {
   const selectedCategories = ref<string[]>([]);
   const currentQuestion = ref<PracticeQuestion | null>(null);
   const growth = ref<GrowthInfo | null>(null);
+  const modelEntitlementStatus = ref<ModelEntitlementStatus | null>(null);
   const messages = ref<ChatMessage[]>([]);
   const messagePanelRef = ref<HTMLElement | null>(null);
   const badgeDialogVisible = ref(false);
@@ -100,11 +103,15 @@ export function usePracticeChat() {
         await initializeGuestPage();
         return;
       }
-      const state = await fetchPracticeState();
+      const [state, entitlementStatus] = await Promise.all([
+        fetchPracticeState(),
+        fetchModelEntitlementStatus(),
+      ]);
       phase.value = state.phase;
       categories.value = state.questionTypes;
       currentQuestion.value = state.currentQuestion;
       growth.value = state.growth;
+      modelEntitlementStatus.value = entitlementStatus;
       syncAuthGrowth(state.growth);
       if (state.currentQuestion) {
         restorePracticeSnapshot(state);
@@ -123,7 +130,12 @@ export function usePracticeChat() {
    * 初始化游客可浏览的刷题页面外壳。
    */
   async function initializeGuestPage(): Promise<void> {
-    categories.value = await fetchPracticeCategories();
+    const [nextCategories, entitlementStatus] = await Promise.all([
+      fetchPracticeCategories(),
+      fetchModelEntitlementStatus(),
+    ]);
+    categories.value = nextCategories;
+    modelEntitlementStatus.value = entitlementStatus;
     phase.value = 'QUESTIONING';
     currentQuestion.value = null;
     growth.value = null;
@@ -234,6 +246,13 @@ export function usePracticeChat() {
     }
     selectedCategories.value = [];
     ensureLoggedIn();
+  }
+
+  /**
+   * 打开模型授权入口。
+   */
+  async function handleModelAuthorize(): Promise<void> {
+    await openModelAuthorization(modelEntitlementStatus.value);
   }
 
   /**
@@ -492,12 +511,14 @@ export function usePracticeChat() {
     handleCategoryVisibleChange,
     handleGuestInteraction,
     handleMessagePanelScroll: snapshot.handleMessagePanelScroll,
+    handleModelAuthorize,
     handleNextQuestion,
     handleRetry,
     inputPlaceholder,
     inputText,
     loading,
     messagePanelRef,
+    modelEntitlementStatus,
     messages,
     nextButtonText,
     retryButtonDisabled,

@@ -1,0 +1,184 @@
+.model-entitlement-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+}
+
+.model-entitlement-summary.is-compact {
+  width: auto;
+}
+
+.model-entitlement-summary.is-compact .model-entitlement-item {
+  // AI刷题页空间更紧凑，模型信息用单行展示避免头部被撑高。
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-width: auto;
+  white-space: nowrap;
+}
+
+.model-entitlement-item {
+  display: grid;
+  gap: 3px;
+  min-width: 118px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border-soft);
+  border-radius: 16px;
+  background: var(--color-surface-soft);
+}
+
+.model-entitlement-item span {
+  color: var(--color-muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.model-entitlement-item strong {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--color-heading);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.model-entitlement-days-value {
+  min-width: 100%;
+}
+
+.model-entitlement-action {
+  --model-auth-color: #f59e0b;
+  --model-auth-text: #7c2d12;
+  --el-button-bg-color: #fff7ed;
+  --el-button-border-color: color-mix(in srgb, var(--model-auth-color) 62%, var(--color-accent));
+  --el-button-text-color: var(--model-auth-text);
+  --el-button-hover-bg-color: #fffbeb;
+  --el-button-hover-border-color: color-mix(in srgb, var(--model-auth-color) 72%, var(--color-accent));
+  --el-button-hover-text-color: var(--model-auth-text);
+  --el-button-active-bg-color: #fef3c7;
+  --el-button-active-border-color: var(--model-auth-color);
+  --el-button-active-text-color: var(--model-auth-text);
+  position: relative;
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+  justify-content: center;
+  min-width: 128px;
+  border: 1px solid transparent;
+  border-radius: 16px;
+  color: var(--model-auth-text);
+  background:
+    linear-gradient(135deg, #fff7ed 0%, #ecfdf5 100%) padding-box,
+    linear-gradient(135deg, #f59e0b 0%, var(--color-accent) 100%) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    0 0 0 3px color-mix(in srgb, var(--model-auth-color) 12%, transparent),
+    0 12px 26px color-mix(in srgb, var(--model-auth-color) 20%, transparent);
+  font-weight: 900;
+}
+
+.model-entitlement-action:hover,
+.model-entitlement-action:focus-visible {
+  color: var(--model-auth-text);
+  background:
+    linear-gradient(135deg, #fffbeb 0%, #dcfce7 100%) padding-box,
+    linear-gradient(135deg, #d97706 0%, var(--color-accent) 100%) border-box;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.92),
+    0 0 0 4px color-mix(in srgb, var(--model-auth-color) 16%, transparent),
+    0 14px 30px color-mix(in srgb, var(--model-auth-color) 26%, transparent);
+}
+
+.model-entitlement-external-icon {
+  // 经典外链图标放在右侧，明确提示会跳转到外部授权网站。
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  color: currentcolor;
+  fill: none;
+  opacity: 0.94;
+  stroke: currentcolor;
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  stroke-width: 1.7;
+}
+
+.model-frozen-tip {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid color-mix(in srgb, var(--color-warning, #f59e0b) 28%, var(--color-border-soft));
+  border-radius: 50%;
+  color: color-mix(in srgb, var(--color-warning, #f59e0b) 56%, var(--color-muted));
+  background: color-mix(in srgb, var(--color-warning, #f59e0b) 10%, var(--color-surface));
+  cursor: help;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 16px;
+  place-items: center;
+  box-shadow: none;
+}
+
+.markdown-body a[href='#model-auth'] {
+  display: inline-flex;
+  position: relative;
+  top: -1px;
+  gap: 6px;
+  align-items: center;
+  justify-content: center;
+  min-height: 28px;
+  padding: 1px 10px;
+  border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-border));
+  border-radius: 10px;
+  color: var(--color-primary-strong);
+  background: color-mix(in srgb, var(--color-primary-softer) 78%, var(--color-surface));
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--color-primary) 14%, transparent);
+  font-weight: 800;
+  line-height: 1.45;
+  text-decoration: none;
+  vertical-align: middle;
+  word-break: keep-all;
+}
+
+.markdown-body a[href='#model-auth']:hover,
+.markdown-body a[href='#model-auth']:focus-visible {
+  border-color: color-mix(in srgb, var(--color-primary) 42%, var(--color-border));
+  color: var(--color-primary);
+  background: color-mix(in srgb, var(--color-primary-softer) 92%, var(--color-surface));
+  outline: none;
+  box-shadow:
+    inset 0 -1px 0 color-mix(in srgb, var(--color-primary) 18%, transparent),
+    0 0 0 3px color-mix(in srgb, var(--color-primary) 12%, transparent);
+}
+
+.markdown-body a[href='#model-auth']::after {
+  // 复用刷题页授权按钮的外链图形，保持“高级模型授权”入口跳转感一致。
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+  background-color: currentcolor;
+  content: '';
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-linecap='square' stroke-linejoin='miter' stroke-width='1.7'%3E%3Cpath d='M6.5 3.5H3.5V12.5H12.5V9.5'/%3E%3Cpath d='M10 3H13V6'/%3E%3Cpath d='M13 3L8.8 7.2'/%3E%3C/svg%3E") center / contain no-repeat;
+  opacity: 0.94;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='black' stroke-linecap='square' stroke-linejoin='miter' stroke-width='1.7'%3E%3Cpath d='M6.5 3.5H3.5V12.5H12.5V9.5'/%3E%3Cpath d='M10 3H13V6'/%3E%3Cpath d='M13 3L8.8 7.2'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+@media (max-width: 768px) {
+  .model-entitlement-summary,
+  .model-entitlement-summary.is-compact {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .model-entitlement-item {
+    flex: 1 1 140px;
+  }
+
+  .model-entitlement-action {
+    width: 100%;
+    min-height: 44px;
+  }
+}

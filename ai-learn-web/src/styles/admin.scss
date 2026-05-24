@@ -330,6 +330,88 @@
   width: 100%;
 }
 
+.redemption-code-hero,
+.model-config-hero {
+  align-items: center;
+}
+
+.redemption-code-hero h2,
+.model-config-hero h2 {
+  margin: 0;
+}
+
+.redemption-generate-form,
+.redemption-filter-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(160px, 0.7fr) minmax(160px, 0.7fr) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.redemption-generate-form {
+  grid-template-columns: minmax(260px, 1fr) minmax(160px, 0.6fr) auto;
+}
+
+.redemption-generate-form .el-select,
+.redemption-filter-form .el-select {
+  width: 100%;
+}
+
+.redemption-generate-card .el-input-number {
+  width: 100%;
+}
+
+.redemption-code-dialog .el-select {
+  width: 100%;
+}
+
+.model-config-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-top: 18px;
+}
+
+.model-config-card {
+  border: 0;
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-card);
+}
+
+.model-config-card-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.model-config-card-header h3 {
+  margin: 0;
+  color: var(--color-heading);
+  font-size: 20px;
+}
+
+.model-config-card-header span {
+  padding: 5px 10px;
+  border-radius: 999px;
+  color: var(--color-primary);
+  background: var(--color-primary-soft);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.model-config-form {
+  display: grid;
+  gap: 4px;
+}
+
+.model-config-card .el-button {
+  width: 100%;
+  margin-top: 8px;
+  font-weight: 800;
+}
+
 @media (max-width: 980px) {
   .import-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -349,8 +431,14 @@
 
   .admin-filter-form,
   .admin-user-filter-form,
+  .redemption-generate-form,
+  .redemption-filter-form,
   .dialog-grid,
   .import-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .model-config-grid {
     grid-template-columns: 1fr;
   }
 }
@@ -437,6 +525,10 @@
 
   .admin-table-card .el-table {
     min-width: 720px;
+  }
+
+  .admin-redemption-page .admin-table-card .el-table {
+    min-width: 980px;
   }
 
   .system-question-import-dialog .el-table {

@@ -6,6 +6,7 @@ from langchain_core.messages import AIMessage
 
 from app.config.constants import AI_GRADING_API_KEY_PLACEHOLDER, CHAT_COMPLETIONS_PATH, LOCAL_RULE_MODEL
 from app.config.settings import settings
+from app.schemas.practice import PracticeModelConfig
 
 
 # DeepSeek V4 默认开启思考模式，评分和讨论链路统一关闭。
@@ -15,20 +16,20 @@ DEEPSEEK_THINKING_DISABLED_BODY = {"thinking": {"type": "disabled"}}
 class PracticeProviderAdapter:
     """封装模型供应商配置、地址兼容和 LangChain 返回差异。"""
 
-    def is_llm_enabled(self) -> bool:
+    def is_llm_enabled(self, model_config: PracticeModelConfig | None = None) -> bool:
         """判断是否具备真实大模型调用配置。"""
-        model = settings.ai_grading_model.strip()
-        api_key = settings.ai_grading_api_key.strip()
+        model = self.model_name(model_config)
+        api_key = self.api_key(model_config)
 
         # LOCAL_RULE 或占位符配置表示 ai-service 不发起外部模型请求。
         return (
-            bool(settings.ai_grading_base_url.strip())
+            bool(self.base_url(model_config))
             and bool(api_key)
             and model.upper() != LOCAL_RULE_MODEL
             and api_key != AI_GRADING_API_KEY_PLACEHOLDER
         )
 
-    def chat_model_kwargs(self) -> dict[str, Any]:
+    def chat_model_kwargs(self, model_config: PracticeModelConfig | None = None) -> dict[str, Any]:
         """构造 LangChain 聊天模型初始化参数。"""
         kwargs: dict[str, Any] = {
             "temperature": 0.2,
@@ -38,31 +39,54 @@ class PracticeProviderAdapter:
         }
 
         # 只在配置真实值时传递供应商连接参数。
-        if settings.ai_grading_api_key.strip():
-            kwargs["api_key"] = settings.ai_grading_api_key
-        if settings.ai_grading_base_url.strip():
-            kwargs["base_url"] = self.normalized_base_url()
-        if settings.ai_grading_model_provider.strip():
-            kwargs["model_provider"] = settings.ai_grading_model_provider.strip()
-        if self.is_deepseek_provider():
+        api_key = self.api_key(model_config)
+        if api_key:
+            kwargs["api_key"] = api_key
+        if self.base_url(model_config):
+            kwargs["base_url"] = self.normalized_base_url(model_config)
+        if self.model_provider().strip():
+            kwargs["model_provider"] = self.model_provider().strip()
+        if self.is_deepseek_provider(model_config):
             kwargs["extra_body"] = DEEPSEEK_THINKING_DISABLED_BODY
         return kwargs
 
-    def normalized_base_url(self) -> str:
+    def normalized_base_url(self, model_config: PracticeModelConfig | None = None) -> str:
         """规整 OpenAI 兼容基础地址。"""
-        base_url = settings.ai_grading_base_url.strip().rstrip("/")
+        base_url = self.base_url(model_config).rstrip("/")
         if base_url.endswith(CHAT_COMPLETIONS_PATH):
             return base_url[: -len(CHAT_COMPLETIONS_PATH)]
         return base_url
 
-    def is_deepseek_provider(self) -> bool:
+    def is_deepseek_provider(self, model_config: PracticeModelConfig | None = None) -> bool:
         """判断当前模型配置是否指向 DeepSeek 服务。"""
-        provider = settings.ai_grading_model_provider.strip().lower()
-        model = settings.ai_grading_model.strip().lower()
-        base_url = settings.ai_grading_base_url.strip().lower()
+        provider = self.model_provider().strip().lower()
+        model = self.model_name(model_config).lower()
+        base_url = self.base_url(model_config).lower()
 
         # 按供应商、模型名或官方域名识别 DeepSeek 兼容逻辑。
         return provider == "deepseek" or model.startswith("deepseek-") or "deepseek.com" in base_url
+
+    def model_name(self, model_config: PracticeModelConfig | None = None) -> str:
+        """读取请求级或全局模型名称。"""
+        if model_config and model_config.model.strip():
+            return model_config.model.strip()
+        return settings.ai_grading_model.strip()
+
+    def base_url(self, model_config: PracticeModelConfig | None = None) -> str:
+        """读取请求级或全局模型基础地址。"""
+        if model_config and model_config.baseUrl.strip():
+            return model_config.baseUrl.strip()
+        return settings.ai_grading_base_url.strip()
+
+    def api_key(self, model_config: PracticeModelConfig | None = None) -> str:
+        """读取请求级或全局模型 Key。"""
+        if model_config and model_config.apiKey.strip():
+            return model_config.apiKey.strip()
+        return settings.ai_grading_api_key.strip()
+
+    def model_provider(self) -> str:
+        """读取全局模型供应商。"""
+        return settings.ai_grading_model_provider.strip()
 
     def agent_stream_content(self, chunk: Any) -> str:
         """读取 Agent 流式事件中的文本片段。"""

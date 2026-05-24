@@ -4,7 +4,6 @@ from dataclasses import dataclass
 import time
 from typing import Any
 
-from app.config.settings import settings
 from app.practice.llm_logger import PracticeLlmLogger, logger
 from app.practice.model_factory import PracticeModelFactory
 from app.practice.prompts import GRADE_SYSTEM_PROMPT, PracticePromptBuilder
@@ -43,11 +42,11 @@ class PracticeGradingAgent:
         logger.info(
             "【AI智能刷题流程-评分】准备调用 Agent 结构化评分：traceId=%s model=%s",
             trace_id,
-            settings.ai_grading_model,
+            self._provider_adapter.model_name(request.modelConfig),
         )
         self._llm_logger.log_request(trace_id, "答案评分-Agent非流式", GRADE_SYSTEM_PROMPT, messages, stream=False)
         try:
-            result = self._model_factory.grading_agent().invoke({"messages": messages})
+            result = self._model_factory.grading_agent(request.modelConfig).invoke({"messages": messages})
             grading = self._structured_grading_result(result)
             if grading is None:
                 raise ValueError("Agent 未返回结构化评分结果")
@@ -55,11 +54,11 @@ class PracticeGradingAgent:
             # LangChain Agent 结构化输出成功后记录完整评分结果，便于按 traceId 复盘返回。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
             self._llm_logger.log_response(trace_id, "答案评分-Agent非流式", {"grading": grading, "rawResult": result}, elapsed_ms)
-            metrics = self._build_metrics(trace_id, elapsed_ms, True, "", result)
+            metrics = self._build_metrics(trace_id, elapsed_ms, True, "", result, request)
             logger.info(
                 "【AI智能刷题流程-评分】Agent 结构化评分完成：traceId=%s model=%s durationMs=%s score=%s inputTokens=%s outputTokens=%s totalTokens=%s estimatedCost=%s",
                 trace_id,
-                settings.ai_grading_model,
+                self._provider_adapter.model_name(request.modelConfig),
                 elapsed_ms,
                 grading.score,
                 metrics.inputTokens,
@@ -70,7 +69,7 @@ class PracticeGradingAgent:
             return PracticeGradeAgentResult(grading=grading, metrics=metrics)
         except Exception as exc:  # noqa: BLE001 - Agent、网络和结构化解析异常统一交由 Java 后端兜底。
             elapsed_ms = round((time.perf_counter() - start_time) * 1000)
-            metrics = self._build_metrics(trace_id, elapsed_ms, False, self._error_category(exc), None)
+            metrics = self._build_metrics(trace_id, elapsed_ms, False, self._error_category(exc), None, request)
             logger.warning(
                 "【AI智能刷题流程-评分】Agent 结构化评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s errorCategory=%s error=%s",
                 trace_id,
@@ -114,14 +113,22 @@ class PracticeGradingAgent:
                     return PracticeGradeResponse.model_validate(tool_call["args"])
         return None
 
-    def _build_metrics(self, trace_id: str, elapsed_ms: int, success: bool, error_category: str, result: Any) -> PracticeAiCallMetrics:
+    def _build_metrics(
+        self,
+        trace_id: str,
+        elapsed_ms: int,
+        success: bool,
+        error_category: str,
+        result: Any,
+        request: PracticeGradeRequest,
+    ) -> PracticeAiCallMetrics:
         """构造评分链路观测指标。"""
         token_usage = self._provider_adapter.call_token_usage(result)
         return PracticeAiCallMetrics(
             traceId=trace_id,
             scene="practice_grade",
-            model=settings.ai_grading_model,
-            modelProvider=settings.ai_grading_model_provider,
+            model=self._provider_adapter.model_name(request.modelConfig),
+            modelProvider=self._provider_adapter.model_provider(),
             success=success,
             fallbackUsed=not success,
             stream=False,

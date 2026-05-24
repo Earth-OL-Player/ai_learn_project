@@ -16,6 +16,12 @@
         <el-menu-item index="/admin/system-question-bank">
           <span>系统题库管理</span>
         </el-menu-item>
+        <el-menu-item index="/admin/redemption-codes">
+          <span>兑换码管理</span>
+        </el-menu-item>
+        <el-menu-item index="/admin/model-configs">
+          <span>模型配置</span>
+        </el-menu-item>
       </el-menu>
     </aside>
 

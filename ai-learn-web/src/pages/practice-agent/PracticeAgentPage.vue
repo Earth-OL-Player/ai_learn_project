@@ -43,6 +43,13 @@
           @visible-change="handleCategoryVisibleChange"
           @change="handleCategoryChange"
         />
+        <ModelEntitlementSummary
+          class="practice-model-summary"
+          :status="modelEntitlementStatus"
+          compact
+          :show-remaining-days="false"
+          @authorize="handleModelAuthorize"
+        />
         <el-button
           class="main-action-button"
           type="primary"
@@ -94,6 +101,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
+import ModelEntitlementSummary from '../../components/model/ModelEntitlementSummary.vue';
 import PracticeBadgeDialog from './components/PracticeBadgeDialog.vue';
 import PracticeCategorySelector from './components/PracticeCategorySelector.vue';
 import PracticeInputBar from './components/PracticeInputBar.vue';
@@ -117,12 +125,14 @@ const {
   handleCategoryVisibleChange,
   handleGuestInteraction,
   handleMessagePanelScroll,
+  handleModelAuthorize,
   handleNextQuestion,
   handleRetry,
   inputPlaceholder,
   inputText,
   loading,
   messagePanelRef,
+  modelEntitlementStatus,
   messages,
   nextButtonText,
   retryButtonDisabled,

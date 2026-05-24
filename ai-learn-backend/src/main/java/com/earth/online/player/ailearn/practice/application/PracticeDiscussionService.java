@@ -2,6 +2,8 @@ package com.earth.online.player.ailearn.practice.application;
 
 import com.earth.online.player.ailearn.growth.application.GrowthAwardService;
 import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
+import com.earth.online.player.ailearn.model.application.ModelEntitlementService;
+import com.earth.online.player.ailearn.model.application.ResolvedModelEntitlement;
 import com.earth.online.player.ailearn.practice.domain.PracticeConstants;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiClient;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeQuestionRecord;
@@ -22,6 +24,7 @@ public class PracticeDiscussionService {
     private final PracticeResponseAssembler responseAssembler;
     private final GrowthAwardService growthAwardService;
     private final PracticeAiClient practiceAiClient;
+    private final ModelEntitlementService modelEntitlementService;
 
     /**
      * 创建当前题 AI 讨论服务。
@@ -31,18 +34,21 @@ public class PracticeDiscussionService {
      * @param responseAssembler 响应组装服务
      * @param growthAwardService 勋章发放服务
      * @param practiceAiClient AI 服务客户端
+     * @param modelEntitlementService 模型权益服务
      */
     public PracticeDiscussionService(
             PracticeSessionService practiceSessionService,
             DiscussionHistoryService discussionHistoryService,
             PracticeResponseAssembler responseAssembler,
             GrowthAwardService growthAwardService,
-            PracticeAiClient practiceAiClient) {
+            PracticeAiClient practiceAiClient,
+            ModelEntitlementService modelEntitlementService) {
         this.practiceSessionService = practiceSessionService;
         this.discussionHistoryService = discussionHistoryService;
         this.responseAssembler = responseAssembler;
         this.growthAwardService = growthAwardService;
         this.practiceAiClient = practiceAiClient;
+        this.modelEntitlementService = modelEntitlementService;
     }
 
     /**
@@ -63,7 +69,15 @@ public class PracticeDiscussionService {
         String lastUserAnswer = session == null ? "" : session.getLastAnswerText();
         String gradingSummary = session == null ? "" : session.getLastGradingSummary();
         String historyJson = session == null ? "" : session.getDiscussionHistoryJson();
-        String reply = practiceAiClient.discussStream(question, lastUserAnswer, gradingSummary, historyJson, content, chunkConsumer)
+        ResolvedModelEntitlement modelEntitlement = modelEntitlementService.resolveForAiCall(userId);
+        String reply = practiceAiClient.discussStream(
+                        question,
+                        lastUserAnswer,
+                        gradingSummary,
+                        historyJson,
+                        content,
+                        modelEntitlement.requestConfig(),
+                        chunkConsumer)
                 .orElse(PracticeConstants.FALLBACK_DISCUSSION_MESSAGE);
         discussionHistoryService.saveDiscussionHistory(userId, historyJson, content, reply);
 

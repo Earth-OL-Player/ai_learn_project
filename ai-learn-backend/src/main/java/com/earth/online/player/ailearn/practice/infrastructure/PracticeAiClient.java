@@ -5,6 +5,7 @@ import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.earth.online.player.ailearn.common.exception.ClientStreamClosedException;
 import com.earth.online.player.ailearn.common.trace.TraceContext;
+import com.earth.online.player.ailearn.model.domain.AiModelRequestConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -71,7 +72,11 @@ public class PracticeAiClient {
      * @param userAnswer 用户答案
      * @return 评分结果
      */
-    public Optional<PracticeAiGradingResult> grade(Long userId, PracticeQuestionRecord question, String userAnswer) {
+    public Optional<PracticeAiGradingResult> grade(
+            Long userId,
+            PracticeQuestionRecord question,
+            String userAnswer,
+            AiModelRequestConfig modelConfig) {
         if (!isEnabled()) {
             return Optional.empty();
         }
@@ -83,6 +88,7 @@ public class PracticeAiClient {
             payload.put("questionType", question.getQuestionType());
             payload.put("standardAnswer", question.getStandardAnswer());
             payload.put("userAnswer", userAnswer);
+            appendModelConfig(payload, modelConfig);
 
             // AI 服务异常时返回空结果，由后端本地规则兜底。
             JsonNode data = postJson(AiServiceConstants.PRACTICE_GRADE_PATH, payload).orElse(null);
@@ -113,12 +119,14 @@ public class PracticeAiClient {
             String gradingSummary,
             String discussionHistoryJson,
             String message,
+            AiModelRequestConfig modelConfig,
             Consumer<String> chunkConsumer) {
         if (!isEnabled()) {
             return Optional.empty();
         }
         try {
             ObjectNode payload = buildDiscussPayload(question, lastUserAnswer, gradingSummary, discussionHistoryJson, message);
+            appendModelConfig(payload, modelConfig);
             return postEventStream(AiServiceConstants.PRACTICE_DISCUSS_STREAM_PATH, payload, chunkConsumer);
         } catch (ClientStreamClosedException exception) {
             throw exception;
@@ -341,6 +349,25 @@ public class PracticeAiClient {
         payload.set("conversationHistory", readDiscussionHistory(discussionHistoryJson));
         payload.put("message", message);
         return payload;
+    }
+
+    /**
+     * 追加请求级模型配置。
+     *
+     * @param payload 请求体
+     * @param modelConfig 模型配置
+     */
+    private void appendModelConfig(ObjectNode payload, AiModelRequestConfig modelConfig) {
+        if (modelConfig == null) {
+            return;
+        }
+
+        // 模型 Key 只放入内部请求体，不进入 Java 后端日志。
+        ObjectNode configNode = objectMapper.createObjectNode();
+        configNode.put("model", modelConfig.model() == null ? "" : modelConfig.model());
+        configNode.put("baseUrl", modelConfig.baseUrl() == null ? "" : modelConfig.baseUrl());
+        configNode.put("apiKey", modelConfig.apiKey() == null ? "" : modelConfig.apiKey());
+        payload.set("modelConfig", configNode);
     }
 
     /**

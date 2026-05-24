@@ -29,7 +29,10 @@
       <div class="message-bubble">
         <p v-if="item.streaming" class="message-text streaming-message-text">
           <span v-if="item.text">{{ item.text }}</span>
-          <span v-else class="streaming-placeholder">{{ streamingPlaceholderText(item) }}</span>
+          <span v-else class="streaming-placeholder">
+            <span class="streaming-spinner" aria-hidden="true"></span>
+            <span>{{ streamingPlaceholderText(item) }}</span>
+          </span>
           <span class="stream-cursor" aria-hidden="true"></span>
         </p>
         <div v-else-if="item.text" class="message-text message-markdown" v-html="renderSafeMessageText(item)"></div>

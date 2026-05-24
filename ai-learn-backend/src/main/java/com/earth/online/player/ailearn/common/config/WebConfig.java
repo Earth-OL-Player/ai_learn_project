@@ -3,6 +3,7 @@ package com.earth.online.player.ailearn.common.config;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.common.ratelimit.RateLimitProperties;
 import com.earth.online.player.ailearn.common.security.JwtProperties;
+import com.earth.online.player.ailearn.model.domain.ModelAuthorizationProperties;
 import java.util.List;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
@@ -19,7 +20,7 @@ import org.springframework.web.filter.CorsFilter;
  * Web 基础配置。
  */
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, AiServiceProperties.class, RateLimitProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, AiServiceProperties.class, RateLimitProperties.class, ModelAuthorizationProperties.class})
 public class WebConfig {
 
     private static final String API_PATH_PATTERN = "/api/v1/**";

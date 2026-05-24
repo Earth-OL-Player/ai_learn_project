@@ -38,6 +38,8 @@ app:
       queue-capacity: ${AI_STREAM_EXECUTOR_QUEUE_CAPACITY:32}
       keep-alive-seconds: ${AI_STREAM_EXECUTOR_KEEP_ALIVE_SECONDS:60}
       await-termination-seconds: ${AI_STREAM_EXECUTOR_AWAIT_TERMINATION_SECONDS:5}
+  model-authorization:
+    url: ${MODEL_AUTHORIZATION_URL:}
   rate-limit:
     enabled: ${RATE_LIMIT_ENABLED:true}
     login-limit: ${RATE_LIMIT_LOGIN_LIMIT:10}

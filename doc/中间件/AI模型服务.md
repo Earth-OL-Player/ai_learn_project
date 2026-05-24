@@ -1,13 +1,13 @@
 # AI模型服务配置说明
 
-版本：v1.10
-日期：2026-05-23
+版本：v1.11
+日期：2026-05-24
 适用工程：`ai-service`、`ai-learn-backend`  
-适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆
+适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆、`sprint202627` 模型权益和请求级模型配置
 
 ## 1. 用途
 
-AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前 AI 智能刷题、评分和讨论不依赖 Qdrant，未接入主业务的 RAG/Qdrant 预留代码、配置和依赖已移除。当前代码通过 LangChain `init_chat_model` 接入模型，公共占位符与 LOCAL_RULE 常量集中在 `app/config/constants.py`；答案评分使用 `with_structured_output(..., method="json_mode")` 返回结构化 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。
+AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评分升级为真实大模型评分、答案优化建议和本题多轮讨论。当前 AI 智能刷题、评分和讨论不依赖 Qdrant，未接入主业务的 RAG/Qdrant 预留代码、配置和依赖已移除。当前代码通过 LangChain `init_chat_model` 接入模型，公共占位符与 LOCAL_RULE 常量集中在 `app/config/constants.py`；答案评分使用结构化响应返回 JSON，讨论能力继续使用 `create_agent`。本地没有真实 Key 时，会使用本地规则评分或讨论不可用提示兜底。明显无关问题已改由 Java 后端本地关键词拦截，不再额外调用模型判断相关性。`sprint202627` 后，Java 后端会按用户当前模型权益把请求级 `modelConfig` 传给 `ai-service`，用于区分初级、高级和超级模型调用配置。
 
 ## 2. 推荐版本
 
@@ -33,6 +33,14 @@ AI_GRADING_TIMEOUT_SECONDS=20
 AI_GRADING_MAX_OUTPUT_TOKENS=800
 ```
 
+`ai-learn-backend` 授权入口使用环境变量占位符：
+
+```dotenv
+MODEL_AUTHORIZATION_URL=https://authorization.example.com/model-auth
+```
+
+占位符说明：真实授权入口地址必须是包含 `http://` 或 `https://` 的完整网站地址，只能配置在本地环境变量或服务器私有配置中，禁止提交生产地址或带 Token 的链接。
+
 ## 5. 必要配置项
 
 | 配置项 | 示例占位符 | 说明 |
@@ -45,6 +53,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 | `RATE_LIMIT_AI_REQUEST_LIMIT` | `8` | Java 后端 AI 评分/讨论流式入口在窗口内允许的请求次数 |
 | `RATE_LIMIT_AI_REQUEST_WINDOW_SECONDS` | `60` | Java 后端 AI 评分/讨论流式入口频率限流窗口秒数 |
 | `RATE_LIMIT_AI_CONCURRENT_LIMIT` | `1` | Java 后端单用户 AI 评分/讨论流式入口并发上限 |
+| `MODEL_AUTHORIZATION_URL` | `https://authorization.example.com/model-auth` | Java 后端模型授权入口完整网站地址，必须包含 `http://` 或 `https://`；前端授权按钮会按该地址新标签打开，未配置或格式不合法时提示暂未开放 |
 | `AI_GRADING_BASE_URL` | `https://模型服务地址占位符/v1` | 可选真实模型服务基础地址，OpenAI 兼容服务通常填写到 `/v1` |
 | `AI_GRADING_API_KEY` | `AI_GRADING_API_KEY占位符` | 可选真实模型服务 Key |
 | `AI_GRADING_MODEL` | `LOCAL_RULE` | 本地规则或真实模型名 |
@@ -77,6 +86,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 6. 在答题或讨论阶段输入明显无关内容，应由 Java 后端本地关键词直接拦截，不再调用 AI 服务相关性接口。
 7. 停止 `ai-service` 或关闭 `AI_SERVICE_ENABLED` 后，后端仍应使用本地规则兜底评分，并用关键词兜底拦截明显无关内容。
 8. 打开浏览器控制台，提交一次答案或本题追问，复制日志中的 `traceId`，应能在 Java 后端日志、Python AI 服务日志和模型调用日志中按同一个 `traceId` 检索到完整链路。
+9. 在管理者中心维护 PRO 或 SUPER 模型配置后，以对应权益用户提交答案，Java 后端调用 `ai-service` 的请求体应包含 `modelConfig`，Python 日志只记录模型名和 traceId，不输出真实 Key。
 
 ## 8. 后续部署到服务器注意事项
 
@@ -138,3 +148,26 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 4. 模型不可用、Key 使用占位符、模型名为 `LOCAL_RULE` 或解析失败时，AI 服务回退到本地保守规则。
 5. 日志只能记录 traceId、场景、模型名、耗时和响应预览，禁止打印真实 Key、完整用户答案或完整提示词。
 6. 生产部署时如接入第三方模型，需要确认供应商的数据使用、留存和脱敏策略符合项目要求。Qdrant 当前不是项目运行依赖，无需部署。
+
+## 12. sprint202627 请求级模型配置补充
+
+本迭代新增模型权益后，Java 后端会在评分和本题讨论请求中追加 `modelConfig`：
+
+```json
+{
+  "modelConfig": {
+    "model": "deepseek-v4-pro",
+    "baseUrl": "https://模型服务地址占位符/v1",
+    "apiKey": "AI_GRADING_API_KEY占位符"
+  }
+}
+```
+
+处理规则：
+
+1. `ai-service` 优先读取请求体中的 `modelConfig.model`、`modelConfig.baseUrl` 和 `modelConfig.apiKey`。
+2. 请求级配置缺失或不完整时，回退到 `ai-service/.env` 中的 `AI_GRADING_MODEL`、`AI_GRADING_BASE_URL` 和 `AI_GRADING_API_KEY`。
+3. 请求级 `apiKey` 只允许在 Java 后端到 Python AI 服务的内网请求体中传递，不得写入日志。
+4. Python 日志只输出 traceId、模型名、是否启用真实模型和耗时，不输出真实 Key。
+5. 管理端模型配置保存到 MySQL `model_configs`，本地联调时可使用占位符；真实值只允许在本地私有环境或服务器管理端维护。
+6. `MODEL_AUTHORIZATION_URL` 仅控制前端授权按钮跳转地址，不参与模型调用鉴权，必须配置为完整 `http/https` 网站地址，不得配置相对路径或带密钥的 URL。

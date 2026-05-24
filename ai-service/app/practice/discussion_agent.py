@@ -51,7 +51,7 @@ class PracticeDiscussionAgent:
         logger.info(
             "【AI智能刷题流程-流式讨论】准备调用 Agent 流式讨论：traceId=%s model=%s",
             trace_id,
-            settings.ai_grading_model,
+            self._provider_adapter.model_name(request.modelConfig),
         )
         try:
             yield from self._stream_discuss_by_agent(request, messages, trace_id, start_time)
@@ -75,11 +75,11 @@ class PracticeDiscussionAgent:
         logger.info(
             "【AI智能刷题流程-讨论】准备调用 Agent 非流式讨论兜底：traceId=%s model=%s",
             trace_id,
-            settings.ai_grading_model,
+            self._provider_adapter.model_name(request.modelConfig),
         )
         self._llm_logger.log_request(trace_id, "本题讨论-Agent非流式兜底", DISCUSSION_SYSTEM_PROMPT, messages, stream=False)
         try:
-            result = self._model_factory.discussion_agent().invoke({"messages": messages})
+            result = self._model_factory.discussion_agent(request.modelConfig).invoke({"messages": messages})
             reply = self._provider_adapter.last_ai_reply(result).strip()
             if not reply:
                 return None
@@ -118,7 +118,7 @@ class PracticeDiscussionAgent:
         output_tokens: int | None = None
 
         # 讨论阶段统一优先使用 Agent 流式，便于后续接入工具、检索和多步骤规划。
-        for stream_chunk in self._stream_discuss_with_agent(messages, trace_id, start_time):
+        for stream_chunk in self._stream_discuss_with_agent(request, messages, trace_id, start_time):
             content = stream_chunk.content
             if stream_chunk.output_tokens is not None:
                 output_tokens = stream_chunk.output_tokens
@@ -151,12 +151,18 @@ class PracticeDiscussionAgent:
         )
         self._llm_logger.log_stream_output_tokens(trace_id, output_tokens, full_reply)
 
-    def _stream_discuss_with_agent(self, messages: list[BaseMessage], trace_id: str, start_time: float) -> Iterator[StreamDiscussChunk]:
+    def _stream_discuss_with_agent(
+        self,
+        request: PracticeDiscussRequest,
+        messages: list[BaseMessage],
+        trace_id: str,
+        start_time: float,
+    ) -> Iterator[StreamDiscussChunk]:
         """使用 LangChain Agent 流式输出讨论回复。"""
         event_count = 0
         content_count = 0
         self._llm_logger.log_request(trace_id, "本题讨论-Agent流式", DISCUSSION_SYSTEM_PROMPT, messages, stream=True)
-        for chunk in self._model_factory.discussion_agent().stream({"messages": messages}, stream_mode="messages", version="v2"):
+        for chunk in self._model_factory.discussion_agent(request.modelConfig).stream({"messages": messages}, stream_mode="messages", version="v2"):
             event_count += 1
             content = self._provider_adapter.agent_stream_content(chunk)
             output_tokens = self._provider_adapter.stream_output_tokens(chunk)

@@ -1,6 +1,14 @@
 from pydantic import BaseModel, Field
 
 
+class PracticeModelConfig(BaseModel):
+    """请求级模型配置。"""
+
+    model: str = ""
+    baseUrl: str = ""
+    apiKey: str = ""
+
+
 class PracticeGradeRequest(BaseModel):
     """刷题答案评分请求。"""
 
@@ -10,6 +18,7 @@ class PracticeGradeRequest(BaseModel):
     questionType: str
     standardAnswer: str
     userAnswer: str
+    modelConfig: PracticeModelConfig | None = None
 
 
 class PracticeGradeResponse(BaseModel):
@@ -60,6 +69,7 @@ class PracticeDiscussRequest(BaseModel):
     gradingSummary: str = ""
     conversationHistory: list[PracticeConversationMessage] = Field(default_factory=list)
     message: str
+    modelConfig: PracticeModelConfig | None = None
 
 
 class PracticeDiscussResponse(BaseModel):

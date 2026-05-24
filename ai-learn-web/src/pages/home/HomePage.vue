@@ -38,7 +38,7 @@
         </div>
       </nav>
 
-      <article class="markdown-card">
+      <article class="markdown-card" @click="handleMarkdownClick">
         <div class="markdown-body" v-html="safeHomeHtml"></div>
       </article>
     </div>
@@ -48,6 +48,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
 import homeMarkdown from '../../content/learning-roadmap/首页.md?raw';
+import { openModelAuthorization } from '../../utils/modelAuthorization';
 import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 interface TocItem {
@@ -144,6 +145,21 @@ function setActiveToc(tocId: string): void {
  */
 function toggleToc(): void {
   isTocCollapsed.value = !isTocCollapsed.value;
+}
+
+/**
+ * 处理首页 Markdown 内授权入口点击。
+ */
+function handleMarkdownClick(event: MouseEvent): void {
+  const target = event.target instanceof Element ? event.target : null;
+  const authLink = target?.closest<HTMLAnchorElement>('a[href="#model-auth"]');
+  if (!authLink) {
+    return;
+  }
+
+  // 授权入口由后端配置控制，首页只负责发起统一跳转动作。
+  event.preventDefault();
+  openModelAuthorization().catch(() => undefined);
 }
 
 /**

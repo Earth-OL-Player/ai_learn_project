@@ -2,6 +2,8 @@ package com.earth.online.player.ailearn.practice.application;
 
 import com.earth.online.player.ailearn.answer.domain.AnswerGradingPort;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
+import com.earth.online.player.ailearn.model.application.ModelEntitlementService;
+import com.earth.online.player.ailearn.model.application.ResolvedModelEntitlement;
 import com.earth.online.player.ailearn.practice.domain.PracticeConstants;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiClient;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeAiGradingResult;
@@ -23,6 +25,7 @@ public class PracticeGradingService {
     private final PracticeGrowthSettlementService growthSettlementService;
     private final PracticeSessionService practiceSessionService;
     private final PracticeResponseAssembler responseAssembler;
+    private final ModelEntitlementService modelEntitlementService;
 
     /**
      * 创建刷题答案评分和成长结算服务。
@@ -32,18 +35,21 @@ public class PracticeGradingService {
      * @param growthSettlementService 成长结算服务
      * @param practiceSessionService 会话状态服务
      * @param responseAssembler 响应组装服务
+     * @param modelEntitlementService 模型权益服务
      */
     public PracticeGradingService(
             AnswerGradingPort answerGradingPort,
             PracticeAiClient practiceAiClient,
             PracticeGrowthSettlementService growthSettlementService,
             PracticeSessionService practiceSessionService,
-            PracticeResponseAssembler responseAssembler) {
+            PracticeResponseAssembler responseAssembler,
+            ModelEntitlementService modelEntitlementService) {
         this.answerGradingPort = answerGradingPort;
         this.practiceAiClient = practiceAiClient;
         this.growthSettlementService = growthSettlementService;
         this.practiceSessionService = practiceSessionService;
         this.responseAssembler = responseAssembler;
+        this.modelEntitlementService = modelEntitlementService;
     }
 
     /**
@@ -55,7 +61,8 @@ public class PracticeGradingService {
      * @return 评分响应
      */
     public PracticeMessageResponse submitAnswer(Long userId, PracticeQuestionRecord question, String userAnswer) {
-        Optional<PracticeAiGradingResult> aiGradingResult = practiceAiClient.grade(userId, question, userAnswer);
+        ResolvedModelEntitlement modelEntitlement = modelEntitlementService.resolveForAiCall(userId);
+        Optional<PracticeAiGradingResult> aiGradingResult = practiceAiClient.grade(userId, question, userAnswer, modelEntitlement.requestConfig());
         boolean fallbackUsed = aiGradingResult.map(PracticeAiGradingResult::fallbackUsed).orElse(true);
         GradingResult gradingResult = aiGradingResult.map(PracticeAiGradingResult::gradingResult)
                 .orElseGet(() -> answerGradingPort.grade(

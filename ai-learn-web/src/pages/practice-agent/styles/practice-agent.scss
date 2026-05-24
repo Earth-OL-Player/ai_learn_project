@@ -34,13 +34,13 @@
 
 .practice-side-toolbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: flex-start;
   min-height: 36px;
   margin-bottom: 12px;
 }
 
 .practice-side-card.is-collapsed .practice-side-toolbar {
-  justify-content: center;
+  justify-content: flex-start;
   margin-bottom: 0;
 }
 
@@ -216,6 +216,15 @@
   font-weight: 700;
 }
 
+.practice-model-summary {
+  // 权益条放在分类和下一题之间，确保用户发起 AI 调用前能看到当前模型。
+  flex: 0 1 auto;
+}
+
+.practice-model-summary .model-entitlement-item {
+  min-width: 112px;
+}
+
 .practice-message-panel {
   // 对话区留出更大空白，突出刷题内容本身。
   flex: 1;
@@ -341,8 +350,23 @@
 
 .streaming-placeholder {
   // 首包到达前给出稳定占位，避免用户误以为卡死。
+  display: inline-flex;
+  gap: 9px;
+  align-items: center;
   color: var(--color-muted);
   font-weight: 600;
+}
+
+.streaming-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid color-mix(in srgb, var(--color-primary) 20%, var(--color-border));
+  border-top-color: var(--color-primary);
+  border-right-color: color-mix(in srgb, var(--color-accent) 82%, var(--color-primary));
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--color-primary) 8%, transparent);
+  animation: streaming-spinner-rotate 0.9s linear infinite;
 }
 
 .stream-cursor {
@@ -369,6 +393,12 @@
   }
 }
 
+@keyframes streaming-spinner-rotate {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .practice-chat-page,
   .practice-side-card,
@@ -377,6 +407,10 @@
   }
 
   .stream-cursor {
+    animation: none;
+  }
+
+  .streaming-spinner {
     animation: none;
   }
 }
@@ -872,7 +906,7 @@
   }
 
   .practice-side-card.is-collapsed .practice-side-toolbar {
-    justify-content: flex-end;
+    justify-content: flex-start;
   }
 
   .practice-chat-header {

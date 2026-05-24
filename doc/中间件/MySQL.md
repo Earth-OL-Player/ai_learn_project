@@ -1,13 +1,13 @@
 # MySQL 中间件说明
 
-版本：v1.22
-日期：2026-05-23  
+版本：v1.23
+日期：2026-05-24
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、`sprint202627` 模型权益兑换与模型配置、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心、容量限制和模型权益
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，用于保存用户注册登录数据、用户性别编码、建议评论区互动数据、真实 AI 面试题库数据和超级管理员标识，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照、系统设置和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、用户性别编码、建议评论区互动数据、真实 AI 面试题库数据、超级管理员标识、模型配置、兑换码和用户模型权益，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照、系统设置、模型权益和审计字段。
 
 当前边界说明：
 
@@ -22,6 +22,9 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、用户�
 - Redis 当前未接入运行代码；Qdrant 预留代码、配置和依赖已移除，不直接参与 MySQL 业务主表写入。
 - `system_settings` 保存系统最大用户数等轻量配置，当前使用 `MAX_USERS` 控制开放注册容量。
 - `invalidated_tokens` 保存用户退出登录后的 JWT `jti` 失效记录，确保退出后旧访问令牌不能继续访问受保护接口。
+- `model_configs` 保存初级、高级、超级三档模型的 model、baseUrl 和 apiKey；真实 apiKey 只能由超级管理员在管理端维护，禁止写入公开文档。
+- `redemption_codes` 保存模型权益兑换码，兑换码字段使用大小写敏感排序规则。
+- `user_model_entitlements` 保存用户高级/超级模型月度和永久权益，月度剩余天数由后端在查询、兑换和 AI 调用时懒结算。
 
 ## 2. 推荐版本
 
@@ -166,7 +169,7 @@ SELECT id, username, gender, super_admin FROM users WHERE username = '本地用�
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V5__create_invalidated_tokens.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表和当前题多轮讨论记忆字段。
+3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V6__create_model_authorization_tables.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表、当前题多轮讨论记忆字段和 JWT 失效记录。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -727,3 +730,52 @@ GET  /api/v1/users/me
 - `invalidated_tokens` 不保存完整 JWT，不允许手工写入生产用户 token 原文。
 - 服务端日志只记录认证失败路径、方法和原因，禁止记录 `Authorization` 请求头原文。
 - 后续如升级为 HttpOnly、Secure、SameSite Cookie 或 access token + refresh token，可继续复用该表作为 access token 黑名单。
+
+## 19. sprint202627 模型权益兑换和模型配置说明
+
+本迭代新增 `V6__create_model_authorization_tables.sql`，用于支持高级模型授权入口、兑换码管理、用户模型权益和三档模型配置。
+
+新增内容：
+
+| 表 | 字段或索引 | 用途 |
+| --- | --- | --- |
+| `model_configs` | `model_level` | 保存 `BASIC`、`PRO`、`SUPER` 三档模型配置，唯一索引保证每档一条配置。 |
+| `model_configs` | `model_name`、`base_url`、`api_key` | 保存模型名称、OpenAI 兼容基础地址和模型 Key；真实 Key 禁止写入仓库。 |
+| `redemption_codes` | `code` | 保存大小写敏感兑换码，格式为 `PRO-随机码` 或 `SUPER-随机码`。 |
+| `redemption_codes` | `code_type`、`status` | 保存兑换码类型和未使用/已使用状态。 |
+| `redemption_codes` | `used_by_user_id`、`used_at` | 保存兑换用户和兑换时间，已使用兑换码只允许查看和导出。 |
+| `user_model_entitlements` | `model_level`、`entitlement_kind`、`status` | 保存用户高级/超级模型月度和永久权益状态。 |
+| `user_model_entitlements` | `remaining_days`、`last_consumed_at` | 支持月度权益按 24 小时懒扣减和冻结恢复。 |
+
+本地验证 SQL：
+
+```sql
+DESC model_configs;
+DESC redemption_codes;
+DESC user_model_entitlements;
+SELECT version, description, success FROM flyway_schema_history WHERE version = '6';
+SELECT model_level, model_name, base_url FROM model_configs ORDER BY FIELD(model_level, 'BASIC', 'PRO', 'SUPER');
+SELECT code, code_type, status FROM redemption_codes ORDER BY created_at DESC LIMIT 5;
+SELECT user_id, model_level, entitlement_kind, status, remaining_days FROM user_model_entitlements WHERE user_id = 用户ID占位符;
+```
+
+本地联调场景：
+
+```text
+GET  /api/v1/model-entitlements/status
+POST /api/v1/model-entitlements/redeem
+GET  /api/v1/admin/redemption-codes?pageNo=1&pageSize=10
+POST /api/v1/admin/redemption-codes/generate
+PUT  /api/v1/admin/redemption-codes/<兑换码ID占位符>
+GET  /api/v1/admin/redemption-codes/export
+GET  /api/v1/admin/model-configs
+PUT  /api/v1/admin/model-configs/PRO
+```
+
+部署注意事项：
+
+- 发布前必须先备份 MySQL，并确认 Flyway 自动执行 V6 成功。
+- `model_configs.api_key` 属于敏感配置，真实值只能在管理端由超级管理员维护，禁止通过 SQL 截图、日志或公开文档泄露。
+- 兑换码属于付费权益凭证，导出文件不得上传到公开仓库或公共网盘。
+- 兑换码大小写敏感，人工排查时必须使用 `BINARY code = '<兑换码占位符>'` 精确查询。
+- 生产环境不得手工批量修改用户权益状态；特殊处理必须先备份并明确用户、等级和权益类型。

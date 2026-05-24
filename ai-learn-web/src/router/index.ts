@@ -14,6 +14,8 @@ const ProfilePage = () => import('../pages/profile/ProfilePage.vue');
 const AdminCenterPage = () => import('../pages/admin/AdminCenterPage.vue');
 const UserManagePage = () => import('../pages/admin/UserManagePage.vue');
 const SystemQuestionBankManagePage = () => import('../pages/admin/SystemQuestionBankManagePage.vue');
+const RedemptionCodeManagePage = () => import('../pages/admin/RedemptionCodeManagePage.vue');
+const ModelConfigManagePage = () => import('../pages/admin/ModelConfigManagePage.vue');
 
 /**
  * 创建前端路由实例。
@@ -85,6 +87,18 @@ const router = createRouter({
               name: 'admin-system-question-bank',
               component: SystemQuestionBankManagePage,
               meta: { title: '系统题库管理', requiresAuth: true, requiresSuperAdmin: true },
+            },
+            {
+              path: 'redemption-codes',
+              name: 'admin-redemption-codes',
+              component: RedemptionCodeManagePage,
+              meta: { title: '兑换码管理', requiresAuth: true, requiresSuperAdmin: true },
+            },
+            {
+              path: 'model-configs',
+              name: 'admin-model-configs',
+              component: ModelConfigManagePage,
+              meta: { title: '模型配置', requiresAuth: true, requiresSuperAdmin: true },
             },
           ],
         },
