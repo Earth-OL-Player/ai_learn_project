@@ -59,12 +59,12 @@ public interface GrowthMapper {
     int insertUserBadge(@Param("userId") Long userId, @Param("ruleCode") String ruleCode);
 
     /**
-     * 统计刷题评分完成次数。
+     * 统计已完成刷题题目数。
      *
      * @param userId 用户ID
-     * @return 完成次数
+     * @return 完成题目数
      */
-    @Select("SELECT COALESCE(SUM(answer_count), 0) FROM user_question_stats WHERE user_id = #{userId}")
+    @Select("SELECT COUNT(1) FROM user_question_stats WHERE user_id = #{userId} AND answer_count > 0")
     long countCompletedAnswers(@Param("userId") Long userId);
 
     /**
@@ -96,13 +96,5 @@ public interface GrowthMapper {
     @Select("SELECT COALESCE(AVG(best_score), 0) FROM user_question_stats WHERE user_id = #{userId} AND answer_count > 0")
     double averageBestScore(@Param("userId") Long userId);
 
-    /**
-     * 查询最高分总和。
-     *
-     * @param userId 用户ID
-     * @return 总经验值
-     */
-    @Select("SELECT COALESCE(SUM(best_score), 0) FROM user_question_stats WHERE user_id = #{userId}")
-    int sumBestScores(@Param("userId") Long userId);
 }
 

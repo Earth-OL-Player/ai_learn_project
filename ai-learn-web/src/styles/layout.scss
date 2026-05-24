@@ -6,12 +6,8 @@ body {
   min-width: 320px;
   min-height: 100vh;
   margin: 0;
-  background: linear-gradient(
-    135deg,
-    var(--color-page-bg-soft) 0%,
-    var(--color-page-bg-tint) 46%,
-    var(--color-page-bg-clean) 100%
-  );
+  overflow-x: hidden;
+  background: var(--color-page-bg-gradient);
 }
 
 .skip-link {
@@ -91,7 +87,7 @@ a {
   margin: 0 4px;
   border-bottom: 0;
   border-radius: var(--radius-pill);
-  color: #4b5870;
+  color: var(--color-nav-item-text);
   font-weight: 600;
 }
 
@@ -117,21 +113,23 @@ a {
   height: 72px;
   padding: 0 36px;
   // 顶部导航使用轻量玻璃质感，保持清新简约的页面风格。
-  background: rgba(255, 255, 255, 0.88);
-  border-bottom: 1px solid rgba(83, 116, 170, 0.1);
-  box-shadow: 0 12px 32px rgba(42, 84, 139, 0.06);
+  background: var(--color-header-bg);
+  border-bottom: 1px solid var(--color-header-border);
+  box-shadow: var(--shadow-header);
   backdrop-filter: blur(14px);
 }
 
 .header-action-area {
   display: flex;
+  gap: 10px;
+  align-items: center;
   flex: 0 0 auto;
   justify-content: flex-end;
   min-width: 168px;
 }
 
 .header-label {
-  color: #8b98ad;
+  color: var(--color-subtle);
   font-size: 13px;
 }
 
@@ -144,6 +142,10 @@ a {
 .layout-content {
   width: 100%;
   padding: 32px 36px 40px;
+}
+
+.mobile-bottom-nav {
+  display: none;
 }
 
 .roadmap-page {
@@ -282,13 +284,13 @@ a {
   gap: 6px;
   padding: 14px 16px;
   background: var(--color-page-bg-soft);
-  border: 1px solid #e7eef9;
+  border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   transition: all 0.2s ease;
 }
 
 .resource-item:hover {
-  border-color: #9ec5fe;
+  border-color: var(--color-primary-bright);
   transform: translateY(-1px);
 }
 
@@ -363,10 +365,9 @@ a {
 .layout-header {
   height: 82px;
   padding: 0 34px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 252, 255, 0.92) 100%);
-  border-bottom: 1px solid rgba(219, 234, 254, 0.9);
-  box-shadow: 0 14px 36px rgba(47, 84, 128, 0.08);
+  background: var(--color-header-bg);
+  border-bottom: 1px solid var(--color-header-border);
+  box-shadow: var(--shadow-header);
 }
 
 .brand-block {
@@ -396,19 +397,19 @@ a {
 
 .brand-title-row span {
   padding: 5px 10px;
-  color: #667085;
+  color: var(--color-muted);
   font-size: 14px;
   font-weight: 700;
-  background: rgba(239, 246, 255, 0.9);
-  border: 1px solid rgba(207, 227, 255, 0.9);
+  background: var(--color-primary-softer);
+  border: 1px solid var(--color-control-border);
   border-radius: var(--radius-pill);
 }
 
 .layout-menu {
   max-width: 720px;
   padding: 6px;
-  background: rgba(248, 251, 255, 0.72);
-  border: 1px solid rgba(219, 234, 254, 0.72);
+  background: var(--color-glass-surface);
+  border: 1px solid var(--color-header-border);
   border-radius: var(--radius-pill);
 }
 
@@ -416,7 +417,7 @@ a {
   height: 42px;
   padding: 0 22px;
   margin: 0 2px;
-  color: #344054;
+  color: var(--color-nav-item-text);
   font-size: 15px;
   font-weight: 800;
 }
@@ -424,7 +425,7 @@ a {
 .layout-menu .el-menu-item.is-active {
   color: var(--color-primary-strong);
   background: var(--color-surface);
-  box-shadow: 0 8px 20px rgba(47, 125, 246, 0.12);
+  box-shadow: var(--shadow-control);
 }
 
 .header-action-area {
@@ -435,16 +436,16 @@ a {
   width: 38px;
   height: 38px;
   font-weight: 800;
-  background: linear-gradient(135deg, #d7e7ff 0%, var(--color-primary-softer) 100%);
+  background: linear-gradient(135deg, var(--color-primary-softer) 0%, var(--color-surface-soft) 100%);
 }
 
 .user-dropdown-button {
   min-height: 40px;
   padding: 8px 16px;
   color: var(--color-heading);
-  background: rgba(255, 255, 255, 0.9);
-  border-color: rgba(207, 227, 255, 0.95);
-  box-shadow: 0 8px 20px rgba(47, 84, 128, 0.06);
+  background: var(--color-control-bg);
+  border-color: var(--color-control-border);
+  box-shadow: var(--shadow-control);
 }
 // 导航项独立成块，头像和用户下拉保持可见且对齐。
 .layout-menu {
@@ -462,48 +463,48 @@ a {
   justify-content: center;
   padding: 0 22px;
   margin: 0 7px;
-  color: #344054;
+  color: var(--color-nav-item-text);
   font-size: 15px;
   font-weight: 800;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(219, 234, 254, 0.92);
+  background: var(--color-nav-item-bg);
+  border: 1px solid var(--color-header-border);
   border-radius: var(--radius-pill);
-  box-shadow: 0 8px 20px rgba(47, 84, 128, 0.045);
+  box-shadow: var(--shadow-subtle);
   transition: color 0.18s ease, background 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
 
 .layout-menu .el-menu-item:hover {
   color: var(--color-primary-strong);
-  background: #f8fbff;
-  box-shadow: 0 10px 24px rgba(47, 125, 246, 0.1);
+  background: var(--color-nav-item-hover-bg);
+  box-shadow: var(--shadow-control);
   transform: translateY(-1px);
 }
 
 .layout-menu .el-menu-item.is-active {
   color: var(--color-primary-strong);
-  background: linear-gradient(135deg, var(--color-surface) 0%, var(--color-primary-softer) 100%);
-  border-color: rgba(166, 206, 255, 0.96);
-  box-shadow: 0 12px 26px rgba(47, 125, 246, 0.14);
+  background: var(--color-nav-item-active-bg);
+  border-color: var(--color-control-border);
+  box-shadow: var(--shadow-control);
 }
 
 .header-user {
   gap: 10px;
   padding: 4px;
-  background: rgba(255, 255, 255, 0.64);
-  border: 1px solid rgba(219, 234, 254, 0.86);
+  background: var(--color-glass-surface);
+  border: 1px solid var(--color-header-border);
   border-radius: var(--radius-pill);
-  box-shadow: 0 8px 22px rgba(47, 84, 128, 0.055);
+  box-shadow: var(--shadow-subtle);
 }
 
 .header-user .el-avatar {
   width: 40px;
   height: 40px;
-  color: #2f7df6;
+  color: var(--color-primary);
   font-size: 15px;
   font-weight: 900;
-  background: linear-gradient(135deg, var(--color-primary-softer) 0%, #dcecff 100%);
-  border: 1px solid rgba(207, 227, 255, 0.95);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  background: linear-gradient(135deg, var(--color-primary-softer) 0%, var(--color-surface-soft) 100%);
+  border: 1px solid var(--color-control-border);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-surface) 88%, transparent);
 }
 
 .user-dropdown-button {
@@ -516,6 +517,11 @@ a {
   background: transparent;
   border: 0;
   box-shadow: none;
+}
+
+.user-dropdown-name {
+  // 用户名独立成文本层，便于窄屏下完整换行展示。
+  min-width: 0;
 }
 
 .user-dropdown-button:hover {
@@ -532,6 +538,83 @@ a {
   border-bottom: 2px solid currentColor;
   opacity: 0.72;
   transform: rotate(45deg);
+}
+
+// 主题切换按钮使用圆形图标按钮，放在头像左侧且保持 44px 触控高度。
+.theme-toggle-button {
+  position: relative;
+  display: grid;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  color: var(--color-heading);
+  font-weight: 800;
+  cursor: pointer;
+  background: var(--color-control-bg);
+  border: 1px solid var(--color-theme-toggle-border);
+  border-radius: 50%;
+  box-shadow: var(--shadow-subtle);
+  transition: color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease, transform 0.18s ease;
+}
+
+.theme-toggle-button:hover {
+  color: var(--color-primary-strong);
+  border-color: var(--color-primary-bright);
+  box-shadow: var(--shadow-control);
+}
+
+.theme-toggle-button:active {
+  transform: scale(0.96);
+}
+
+.theme-toggle-icon-wrap {
+  position: relative;
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  color: #f59e0b;
+  background: var(--color-theme-toggle-bg);
+  border-radius: 50%;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.16);
+  place-items: center;
+  transition: color 0.22s ease, background 0.22s ease;
+}
+
+.theme-toggle-button.is-dark .theme-toggle-icon-wrap {
+  color: #60a5fa;
+}
+
+.theme-toggle-icon {
+  width: 16px;
+  height: 16px;
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.theme-toggle-sun {
+  border: 2px solid currentColor;
+  border-radius: 50%;
+  box-shadow: 0 -6px 0 -4px currentColor, 0 6px 0 -4px currentColor, 6px 0 0 -4px currentColor, -6px 0 0 -4px currentColor;
+}
+
+.theme-toggle-moon {
+  position: relative;
+  background: currentColor;
+  border-radius: 50%;
+}
+
+.theme-toggle-moon::after {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 15px;
+  height: 15px;
+  background: var(--color-control-bg);
+  border-radius: 50%;
+  content: '';
 }
 // 首页入口加入后压缩导航单项宽度，保证大屏顶部栏不拥挤。
 .layout-header {

@@ -13,13 +13,13 @@
   color: var(--color-text-strong);
   font-weight: 700;
   cursor: pointer;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(83, 116, 170, 0.14);
+  background: var(--color-control-bg);
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-pill);
 }
 
 .user-dropdown-arrow {
-  color: #6b7890;
+  color: var(--color-subtle);
   font-size: 14px;
 }
 
@@ -105,7 +105,7 @@
 
 .profile-header p {
   margin: 0;
-  color: #6b7890;
+  color: var(--color-muted);
 }
 
 .profile-descriptions {
@@ -121,9 +121,9 @@
 // 登录注册弹框采用轻量圆角卡片，兼容窄屏和桌面浏览器。
 .modern-auth-dialog .el-dialog {
   overflow: hidden;
-  border: 1px solid rgba(219, 234, 254, 0.95);
+  border: 1px solid var(--color-header-border);
   border-radius: 34px;
-  box-shadow: 0 28px 80px rgba(36, 76, 130, 0.18);
+  box-shadow: var(--shadow-panel);
 }
 
 .modern-auth-dialog .el-dialog__header {
@@ -139,17 +139,17 @@
 }
 
 .auth-form .el-form-item__label {
-  color: #344054;
+  color: var(--color-heading);
   font-weight: 800;
 }
 
 .auth-form .el-input__wrapper {
   border-radius: var(--radius-lg);
-  box-shadow: 0 0 0 1px #dbeafe inset;
+  box-shadow: 0 0 0 1px var(--color-control-border) inset;
 }
 
 .auth-form .el-input__wrapper.is-focus {
-  box-shadow: 0 0 0 1px var(--color-primary-bright) inset, 0 10px 24px rgba(58, 134, 255, 0.12);
+  box-shadow: 0 0 0 1px var(--color-primary-bright) inset, var(--shadow-control);
 }
 
 .auth-form-grid {
@@ -164,5 +164,39 @@
 
 .modern-auth-footer .el-button {
   min-width: 112px;
+}
+
+@media (max-width: 720px) {
+  .profile-page {
+    max-width: 100%;
+  }
+
+  .profile-card {
+    padding: 8px;
+    border-radius: 20px;
+  }
+
+  .profile-descriptions {
+    border-radius: 16px;
+  }
+
+  .login-guide-body {
+    padding: 4px 0 12px;
+  }
+
+  .login-guide-body h3 {
+    font-size: 22px;
+  }
+
+  .auth-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modern-auth-footer .el-button,
+  .auth-dialog-footer .el-button,
+  .login-guide-actions .el-button {
+    width: 100%;
+    min-height: 44px;
+  }
 }
 

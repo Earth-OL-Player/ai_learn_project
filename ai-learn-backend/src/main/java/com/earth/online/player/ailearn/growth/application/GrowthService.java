@@ -81,8 +81,8 @@ public class GrowthService {
      * @return 成长响应
      */
     private GrowthResponse buildGrowthResponse(User user, List<BadgeResponse> newBadges) {
-        // 成长数据基于用户题目汇总表，避免依赖已下线的答题记录流水。
-        int experience = Math.max(0, growthMapper.sumBestScores(user.getId()));
+        // 总经验直接读取用户表快照，避免成长查询扫描用户题目汇总表。
+        int experience = user.getExperience() == null ? 0 : Math.max(0, user.getExperience());
         GrowthLevel level = growthRuleService.resolveLevel(experience);
         GrowthRank rank = growthRuleService.resolveRank(experience);
         int nextLevelExperience = level.nextLevelExperience();

@@ -28,3 +28,20 @@ target/
 
 # Vite 本地依赖预构建缓存
 ai-learn-web/.vite-cache/
+
+# Python 字节码缓存
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Python 虚拟环境目录
+.venv/
+venv/
+env/
+
+# Python 工具缓存与覆盖率产物
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

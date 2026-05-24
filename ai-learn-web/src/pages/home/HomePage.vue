@@ -59,6 +59,8 @@ interface TocItem {
 let tocObserver: IntersectionObserver | null = null;
 const activeTocId = ref('');
 const isTocCollapsed = ref(false);
+const isMobileViewport = ref(false);
+let mobileViewportMediaQuery: MediaQueryList | null = null;
 let headingIdGenerator = createHeadingIdGenerator();
 
 const homeMarkdownRenderer = createSafeMarkdownRenderer({
@@ -132,6 +134,9 @@ function renderHomeMarkdown(): string {
  */
 function setActiveToc(tocId: string): void {
   activeTocId.value = tocId;
+  if (isMobileViewport.value) {
+    isTocCollapsed.value = true;
+  }
 }
 
 /**
@@ -139,6 +144,16 @@ function setActiveToc(tocId: string): void {
  */
 function toggleToc(): void {
   isTocCollapsed.value = !isTocCollapsed.value;
+}
+
+/**
+ * 同步手机端目录折叠状态。
+ *
+ * @param event 媒体查询变化事件
+ */
+function syncMobileTocState(event?: MediaQueryListEvent): void {
+  isMobileViewport.value = event ? event.matches : Boolean(mobileViewportMediaQuery?.matches);
+  isTocCollapsed.value = isMobileViewport.value;
 }
 
 /**
@@ -172,12 +187,18 @@ const safeHomeHtml = computed(() => renderHomeMarkdown());
 const tocItems = computed(() => buildTocItems(homeMarkdown));
 
 onMounted(async () => {
+  // 手机端目录默认收起，避免首屏阅读内容被目录占据过多空间。
+  mobileViewportMediaQuery = window.matchMedia('(max-width: 768px)');
+  syncMobileTocState();
+  mobileViewportMediaQuery.addEventListener('change', syncMobileTocState);
   await nextTick();
   observeTocHeadings();
 });
 
 onBeforeUnmount(() => {
   tocObserver?.disconnect();
+  mobileViewportMediaQuery?.removeEventListener('change', syncMobileTocState);
+  mobileViewportMediaQuery = null;
 });
 </script>
 

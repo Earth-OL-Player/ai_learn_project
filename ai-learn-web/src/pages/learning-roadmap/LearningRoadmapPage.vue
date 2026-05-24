@@ -59,6 +59,8 @@ interface TocItem {
 let tocObserver: IntersectionObserver | null = null;
 const activeTocId = ref('');
 const isTocCollapsed = ref(false);
+const isMobileViewport = ref(false);
+let mobileViewportMediaQuery: MediaQueryList | null = null;
 let headingIdGenerator = createHeadingIdGenerator();
 let imageCaptionNumber = 0;
 
@@ -221,6 +223,9 @@ function renderRoadmapMarkdown(): string {
  */
 function setActiveToc(tocId: string): void {
   activeTocId.value = tocId;
+  if (isMobileViewport.value) {
+    isTocCollapsed.value = true;
+  }
 }
 
 /**
@@ -228,6 +233,16 @@ function setActiveToc(tocId: string): void {
  */
 function toggleToc(): void {
   isTocCollapsed.value = !isTocCollapsed.value;
+}
+
+/**
+ * 同步手机端目录折叠状态。
+ *
+ * @param event 媒体查询变化事件
+ */
+function syncMobileTocState(event?: MediaQueryListEvent): void {
+  isMobileViewport.value = event ? event.matches : Boolean(mobileViewportMediaQuery?.matches);
+  isTocCollapsed.value = isMobileViewport.value;
 }
 
 /**
@@ -261,11 +276,17 @@ const safeRoadmapHtml = computed(() => renderRoadmapMarkdown());
 const tocItems = computed(() => buildTocItems(roadmapMarkdown));
 
 onMounted(async () => {
+  // 手机端默认收起长目录，让路线正文更快进入首屏。
+  mobileViewportMediaQuery = window.matchMedia('(max-width: 768px)');
+  syncMobileTocState();
+  mobileViewportMediaQuery.addEventListener('change', syncMobileTocState);
   await nextTick();
   observeTocHeadings();
 });
 
 onBeforeUnmount(() => {
   tocObserver?.disconnect();
+  mobileViewportMediaQuery?.removeEventListener('change', syncMobileTocState);
+  mobileViewportMediaQuery = null;
 });
 </script>

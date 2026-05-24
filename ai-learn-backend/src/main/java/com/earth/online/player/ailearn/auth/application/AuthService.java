@@ -9,9 +9,6 @@ import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.JwtTokenService;
 import com.earth.online.player.ailearn.common.security.TokenInvalidationService;
-import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
-import com.earth.online.player.ailearn.growth.domain.GrowthRank;
-import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.system.infrastructure.SystemSettingMapper;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.domain.UserSummary;
@@ -28,7 +25,6 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserMapper userMapper;
-    private final GrowthMapper growthMapper;
     private final SystemSettingMapper systemSettingMapper;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
@@ -38,7 +34,6 @@ public class AuthService {
      * 创建认证应用服务。
      *
      * @param userMapper 用户仓储
-     * @param growthMapper 成长仓储
      * @param systemSettingMapper 系统设置仓储
      * @param passwordEncoder 密码编码器
      * @param jwtTokenService JWT 服务
@@ -46,13 +41,11 @@ public class AuthService {
      */
     public AuthService(
             UserMapper userMapper,
-            GrowthMapper growthMapper,
             SystemSettingMapper systemSettingMapper,
             PasswordEncoder passwordEncoder,
             JwtTokenService jwtTokenService,
             TokenInvalidationService tokenInvalidationService) {
         this.userMapper = userMapper;
-        this.growthMapper = growthMapper;
         this.systemSettingMapper = systemSettingMapper;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
@@ -155,27 +148,9 @@ public class AuthService {
      * @return 认证响应
      */
     private AuthResponse buildAuthResponse(User user) {
-        refreshGrowthSnapshot(user);
         UserSummary summary = UserSummaryConverter.toSummary(user);
         String accessToken = jwtTokenService.generateToken(user.getId(), user.getUsername());
         return new AuthResponse(accessToken, AppConstants.TOKEN_TYPE_BEARER, jwtTokenService.getExpiresInSeconds(), summary);
-    }
-
-    /**
-     * 刷新用户成长快照。
-     *
-     * @param user 用户信息
-     */
-    private void refreshGrowthSnapshot(User user) {
-        int experience = Math.max(0, growthMapper.sumBestScores(user.getId()));
-        GrowthLevel level = GrowthLevel.resolveByExperience(experience);
-        GrowthRank rank = GrowthRank.resolveByExperience(experience);
-
-        // 登录响应也使用最新成长规则，避免旧等级名称继续显示。
-        userMapper.updateGrowth(user.getId(), experience, level.code(), rank.code());
-        user.setExperience(experience);
-        user.setLevelCode(level.code());
-        user.setRankCode(rank.code());
     }
 
 }

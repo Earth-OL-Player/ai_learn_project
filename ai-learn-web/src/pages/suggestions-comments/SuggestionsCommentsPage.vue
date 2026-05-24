@@ -975,6 +975,23 @@ onMounted(async () => {
 }
 
 @media (max-width: 768px) {
+  .interaction-page {
+    // 互动区在手机端减少分区间距，让发布框更快进入视野。
+    gap: 14px;
+  }
+
+  .mode-switch {
+    // 页签改为等分网格，两个入口都保留稳定触控宽度。
+    align-self: stretch;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .mode-button {
+    min-height: 44px;
+    padding: 10px 14px;
+  }
+
   .board-header,
   .composer-footer,
   .reply-footer {
@@ -986,13 +1003,86 @@ onMounted(async () => {
     padding: 22px 18px;
   }
 
+  .board-header {
+    // 标题和排序纵向靠近，避免右侧排序挤压标题。
+    gap: 12px;
+    margin-bottom: 18px;
+  }
+
+  .board-header h2 {
+    font-size: 24px;
+  }
+
+  .sort-tabs {
+    align-self: stretch;
+    justify-content: flex-start;
+  }
+
   .composer-footer {
-    align-items: flex-end;
+    align-items: stretch;
+  }
+
+  .composer-footer .el-button {
+    width: 100%;
   }
 
   .composer-card,
   .feed-item {
     gap: 12px;
+  }
+
+  .suggestion-type-row {
+    // 建议类型在手机端按两列排列，减少横向滚动风险。
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .type-chip {
+    min-height: 44px;
+  }
+
+  .feed-actions {
+    // 点赞、回复和时间允许换行，保证长时间文案不撑宽列表。
+    flex-wrap: wrap;
+    gap: 10px 16px;
+  }
+
+  .reply-footer > div {
+    display: grid;
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .child-list {
+    padding: 12px;
+  }
+}
+
+@media (max-width: 480px) {
+  .interaction-board {
+    padding: 18px 14px;
+    border-radius: 22px;
+  }
+
+  .composer-card .el-avatar,
+  .feed-item > .el-avatar {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px;
+  }
+
+  .suggestion-type-row {
+    grid-template-columns: 1fr;
+  }
+
+  .feed-content {
+    font-size: 16px;
+  }
+
+  .pagination-row :deep(.el-pagination) {
+    flex-wrap: wrap;
+    justify-content: center;
   }
 }
 </style>

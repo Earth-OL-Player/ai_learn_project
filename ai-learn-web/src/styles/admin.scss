@@ -9,8 +9,8 @@
 .admin-sidebar {
   min-height: 560px;
   padding: 22px;
-  background: rgba(255, 255, 255, 0.9);
-  border: 1px solid rgba(83, 116, 170, 0.1);
+  background: var(--color-glass-surface-strong);
+  border: 1px solid var(--color-border-soft);
   border-radius: var(--radius-2xl);
   box-shadow: var(--shadow-card);
 }
@@ -20,7 +20,7 @@
   gap: 14px;
   align-items: center;
   padding-bottom: 20px;
-  border-bottom: 1px solid rgba(83, 116, 170, 0.1);
+  border-bottom: 1px solid var(--color-border-soft);
 }
 
 .admin-sidebar-icon {
@@ -55,7 +55,7 @@
 .admin-menu .el-menu-item {
   height: 46px;
   margin-bottom: 8px;
-  color: #4b5870;
+  color: var(--color-muted);
   font-weight: 700;
   border-radius: var(--radius-md);
 }
@@ -79,7 +79,7 @@
   color: var(--color-surface);
   background: var(--color-hero-gradient);
   border-radius: var(--radius-hero);
-  box-shadow: 0 18px 46px rgba(48, 115, 210, 0.18);
+  box-shadow: var(--shadow-hero);
 }
 
 .admin-page-hero h2 {
@@ -168,7 +168,7 @@
   display: -webkit-box;
   margin: 0;
   overflow: hidden;
-  color: #344054;
+  color: var(--color-text);
   line-height: 1.7;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -203,7 +203,7 @@
 }
 
 .import-summary-item span {
-  color: #667085;
+  color: var(--color-muted);
   font-size: var(--font-size-sm);
   font-weight: 700;
 }
@@ -276,7 +276,7 @@
 }
 
 .user-limit-copy span {
-  color: #667085;
+  color: var(--color-muted);
   font-weight: 700;
 }
 
@@ -314,7 +314,7 @@
 
 .admin-user-cell span {
   margin-top: 3px;
-  color: #667085;
+  color: var(--color-muted);
   font-size: 13px;
 }
 
@@ -352,5 +352,117 @@
   .dialog-grid,
   .import-summary-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .admin-center-page {
+    // 管理端手机布局取消侧栏双列，把操作流改为从上到下。
+    grid-template-columns: 1fr;
+    gap: 16px;
+    padding: 0;
+  }
+
+  .admin-sidebar {
+    min-height: auto;
+    padding: 14px;
+    border-radius: 20px;
+  }
+
+  .admin-sidebar-header {
+    padding-bottom: 12px;
+  }
+
+  .admin-sidebar-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: 14px;
+  }
+
+  .admin-sidebar-header h2 {
+    font-size: 18px;
+  }
+
+  .admin-menu {
+    // 管理导航在手机端横向排列，减少顶部区域占用高度。
+    display: flex;
+    gap: 8px;
+    max-width: 100%;
+    margin-top: 12px;
+    overflow-x: auto;
+  }
+
+  .admin-menu .el-menu-item {
+    flex: 0 0 auto;
+    height: 44px;
+    min-height: 44px;
+    margin-bottom: 0;
+    padding: 0 16px;
+  }
+
+  .admin-page-hero {
+    padding: 20px;
+    border-radius: 22px;
+  }
+
+  .admin-page-hero h2 {
+    font-size: 24px;
+  }
+
+  .system-question-actions,
+  .user-limit-action {
+    // 多按钮操作区单列铺开，避免窄屏按钮互相挤压。
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .system-question-actions .el-button,
+  .system-question-actions .el-upload,
+  .system-question-actions .el-upload .el-button,
+  .user-limit-action .el-button,
+  .user-limit-action .el-input-number {
+    width: 100%;
+  }
+
+  .admin-filter-card,
+  .admin-table-card {
+    margin-top: 14px;
+    border-radius: 20px;
+  }
+
+  .admin-table-card .el-card__body {
+    // 宽表格只允许在卡片内部滚动，不带动整页横向滚动。
+    overflow-x: auto;
+  }
+
+  .admin-table-card .el-table {
+    min-width: 720px;
+  }
+
+  .system-question-import-dialog .el-table {
+    min-width: 760px;
+  }
+
+  .import-preview-panel {
+    overflow-x: auto;
+  }
+}
+
+@media (max-width: 480px) {
+  .admin-page-hero {
+    padding: 18px 16px;
+  }
+
+  .admin-sidebar {
+    padding: 12px;
+  }
+
+  .admin-filter-card .el-card__body,
+  .admin-table-card .el-card__body {
+    padding: 16px 12px;
+  }
+
+  .table-action-row {
+    gap: 4px;
   }
 }

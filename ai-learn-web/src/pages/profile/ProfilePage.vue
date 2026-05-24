@@ -12,7 +12,7 @@
         <el-button class="profile-edit-button" type="primary" round @click="openProfileDialog">编辑资料</el-button>
       </div>
 
-      <el-descriptions :column="2" border class="profile-descriptions">
+      <el-descriptions :column="profileDescriptionColumn" border class="profile-descriptions">
         <el-descriptions-item label="用户名">{{ authStore.user?.username }}</el-descriptions-item>
         <el-descriptions-item label="昵称">{{ authStore.user?.nickname || '暂未设置' }}</el-descriptions-item>
         <el-descriptions-item label="性别">{{ genderText }}</el-descriptions-item>
@@ -53,14 +53,17 @@ import { ElOption, ElSelect } from 'element-plus/es/components/select/index.mjs'
 import 'element-plus/es/components/card/style/css';
 import 'element-plus/es/components/descriptions/style/css';
 import 'element-plus/es/components/select/style/css';
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue';
 import { useAuthStore } from '../../stores/auth';
 import type { GenderCode } from '../../api/user';
 import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
 
+const PROFILE_MOBILE_QUERY = '(max-width: 720px)';
 const authStore = useAuthStore();
 const savingProfile = ref(false);
 const profileDialogVisible = ref(false);
+const isProfileMobile = ref(false);
+let profileMediaQuery: MediaQueryList | null = null;
 const genderOptions = [
   { label: '男', value: 'MALE' },
   { label: '女', value: 'FEMALE' },
@@ -76,6 +79,7 @@ const profileForm = reactive<{ nickname: string; gender: GenderCode | '' }>({
 const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
 const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase());
 const genderText = computed(() => resolveGenderText(authStore.user?.gender || null));
+const profileDescriptionColumn = computed(() => (isProfileMobile.value ? 1 : 2));
 
 // 注册时间统一展示为本地可读格式。
 const formattedCreatedAt = computed(() => {
@@ -139,11 +143,32 @@ function resolveGenderText(gender: GenderCode | null): string {
   return '-';
 }
 
+/**
+ * 同步个人资料表格列数断点。
+ *
+ * @param event 媒体查询变化事件
+ */
+function syncProfileViewport(event?: MediaQueryListEvent): void {
+  isProfileMobile.value = event ? event.matches : Boolean(profileMediaQuery?.matches);
+}
+
 watch(
   () => [authStore.user?.nickname, authStore.user?.gender] as const,
   () => resetProfileForm(),
   { immediate: true },
 );
+
+onMounted(() => {
+  // 资料描述组件需要真实列数，避免手机端两列表格撑破屏幕。
+  profileMediaQuery = window.matchMedia(PROFILE_MOBILE_QUERY);
+  syncProfileViewport();
+  profileMediaQuery.addEventListener('change', syncProfileViewport);
+});
+
+onBeforeUnmount(() => {
+  profileMediaQuery?.removeEventListener('change', syncProfileViewport);
+  profileMediaQuery = null;
+});
 </script>
 
 <style scoped lang="scss">
@@ -154,7 +179,7 @@ watch(
 }
 
 .profile-card {
-  border: 1px solid #edf2f7;
+  border: 1px solid var(--color-border);
   border-radius: 18px;
 }
 
@@ -169,12 +194,12 @@ watch(
 
 .profile-header h2 {
   margin: 0;
-  color: #1f2a44;
+  color: var(--color-heading);
 }
 
 .profile-header p {
   margin: 6px 0 0;
-  color: #667085;
+  color: var(--color-muted);
 }
 
 .profile-edit-button {
@@ -200,9 +225,28 @@ watch(
 }
 
 @media (max-width: 720px) {
+  .profile-page {
+    gap: 14px;
+  }
+
+  .profile-card {
+    border-radius: 18px;
+  }
+
   .profile-header {
     align-items: flex-start;
     flex-wrap: wrap;
+    padding: 12px 0 4px;
+  }
+
+  .profile-header :deep(.el-avatar) {
+    width: 64px !important;
+    height: 64px !important;
+    font-size: 22px;
+  }
+
+  .profile-header h2 {
+    font-size: 23px;
   }
 
   .profile-edit-button {
@@ -216,6 +260,7 @@ watch(
 
   .profile-edit-actions .el-button {
     flex: 1;
+    min-height: 44px;
   }
 }
 </style>

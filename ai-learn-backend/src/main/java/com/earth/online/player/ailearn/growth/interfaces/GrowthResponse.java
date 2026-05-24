@@ -14,7 +14,7 @@ import java.util.List;
  * @param currentLevelExperience 当前等级起始总经验
  * @param nextLevelExperience 下一级所需总经验
  * @param levelProgressText 等级经验展示文案
- * @param answeredCount 累计答题数量
+ * @param answeredCount 累计已答题目数
  * @param averageScore 平均得分
  * @param experienceToNextLevel 距离下一级经验
  * @param streakDays 总学习天数，沿用历史字段名

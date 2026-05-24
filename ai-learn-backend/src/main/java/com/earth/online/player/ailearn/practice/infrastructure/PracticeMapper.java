@@ -183,7 +183,24 @@ public interface PracticeMapper {
     int incrementDiscussionFollowUpCount(@Param("userId") Long userId);
 
     /**
-     * 查询用户题目汇总。
+     * 确保用户题目汇总行存在。
+     *
+     * @param userId 用户ID
+     * @param questionCode 题目编码
+     * @return 影响行数
+     */
+    @Insert("""
+            INSERT IGNORE INTO user_question_stats(user_id, question_code, answer_count, best_score, last_score,
+                                                   first_answered_at, last_answered_at)
+            VALUES(#{userId}, #{questionCode}, 0, 0, 0, NULL, NULL)
+            """)
+    int insertEmptyStatIfAbsent(
+            @Param("userId") Long userId,
+            @Param("questionCode") String questionCode
+    );
+
+    /**
+     * 加锁查询用户题目汇总。
      *
      * @param userId 用户ID
      * @param questionCode 题目编码
@@ -193,32 +210,31 @@ public interface PracticeMapper {
             SELECT id, user_id, question_code, answer_count, best_score, last_score
             FROM user_question_stats
             WHERE user_id = #{userId} AND question_code = #{questionCode}
+            FOR UPDATE
             """)
-    PracticeStatRecord findStat(
+    PracticeStatRecord findStatForUpdate(
             @Param("userId") Long userId,
             @Param("questionCode") String questionCode
     );
 
     /**
-     * 新增或更新用户题目汇总。
+     * 更新已加锁的用户题目汇总。
      *
-     * @param userId 用户ID
-     * @param questionCode 题目编码
+     * @param statId 汇总ID
      * @param score 本次得分
      * @return 影响行数
      */
-    @Insert("""
-            INSERT INTO user_question_stats(user_id, question_code, answer_count, best_score, last_score,
-                                            first_answered_at, last_answered_at)
-            VALUES(#{userId}, #{questionCode}, 1, #{score}, #{score}, NOW(), NOW())
-            ON DUPLICATE KEY UPDATE answer_count = answer_count + 1,
-                                    best_score = GREATEST(best_score, VALUES(best_score)),
-                                    last_score = VALUES(last_score),
-                                    last_answered_at = NOW()
+    @Update("""
+            UPDATE user_question_stats
+            SET answer_count = answer_count + 1,
+                best_score = GREATEST(best_score, #{score}),
+                last_score = #{score},
+                first_answered_at = CASE WHEN first_answered_at IS NULL THEN NOW() ELSE first_answered_at END,
+                last_answered_at = NOW()
+            WHERE id = #{statId}
             """)
-    int upsertStat(
-            @Param("userId") Long userId,
-            @Param("questionCode") String questionCode,
+    int updateLockedStatAfterAnswer(
+            @Param("statId") Long statId,
             @Param("score") int score
     );
 }

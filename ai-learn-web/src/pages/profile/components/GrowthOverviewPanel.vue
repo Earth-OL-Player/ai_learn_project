@@ -379,5 +379,40 @@ onMounted(loadGrowth);
     grid-template-columns: 1fr;
   }
 }
+
+@media (max-width: 720px) {
+  .growth-card {
+    border-radius: 18px;
+  }
+
+  .growth-grid {
+    gap: 12px;
+    padding: 14px;
+    grid-template-columns: 1fr;
+    border-radius: 20px;
+  }
+
+  .metric-card {
+    min-height: 82px;
+    padding: 14px;
+  }
+
+  .metric-card strong {
+    font-size: 26px;
+  }
+
+  .level-summary {
+    gap: 12px;
+    padding: 14px;
+  }
+
+  .badge-group {
+    padding: 12px;
+  }
+
+  .badge-list {
+    grid-template-columns: 1fr;
+  }
+}
 </style>
 

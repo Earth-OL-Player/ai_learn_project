@@ -76,16 +76,18 @@ import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { ElSkeleton } from 'element-plus/es/components/skeleton/index.mjs';
 import 'element-plus/es/components/empty/style/css';
 import 'element-plus/es/components/skeleton/style/css';
-import { onMounted, ref } from 'vue';
+import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { fetchInterviewQuestionDocument, fetchPublicQuestionTypes } from '../../api/questions';
 import type { QuestionDetail } from '../../types/question';
 import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 const activeQuestionType = ref('');
 const isTocCollapsed = ref(false);
+const isMobileViewport = ref(false);
 const loading = ref(false);
 const questionDetails = ref<QuestionDetail[]>([]);
 const questionTypes = ref<string[]>([]);
+let mobileViewportMediaQuery: MediaQueryList | null = null;
 
 const answerMarkdownRenderer = createSafeMarkdownRenderer({
   linkify: true,
@@ -121,6 +123,9 @@ async function handleCategoryChange(questionType: string): Promise<void> {
 
   activeQuestionType.value = questionType;
   await loadInterviewDocumentByCategory(questionType);
+  if (isMobileViewport.value) {
+    isTocCollapsed.value = true;
+  }
 }
 
 /**
@@ -187,7 +192,28 @@ function toggleToc(): void {
   isTocCollapsed.value = !isTocCollapsed.value;
 }
 
-onMounted(initializeInterviewDocument);
+/**
+ * 同步手机端分类折叠状态。
+ *
+ * @param event 媒体查询变化事件
+ */
+function syncMobileCategoryState(event?: MediaQueryListEvent): void {
+  isMobileViewport.value = event ? event.matches : Boolean(mobileViewportMediaQuery?.matches);
+  isTocCollapsed.value = isMobileViewport.value;
+}
+
+onMounted(() => {
+  // 手机端默认收起分类，切换分类后把空间还给题目正文。
+  mobileViewportMediaQuery = window.matchMedia('(max-width: 768px)');
+  syncMobileCategoryState();
+  mobileViewportMediaQuery.addEventListener('change', syncMobileCategoryState);
+  void initializeInterviewDocument();
+});
+
+onBeforeUnmount(() => {
+  mobileViewportMediaQuery?.removeEventListener('change', syncMobileCategoryState);
+  mobileViewportMediaQuery = null;
+});
 </script>
 
 <style scoped lang="scss">
@@ -213,8 +239,8 @@ onMounted(initializeInterviewDocument);
 }
 
 .interview-category-button:hover {
-  color: #1f6feb;
-  background: #f4f8ff;
+  color: var(--color-primary);
+  background: var(--color-primary-softer);
 }
 
 .interview-category-section {
@@ -224,8 +250,8 @@ onMounted(initializeInterviewDocument);
 .interview-question-card {
   padding: 22px 24px;
   margin: 26px 0 34px;
-  background: linear-gradient(135deg, #f8fbff 0%, #f9fffb 100%);
-  border: 1px solid #e8eef7;
+  background: linear-gradient(135deg, var(--color-surface-soft) 0%, var(--color-surface) 100%);
+  border: 1px solid var(--color-border);
   border-radius: 22px;
 }
 
@@ -240,7 +266,7 @@ onMounted(initializeInterviewDocument);
 .interview-question-title {
   flex: 1;
   margin: 0;
-  color: #17233d;
+  color: var(--color-heading);
   font-size: 21px;
   font-weight: 800;
   line-height: 1.65;
@@ -264,26 +290,26 @@ onMounted(initializeInterviewDocument);
 }
 
 .interview-meta-badge.is-importance {
-  color: #e68a00;
-  background: #fff8e8;
-  border-color: #ffe1a8;
+  color: #d97706;
+  background: color-mix(in srgb, #f59e0b 14%, var(--color-surface));
+  border-color: color-mix(in srgb, #f59e0b 34%, var(--color-border));
 }
 
 .interview-meta-badge.is-occurrence {
-  color: #30a514;
-  background: #f1ffe9;
-  border-color: #c7efb4;
+  color: #16a34a;
+  background: color-mix(in srgb, #22c55e 14%, var(--color-surface));
+  border-color: color-mix(in srgb, #22c55e 34%, var(--color-border));
 }
 
 .interview-answer-title {
   margin: 4px 0 10px;
-  color: #1f6feb;
+  color: var(--color-primary);
   font-size: 15px;
   font-weight: 800;
 }
 
 .interview-answer {
-  color: #475467;
+  color: var(--color-text);
 }
 
 .interview-answer :deep(p:first-child) {
@@ -301,6 +327,38 @@ onMounted(initializeInterviewDocument);
 
   .interview-question-meta {
     justify-content: flex-start;
+  }
+}
+
+@media (max-width: 768px) {
+  .interview-document-card {
+    min-height: 420px;
+  }
+
+  .interview-category-card {
+    max-height: min(46vh, 340px);
+  }
+
+  .interview-question-card {
+    padding: 18px 16px;
+    margin: 20px 0 26px;
+    border-radius: 18px;
+  }
+
+  .interview-question-title {
+    font-size: 18px;
+  }
+
+  .interview-question-meta {
+    display: grid;
+    width: 100%;
+    grid-template-columns: 1fr;
+  }
+
+  .interview-meta-badge {
+    min-height: 36px;
+    align-content: center;
+    line-height: 1.3;
   }
 }
 </style>

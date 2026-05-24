@@ -1,6 +1,6 @@
 # MySQL 中间件说明
 
-版本：v1.21
+版本：v1.22
 日期：2026-05-23  
 适用工程：`ai-learn-backend`  
 适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心和容量限制
@@ -16,7 +16,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、用户�
 - 本地开发可继续使用 Docker 自建 MySQL；正式上线推荐使用云数据库 MySQL，当前腾讯云方案使用 TDSQL Boundless 2核4GB、50GB 增强型 SSD 云硬盘，兼容 MySQL 8.0，避免在应用服务器上自行维护数据库进程、备份和故障恢复。
 - 密码只保存 BCrypt 哈希，禁止保存明文密码。
 - `sprint2619` 后，建议区不再保存处理状态和标题；建议与评论均通过点赞明细表记录用户点赞状态，评论支持一级父子评论。
-- `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章、学习天数和经验均基于汇总表计算。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。`sprint2623` 后，`users.gender` 保存用户性别编码，用于个人中心资料编辑，并供系统内部展示逻辑读取。
+- `sprint2620` 后，成长徽章只保留 AI 智能刷题联动的 11 个勋章，并通过 `user_practice_sessions.discussion_follow_up_count` 记录当前题评分后的连续追问次数。`sprint2621` 后，个人中心不再维护成长明细流水，徽章和学习天数仍基于刷题汇总判断；当前主干中经验和段位直接读取 `users.experience` 快照，答题后只按本次突破历史最高分的差值增量更新。`sprint2622` 后，`user_practice_sessions` 增加当前题评分摘要和短期讨论历史，用于 AI 智能刷题多轮追问上下文。`sprint2623` 后，`users.gender` 保存用户性别编码，用于个人中心资料编辑，并供系统内部展示逻辑读取。
 - 系统题库通过 migration 初始化 `AI面试题Top300.csv` 中的真实题目数据，供热门面经和 AI 智能刷题使用。
 - `users.super_admin` 用于标识超级管理员，默认注册用户为普通用户，只允许后台开发者通过数据库维护。`sprint202613` 后，`questions.code` 是题目稳定业务编码，`questions.question_type` 是分类字符串来源，所有下拉分类从题目表 `DISTINCT question_type` 获取；系统不再创建 `knowledge_points` 与 `question_knowledge_points`。
 - Redis 当前未接入运行代码；Qdrant 预留代码、配置和依赖已移除，不直接参与 MySQL 业务主表写入。
@@ -253,10 +253,12 @@ SELECT user_id, question_code, phase, last_score, LEFT(last_answer_text, 80) AS 
 
 成长计算说明：
 
-- 总经验仍按 `user_question_stats.best_score` 汇总得到，即所有题目历史最高分之和。
+- 总经验以 `users.experience` 为运行时权威快照，登录、个人信息和成长查询不再扫描 `user_question_stats` 汇总总经验。
+- 每次答题后先读取当前题历史最高分，本次得分超过历史最高分时，经验增量为 `本次得分 - 历史最高分`；未超过时经验不变。
+- `user_question_stats.best_score` 仍保存每题历史最高分，用于计算本次经验增量和排查数据一致性，不作为高频查询时的总经验聚合来源。
 - 每 100 总经验升 1 级，展示格式为 `LV8 700/800`。
 - 段位由等级范围映射得到，例如 `LV1~LV10` 为炼气期，`LV11~LV20` 为筑基期。
-- 历史 `BRONZE`、`SILVER`、`GOLD`、`PLATINUM`、`DIAMOND`、`KING` 会先回收为 `QI_REFINING`，用户登录、查询个人信息或完成答题后会按真实总经验刷新为正确境界编码。
+- 历史 `BRONZE`、`SILVER`、`GOLD`、`PLATINUM`、`DIAMOND`、`KING` 会先回收为 `QI_REFINING`；后续完成答题产生经验增量时，会按 `users.experience` 刷新为正确境界编码。
 
 本地验证 SQL：
 
@@ -264,7 +266,7 @@ SELECT user_id, question_code, phase, last_score, LEFT(last_answer_text, 80) AS 
 DESC users;
 SELECT version, description, success FROM flyway_schema_history WHERE version = '14';
 SELECT id, username, experience, level_code, rank_code FROM users WHERE username = '本地用户名占位符';
-SELECT COALESCE(SUM(best_score), 0) AS total_experience FROM user_question_stats WHERE user_id = 用户ID占位符;
+SELECT user_id, question_code, answer_count, best_score, last_score FROM user_question_stats WHERE user_id = 用户ID占位符;
 ```
 
 部署注意事项：
@@ -358,7 +360,7 @@ POST /api/v1/practice/messages/stream
 
 联调关注点：
 
-- 完成刷题评分后，`user_question_stats.answer_count` 增加，后端按累计完成次数、学习天数、时段和周末发放勋章，不再写入成长明细流水。
+- 完成刷题评分后，`user_question_stats.answer_count` 增加；成长概览和答题里程碑勋章按已完成题目数统计，同一道题重复作答只算 1 题，不再写入成长明细流水。
 - 单题评分后连续有效追问 3 次，`discussion_follow_up_count` 达到 3，并尝试发放“问到底”。
 - 个人中心徽章墙只展示 sprint2620 定义内的勋章；隐藏/稀有类未获得时不展示。
 

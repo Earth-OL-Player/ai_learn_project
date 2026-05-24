@@ -83,6 +83,21 @@ public interface UserMapper {
     User findById(@Param("id") Long id);
 
     /**
+     * 根据用户ID加锁查询未删除用户。
+     *
+     * @param id 用户ID
+     * @return 用户信息
+     */
+    @Select("""
+            SELECT id, username, nickname, avatar, gender, email, password_hash, experience, level_code, rank_code, super_admin,
+                   created_at, updated_at, deleted
+            FROM users
+            WHERE id = #{id} AND deleted = 0
+            FOR UPDATE
+            """)
+    User findByIdForUpdate(@Param("id") Long id);
+
+    /**
      * 根据用户名查询未删除用户。
      *
      * @param username 用户名

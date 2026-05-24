@@ -118,7 +118,7 @@ public class GrowthAwardService {
      * 追加累计完成题数规则。
      *
      * @param candidateRules 候选规则
-     * @param completedAnswers 累计完成次数
+     * @param completedAnswers 累计完成题数
      */
     private void appendAnswerCountRules(List<String> candidateRules, long completedAnswers) {
         if (completedAnswers >= 1) {

@@ -1,18 +1,21 @@
 package com.earth.online.player.ailearn.practice.application;
 
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
+import com.earth.online.player.ailearn.common.exception.BusinessException;
+import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.growth.application.GrowthAwardService;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
-import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeQuestionRecord;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeStatRecord;
 import com.earth.online.player.ailearn.practice.interfaces.PracticeGradingResponse;
+import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
 import java.util.List;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 /**
  * 刷题成长经验结算服务。
@@ -21,7 +24,6 @@ import org.springframework.stereotype.Service;
 public class PracticeGrowthSettlementService {
 
     private final PracticeMapper practiceMapper;
-    private final GrowthMapper growthMapper;
     private final UserMapper userMapper;
     private final GrowthAwardService growthAwardService;
 
@@ -29,17 +31,14 @@ public class PracticeGrowthSettlementService {
      * 创建刷题成长经验结算服务。
      *
      * @param practiceMapper 刷题仓储
-     * @param growthMapper 成长仓储
      * @param userMapper 用户仓储
      * @param growthAwardService 勋章发放服务
      */
     public PracticeGrowthSettlementService(
             PracticeMapper practiceMapper,
-            GrowthMapper growthMapper,
             UserMapper userMapper,
             GrowthAwardService growthAwardService) {
         this.practiceMapper = practiceMapper;
-        this.growthMapper = growthMapper;
         this.userMapper = userMapper;
         this.growthAwardService = growthAwardService;
     }
@@ -53,23 +52,24 @@ public class PracticeGrowthSettlementService {
      * @param fallbackUsed 是否使用兜底评分
      * @return 评分响应
      */
+    @Transactional(rollbackFor = Exception.class)
     public PracticeGradingResponse settleAnswer(
             Long userId,
             PracticeQuestionRecord question,
             GradingResult gradingResult,
             boolean fallbackUsed) {
-        PracticeStatRecord oldStat = practiceMapper.findStat(userId, question.getCode());
-        int previousBest = oldStat == null || oldStat.getBestScore() == null ? 0 : oldStat.getBestScore();
-        int previousLast = oldStat == null || oldStat.getLastScore() == null ? 0 : oldStat.getLastScore();
+        User user = findLockedUser(userId);
+        PracticeStatRecord oldStat = findLockedStat(userId, question.getCode());
+        boolean firstAnswer = oldStat.getAnswerCount() == null || oldStat.getAnswerCount() == 0;
+        int previousBest = oldStat.getBestScore() == null ? 0 : oldStat.getBestScore();
+        int previousLast = oldStat.getLastScore() == null ? 0 : oldStat.getLastScore();
         int score = Math.max(0, Math.min(100, gradingResult.score()));
         int earnedExperience = Math.max(0, score - previousBest);
-        practiceMapper.upsertStat(userId, question.getCode(), score);
+        practiceMapper.updateLockedStatAfterAnswer(oldStat.getId(), score);
 
-        // 经验值按所有题目最高分总和重算，避免重复答题造成累计偏差。
-        int totalExperience = Math.max(0, growthMapper.sumBestScores(userId));
-        GrowthLevel level = GrowthLevel.resolveByExperience(totalExperience);
-        GrowthRank rank = GrowthRank.resolveByExperience(totalExperience);
-        userMapper.updateGrowth(userId, totalExperience, level.code(), rank.code());
+        // 总经验直接基于用户表快照叠加本次突破分，避免扫描用户题目汇总表。
+        int totalExperience = calculateTotalExperience(user, earnedExperience);
+        refreshGrowthSnapshotIfNeeded(user, totalExperience, earnedExperience);
         List<BadgeResponse> newBadges = growthAwardService.awardAfterAnswer(userId, score);
         return new PracticeGradingResponse(
                 score,
@@ -80,12 +80,90 @@ public class PracticeGrowthSettlementService {
                 gradingResult.improvementAdvice(),
                 earnedExperience,
                 previousBest,
-                oldStat == null ? null : previousLast,
-                buildExperienceDetail(oldStat == null, previousBest, previousLast, score, earnedExperience),
+                firstAnswer ? null : previousLast,
+                buildExperienceDetail(firstAnswer, previousBest, previousLast, score, earnedExperience),
                 totalExperience,
                 newBadges,
                 fallbackUsed
         );
+    }
+
+    /**
+     * 加锁读取当前用户。
+     *
+     * @param userId 用户ID
+     * @return 用户信息
+     */
+    private User findLockedUser(Long userId) {
+        User user = userMapper.findByIdForUpdate(userId);
+        if (user == null) {
+            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录状态已失效，请重新登录");
+        }
+        return user;
+    }
+
+    /**
+     * 加锁读取当前题汇总。
+     *
+     * @param userId 用户ID
+     * @param questionCode 题目编码
+     * @return 题目汇总
+     */
+    private PracticeStatRecord findLockedStat(Long userId, String questionCode) {
+        practiceMapper.insertEmptyStatIfAbsent(userId, questionCode);
+        PracticeStatRecord stat = practiceMapper.findStatForUpdate(userId, questionCode);
+        if (stat == null) {
+            throw new BusinessException(ResponseCode.SYSTEM_ERROR.code(), "题目汇总更新失败，请稍后重试");
+        }
+        return stat;
+    }
+
+    /**
+     * 计算答题后的用户总经验。
+     *
+     * @param user 用户信息
+     * @param earnedExperience 本次新增经验
+     * @return 答题后的总经验
+     */
+    private int calculateTotalExperience(User user, int earnedExperience) {
+        int currentExperience = user.getExperience() == null ? 0 : Math.max(0, user.getExperience());
+        return currentExperience + earnedExperience;
+    }
+
+    /**
+     * 必要时刷新用户成长快照。
+     *
+     * @param user 用户信息
+     * @param totalExperience 答题后的总经验
+     * @param earnedExperience 本次新增经验
+     */
+    private void refreshGrowthSnapshotIfNeeded(User user, int totalExperience, int earnedExperience) {
+        GrowthLevel level = GrowthLevel.resolveByExperience(totalExperience);
+        GrowthRank rank = GrowthRank.resolveByExperience(totalExperience);
+        if (earnedExperience == 0 && isSameGrowthSnapshot(user, totalExperience, level, rank)) {
+            return;
+        }
+
+        // 只在经验或成长编码变化时写用户表，减少无收益重复答题产生的写压力。
+        userMapper.updateGrowth(user.getId(), totalExperience, level.code(), rank.code());
+        user.setExperience(totalExperience);
+        user.setLevelCode(level.code());
+        user.setRankCode(rank.code());
+    }
+
+    /**
+     * 判断用户成长快照是否已经一致。
+     *
+     * @param user 用户信息
+     * @param totalExperience 当前总经验
+     * @param level 当前等级
+     * @param rank 当前段位
+     * @return 是否一致
+     */
+    private boolean isSameGrowthSnapshot(User user, int totalExperience, GrowthLevel level, GrowthRank rank) {
+        return Integer.valueOf(totalExperience).equals(user.getExperience())
+                && level.code().equals(user.getLevelCode())
+                && rank.code().equals(user.getRankCode());
     }
 
     /**
