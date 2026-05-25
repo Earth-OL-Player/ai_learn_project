@@ -49,7 +49,7 @@ public interface PracticeMapper {
                 #{item}
               </foreach>
             </if>
-            ORDER BY q.importance_score DESC, q.occurrence_count DESC, q.id DESC
+            ORDER BY q.importance_score DESC, q.id DESC
             LIMIT 500
             </script>
             """)

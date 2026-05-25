@@ -18,6 +18,15 @@ import org.springframework.util.StringUtils;
 @Service
 public class QuestionSelectionService {
 
+    private static final double BASE_WEIGHT = 1.0D;
+    private static final double MAX_PERCENT_SCORE = 100.0D;
+    private static final double IMPORTANCE_WEIGHT_FACTOR = 3.0D;
+    private static final double ANSWER_COUNT_WEIGHT_FACTOR = 4.0D;
+    private static final double BEST_SCORE_WEIGHT_FACTOR = 5.0D;
+    private static final double MIN_WEIGHT = 0.1D;
+    private static final double RANDOM_WEIGHT_MIN = 0.75D;
+    private static final double RANDOM_WEIGHT_MAX = 1.35D;
+
     private final PracticeMapper practiceMapper;
 
     /**
@@ -55,7 +64,7 @@ public class QuestionSelectionService {
         PracticeQuestionRecord selected = null;
         double bestScore = Double.NEGATIVE_INFINITY;
         for (PracticeQuestionRecord candidate : candidates) {
-            double weightedScore = calculateWeight(candidate) * ThreadLocalRandom.current().nextDouble(0.75D, 1.35D);
+            double weightedScore = calculateWeight(candidate) * ThreadLocalRandom.current().nextDouble(RANDOM_WEIGHT_MIN, RANDOM_WEIGHT_MAX);
             if (weightedScore > bestScore) {
                 bestScore = weightedScore;
                 selected = candidate;
@@ -110,15 +119,23 @@ public class QuestionSelectionService {
         int answeredCount = safeInt(question.getAnsweredCount());
         int bestScore = safeInt(question.getBestScore());
         double importanceScore = safeDouble(question.getImportanceScore());
-        int occurrenceCount = safeInt(question.getOccurrenceCount());
 
-        // 次数越少、重要性越高、历史得分越低，权重越高。
-        double weight = 1.0D;
-        weight += (importanceScore / 100.0D) * 4.0D;
-        weight += 3.0D / (1 + answeredCount);
-        weight += bestScore == 0 ? 2.5D : ((100 - bestScore) / 100.0D) * 3.0D;
-        weight += Math.min(1.5D, Math.log10(occurrenceCount + 1.0D) / 2.0D);
-        return Math.max(0.1D, weight);
+        // 仅保留三个维度：答题次数越少、历史最高分越低、题目重要性越高，权重越高。
+        double weight = BASE_WEIGHT;
+        weight += normalizePercent(importanceScore) * IMPORTANCE_WEIGHT_FACTOR;
+        weight += ANSWER_COUNT_WEIGHT_FACTOR / (1 + Math.max(0, answeredCount));
+        weight += (1 - normalizePercent(bestScore)) * BEST_SCORE_WEIGHT_FACTOR;
+        return Math.max(MIN_WEIGHT, weight);
+    }
+
+    /**
+     * 将百分制分数归一化到 0 到 1。
+     *
+     * @param score 原始百分制分数
+     * @return 归一化分数
+     */
+    private double normalizePercent(double score) {
+        return Math.max(0.0D, Math.min(MAX_PERCENT_SCORE, score)) / MAX_PERCENT_SCORE;
     }
 
     /**

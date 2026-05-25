@@ -174,6 +174,43 @@
   display: none;
 }
 
+.main-action-button-content {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.practice-action-tip {
+  display: inline-grid;
+  width: 16px;
+  height: 16px;
+  place-items: center;
+  flex: 0 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: 50%;
+  color: rgba(255, 255, 255, 0.78);
+  cursor: help;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1;
+  background: rgba(255, 255, 255, 0.12);
+  transition: border-color 0.18s ease, color 0.18s ease, background-color 0.18s ease;
+}
+
+.practice-action-tip:hover {
+  border-color: rgba(255, 255, 255, 0.72);
+  color: #ffffff;
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.practice-action-tip-popper {
+  max-width: 280px;
+  color: var(--color-heading);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
 .practice-category-option-content {
   display: flex;
   align-items: center;

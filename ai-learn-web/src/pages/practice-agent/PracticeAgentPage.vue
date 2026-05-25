@@ -57,7 +57,17 @@
           :aria-label="nextButtonText"
           @click="handleNextQuestion"
         >
-          {{ nextButtonText }}
+          <span class="main-action-button-content">
+            <span>{{ nextButtonText }}</span>
+            <el-tooltip
+              :content="smartQuestionTipText"
+              effect="light"
+              placement="top"
+              popper-class="practice-action-tip-popper"
+            >
+              <span class="practice-action-tip" aria-hidden="true" @click.stop>!</span>
+            </el-tooltip>
+          </span>
         </el-button>
         <el-button
           class="sub-action-button"
@@ -98,6 +108,8 @@
 </template>
 
 <script setup lang="ts">
+import { ElTooltip } from 'element-plus/es/components/tooltip/index.mjs';
+import 'element-plus/es/components/tooltip/style/css';
 import { computed, ref } from 'vue';
 import RealmCharacterCard from '../../components/growth/RealmCharacterCard.vue';
 import ModelEntitlementSummary from '../../components/model/ModelEntitlementSummary.vue';
@@ -141,6 +153,7 @@ const {
 } = usePracticeChat();
 
 const DEFAULT_MOTTO_LINES = ['昨日因,今日果,前尘不咎', '今日因,明日果,当下即道'] as const;
+const smartQuestionTipText = '智能出题：当前会根据答过次数、历史最高分、题目重要分维度综合计算权重；';
 const hasCustomMotto = computed(() => Boolean(authStore.user?.motto?.trim()));
 
 // 有用户自定义座右铭时优先展示自定义内容，否则保持默认两行文案。
