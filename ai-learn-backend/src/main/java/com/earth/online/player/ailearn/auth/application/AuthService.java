@@ -99,9 +99,12 @@ public class AuthService {
      * @return 登录凭证响应
      */
     public AuthResponse login(LoginRequest request) {
-        User user = userMapper.findByUsername(request.username().trim());
+        String usernameOrEmail = request.username().trim();
+
+        // 用户名和邮箱都是唯一标识，登录时统一按账号标识查询。
+        User user = userMapper.findByUsernameOrEmail(usernameOrEmail);
         if (user == null || !passwordEncoder.matches(request.password(), user.getPasswordHash())) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "用户名或密码错误");
+            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "用户名或邮箱或密码错误");
         }
         return buildAuthResponse(user);
     }

@@ -77,7 +77,14 @@ class PracticeDiscussionAgent:
             trace_id,
             self._provider_adapter.model_name(request.modelConfig),
         )
-        self._llm_logger.log_request(trace_id, "本题讨论-Agent非流式兜底", DISCUSSION_SYSTEM_PROMPT, messages, stream=False)
+        self._llm_logger.log_request(
+            trace_id,
+            "本题讨论-Agent非流式兜底",
+            DISCUSSION_SYSTEM_PROMPT,
+            messages,
+            stream=False,
+            model_config=request.modelConfig,
+        )
         try:
             result = self._model_factory.discussion_agent(request.modelConfig).invoke({"messages": messages})
             reply = self._provider_adapter.last_ai_reply(result).strip()
@@ -161,8 +168,19 @@ class PracticeDiscussionAgent:
         """使用 LangChain Agent 流式输出讨论回复。"""
         event_count = 0
         content_count = 0
-        self._llm_logger.log_request(trace_id, "本题讨论-Agent流式", DISCUSSION_SYSTEM_PROMPT, messages, stream=True)
-        for chunk in self._model_factory.discussion_agent(request.modelConfig).stream({"messages": messages}, stream_mode="messages", version="v2"):
+        self._llm_logger.log_request(
+            trace_id,
+            "本题讨论-Agent流式",
+            DISCUSSION_SYSTEM_PROMPT,
+            messages,
+            stream=True,
+            model_config=request.modelConfig,
+        )
+        for chunk in self._model_factory.discussion_agent(request.modelConfig).stream(
+            {"messages": messages},
+            stream_mode="messages",
+            version="v2",
+        ):
             event_count += 1
             content = self._provider_adapter.agent_stream_content(chunk)
             output_tokens = self._provider_adapter.stream_output_tokens(chunk)

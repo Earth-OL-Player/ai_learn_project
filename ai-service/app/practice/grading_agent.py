@@ -44,7 +44,14 @@ class PracticeGradingAgent:
             trace_id,
             self._provider_adapter.model_name(request.modelConfig),
         )
-        self._llm_logger.log_request(trace_id, "答案评分-Agent非流式", GRADE_SYSTEM_PROMPT, messages, stream=False)
+        self._llm_logger.log_request(
+            trace_id,
+            "答案评分-Agent非流式",
+            GRADE_SYSTEM_PROMPT,
+            messages,
+            stream=False,
+            model_config=request.modelConfig,
+        )
         try:
             result = self._model_factory.grading_agent(request.modelConfig).invoke({"messages": messages})
             grading = self._structured_grading_result(result)

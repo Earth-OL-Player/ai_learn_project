@@ -2,13 +2,13 @@
   <el-dialog v-model="visible" title="登录账号" aria-label="登录账号" width="440px" class="auth-dialog modern-auth-dialog" destroy-on-close align-center>
     <el-form :model="form" label-position="top" class="auth-form" @submit.prevent @keyup.enter="submitLogin">
       <h2 class="sr-only">登录账号</h2>
-      <el-form-item label="用户名">
+      <el-form-item label="用户名或邮箱">
         <el-input
           v-model.trim="form.username"
-          aria-label="用户名"
+          aria-label="用户名或邮箱"
           autocomplete="username"
-          placeholder="请输入用户名"
-          maxlength="32"
+          placeholder="请输入用户名或邮箱"
+          maxlength="128"
           size="large"
           clearable
         />
@@ -58,7 +58,7 @@ const form = reactive({
  */
 async function submitLogin(): Promise<void> {
   if (!form.username || !form.password) {
-    formError.value = '请输入用户名和密码';
+    formError.value = '请输入用户名或邮箱和密码';
     ElMessage.warning(formError.value);
     return;
   }

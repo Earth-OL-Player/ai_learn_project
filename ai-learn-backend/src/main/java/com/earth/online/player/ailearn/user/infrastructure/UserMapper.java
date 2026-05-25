@@ -112,6 +112,21 @@ public interface UserMapper {
     User findByUsername(@Param("username") String username);
 
     /**
+     * 根据用户名或邮箱查询未删除用户。
+     *
+     * @param usernameOrEmail 用户名或邮箱
+     * @return 用户信息
+     */
+    @Select("""
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
+                   created_at, updated_at, deleted
+            FROM users
+            WHERE (username = #{usernameOrEmail} OR email = #{usernameOrEmail}) AND deleted = 0
+            LIMIT 1
+            """)
+    User findByUsernameOrEmail(@Param("usernameOrEmail") String usernameOrEmail);
+
+    /**
      * 根据昵称查询未删除用户。
      *
      * @param nickname 昵称

@@ -11,6 +11,7 @@ from pydantic import BaseModel
 from app.config.log_config import configure_logger
 from app.config.settings import settings
 from app.practice.provider_adapter import PracticeProviderAdapter
+from app.schemas.practice import PracticeModelConfig
 
 
 logger = configure_logger("ai_service.practice.llm")
@@ -56,7 +57,15 @@ class PracticeLlmLogger:
         self._provider_adapter = provider_adapter
         self._sanitizer = sanitizer
 
-    def log_request(self, trace_id: str, scene: str, system_prompt: str | None, messages: list[BaseMessage], stream: bool) -> None:
+    def log_request(
+        self,
+        trace_id: str,
+        scene: str,
+        system_prompt: str | None,
+        messages: list[BaseMessage],
+        stream: bool,
+        model_config: PracticeModelConfig | None = None,
+    ) -> None:
         """以 DEBUG 级别记录大模型调用入参。"""
         if not logger.isEnabledFor(logging.DEBUG):
             return
@@ -65,15 +74,23 @@ class PracticeLlmLogger:
         payload = {
             "scene": scene,
             "stream": stream,
-            "model": settings.ai_grading_model,
+            "model": self._provider_adapter.model_name(model_config),
             "modelProvider": settings.ai_grading_model_provider,
-            "baseUrl": self._provider_adapter.normalized_base_url() if settings.ai_grading_base_url.strip() else "",
+            "baseUrl": (
+                self._provider_adapter.normalized_base_url(model_config)
+                if self._provider_adapter.base_url(model_config)
+                else ""
+            ),
             "timeoutSeconds": settings.ai_grading_timeout_seconds,
             "maxOutputTokens": settings.ai_grading_max_output_tokens,
             "systemPrompt": system_prompt,
             "messages": [self._sanitizer.message_to_log_payload(message) for message in messages],
         }
-        logger.debug("【AI智能刷题-大模型调用入参】traceId=%s payload=%s", trace_id, self._sanitizer.to_pretty_json(payload))
+        logger.debug(
+            "【AI智能刷题-大模型调用入参】traceId=%s payload=%s",
+            trace_id,
+            self._sanitizer.to_pretty_json(payload),
+        )
 
     def log_response(self, trace_id: str, scene: str, response: Any, elapsed_ms: int) -> None:
         """以 DEBUG 级别记录大模型调用返回。"""
