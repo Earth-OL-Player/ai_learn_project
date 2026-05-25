@@ -5,7 +5,7 @@
       id="practice-answer-input"
       v-model="inputValue"
       type="textarea"
-      :rows="3"
+      :autosize="inputTextareaAutosize"
       resize="none"
       :placeholder="placeholder"
       :disabled="loading"
@@ -44,6 +44,15 @@ const emit = defineEmits<{
   send: [];
   'update:modelValue': [value: string];
 }>();
+
+const INPUT_TEXTAREA_MIN_ROWS = 3;
+const INPUT_TEXTAREA_MAX_ROWS = 10;
+
+// 文本框先随内容向上增高，超过十行后固定高度并交给内部滚动。
+const inputTextareaAutosize = {
+  minRows: INPUT_TEXTAREA_MIN_ROWS,
+  maxRows: INPUT_TEXTAREA_MAX_ROWS,
+};
 
 // 输入栏只负责收集文本，发送行为交给页面业务组合函数处理。
 const inputValue = computed({
