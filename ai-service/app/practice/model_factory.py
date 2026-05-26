@@ -7,7 +7,7 @@ from langchain.chat_models import init_chat_model
 
 from app.practice.prompts import DISCUSSION_SYSTEM_PROMPT, GRADE_SYSTEM_PROMPT
 from app.practice.provider_adapter import PracticeProviderAdapter
-from app.schemas.practice import PracticeGradeResponse, PracticeModelConfig
+from app.schemas.practice import PracticeGradeEvaluation, PracticeModelConfig
 
 
 class PracticeModelFactory:
@@ -23,7 +23,7 @@ class PracticeModelFactory:
             model=self.chat_model(model_config),
             tools=[],
             system_prompt=GRADE_SYSTEM_PROMPT,
-            response_format=PracticeGradeResponse,
+            response_format=PracticeGradeEvaluation,
         )
 
     def discussion_agent(self, model_config: PracticeModelConfig | None = None) -> Any:

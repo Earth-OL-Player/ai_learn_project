@@ -11,7 +11,7 @@ GRADE_SYSTEM_PROMPT = (
     "请你进行评分，并且使用我要求的Json结构化输出。\n"
     "允许用户使用同义表达，结合你自身和知识和参考答案一起点评，不能强求用户答案和参考答案一模一样，意义相同即得分。\n"
     "参考答案通常很长，带有解释性说明，而用户的答案可能只是匹配关键点，长度较短，但是只要能够说出关键点依然可以满分，回答答案长度不作为评分标准。请发挥你的智能分析用户的答案，给出中肯的评分，而不是死按参考答案套路。\n"
-    "结构化输出时必须填写 score、hitPoints、missingPoints、problems、referenceAnswer、improvementAdvice 六个字段。\n"
+    "结构化输出时必须填写 score、hitPoints、missingPoints、problems、improvementAdvice 五个字段。\n"
     "hitPoints、missingPoints、problems 必须分别承载命中点、缺失点和问题点，不要只在 improvementAdvice 中描述这些内容。\n"
     "除非 score 为 100 且答案确实没有缺失，否则 missingPoints 或 problems 至少要有一个非空数组。\n"
 )

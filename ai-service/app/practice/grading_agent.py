@@ -8,7 +8,7 @@ from app.practice.llm_logger import PracticeLlmLogger, logger
 from app.practice.model_factory import PracticeModelFactory
 from app.practice.prompts import GRADE_SYSTEM_PROMPT, PracticePromptBuilder
 from app.practice.provider_adapter import PracticeProviderAdapter
-from app.schemas.practice import PracticeAiCallMetrics, PracticeGradeRequest, PracticeGradeResponse
+from app.schemas.practice import PracticeAiCallMetrics, PracticeGradeEvaluation, PracticeGradeRequest, PracticeGradeResponse
 
 
 @dataclass
@@ -54,7 +54,7 @@ class PracticeGradingAgent:
         )
         try:
             result = self._model_factory.grading_agent(request.modelConfig).invoke({"messages": messages})
-            grading = self._structured_grading_result(result)
+            grading = self._structured_grading_result(result, request.standardAnswer)
             if grading is None:
                 raise ValueError("Agent 未返回结构化评分结果")
 
@@ -87,25 +87,26 @@ class PracticeGradingAgent:
             )
             return PracticeGradeAgentResult(grading=None, metrics=metrics)
 
-    def _structured_grading_result(self, result: Any) -> PracticeGradeResponse | None:
+    def _structured_grading_result(self, result: Any, reference_answer: str) -> PracticeGradeResponse | None:
         """从 Agent 执行结果中读取结构化评分结果。"""
-        if isinstance(result, PracticeGradeResponse):
-            return result
+        if isinstance(result, PracticeGradeEvaluation):
+            return self._build_grade_response(result, reference_answer)
         if not isinstance(result, dict):
             return None
 
         # LangChain Agent response_format 成功时会返回 structured_response。
         structured_response = result.get("structured_response")
         if structured_response is not None:
-            return PracticeGradeResponse.model_validate(structured_response)
+            evaluation = PracticeGradeEvaluation.model_validate(structured_response)
+            return self._build_grade_response(evaluation, reference_answer)
 
         # 兼容结构化结果落在 tool_calls 中的场景，避免供应商返回差异导致评分丢失。
         messages = result.get("messages")
         if isinstance(messages, list):
-            return self._grading_result_from_tool_calls(messages)
+            return self._grading_result_from_tool_calls(messages, reference_answer)
         return None
 
-    def _grading_result_from_tool_calls(self, messages: list[Any]) -> PracticeGradeResponse | None:
+    def _grading_result_from_tool_calls(self, messages: list[Any], reference_answer: str) -> PracticeGradeResponse | None:
         """从 Agent 工具调用消息中读取结构化评分结果。"""
         for message in reversed(messages):
             tool_calls = getattr(message, "tool_calls", None)
@@ -116,9 +117,17 @@ class PracticeGradingAgent:
             for tool_call in tool_calls:
                 if not isinstance(tool_call, dict):
                     continue
-                if tool_call.get("name") == PracticeGradeResponse.__name__ and tool_call.get("args"):
-                    return PracticeGradeResponse.model_validate(tool_call["args"])
+                if tool_call.get("name") == PracticeGradeEvaluation.__name__ and tool_call.get("args"):
+                    evaluation = PracticeGradeEvaluation.model_validate(tool_call["args"])
+                    return self._build_grade_response(evaluation, reference_answer)
         return None
+
+    def _build_grade_response(self, evaluation: PracticeGradeEvaluation, reference_answer: str) -> PracticeGradeResponse:
+        """用模型评分结果和服务端参考答案组装接口响应。"""
+        return PracticeGradeResponse(
+            **evaluation.model_dump(mode="python"),
+            referenceAnswer=reference_answer,
+        )
 
     def _build_metrics(
         self,
