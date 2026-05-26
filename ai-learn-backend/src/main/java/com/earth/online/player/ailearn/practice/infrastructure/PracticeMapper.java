@@ -88,7 +88,8 @@ public interface PracticeMapper {
      */
     @Select("""
             SELECT id, user_id, question_code, phase, last_score, last_answer_text,
-                   last_grading_summary, discussion_history_json, discussion_follow_up_count
+                   last_grading_summary, discussion_history_json, discussion_follow_up_count,
+                   chat_history_json
             FROM user_practice_sessions
             WHERE user_id = #{userId}
             """)
@@ -105,8 +106,8 @@ public interface PracticeMapper {
     @Insert("""
             INSERT INTO user_practice_sessions(user_id, question_code, phase, last_score, last_answer_text,
                                                last_grading_summary, discussion_history_json,
-                                               discussion_follow_up_count, started_at, answered_at)
-            VALUES(#{userId}, #{questionCode}, #{phase}, NULL, NULL, NULL, NULL, 0, NOW(), NULL)
+                                               discussion_follow_up_count, chat_history_json, started_at, answered_at)
+            VALUES(#{userId}, #{questionCode}, #{phase}, NULL, NULL, NULL, NULL, 0, NULL, NOW(), NULL)
             ON DUPLICATE KEY UPDATE question_code = VALUES(question_code),
                                     phase = VALUES(phase),
                                     last_score = NULL,
@@ -114,6 +115,7 @@ public interface PracticeMapper {
                                     last_grading_summary = NULL,
                                     discussion_history_json = NULL,
                                     discussion_follow_up_count = 0,
+                                    chat_history_json = NULL,
                                     started_at = NOW(),
                                     answered_at = NULL
             """)
@@ -167,6 +169,23 @@ public interface PracticeMapper {
     int updateDiscussionHistory(
             @Param("userId") Long userId,
             @Param("discussionHistoryJson") String discussionHistoryJson
+    );
+
+    /**
+     * 更新当前轮跨端展示聊天记录。
+     *
+     * @param userId 用户ID
+     * @param chatHistoryJson 聊天记录JSON
+     * @return 影响行数
+     */
+    @Update("""
+            UPDATE user_practice_sessions
+            SET chat_history_json = #{chatHistoryJson}
+            WHERE user_id = #{userId}
+            """)
+    int updateChatHistory(
+            @Param("userId") Long userId,
+            @Param("chatHistoryJson") String chatHistoryJson
     );
 
     /**

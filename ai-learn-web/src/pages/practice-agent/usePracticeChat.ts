@@ -8,6 +8,7 @@ import {
   retryPracticeQuestion,
   sendPracticeMessageStream,
   type PracticeGrading,
+  type PracticeChatHistoryMessage,
   type PracticeMessageResult,
   type PracticePhase,
   type PracticeQuestion,
@@ -381,14 +382,24 @@ export function usePracticeChat() {
    */
   function restorePracticeSnapshot(state: PracticeState): void {
     const localSnapshot = snapshot.readPracticeSnapshot();
-    if (localSnapshot && localSnapshot.questionCode === state.currentQuestion?.code && localSnapshot.messages.length > 0) {
-      const hasInterruptedStreaming = localSnapshot.messages.some((item) => item.streaming);
+    if (localSnapshot && localSnapshot.questionCode === state.currentQuestion?.code && hasInterruptedStreamingMessage(localSnapshot.messages)) {
       messages.value = localSnapshot.messages.map(stream.normalizeRestoredMessage);
       messageId = Math.max(...messages.value.map((item) => item.id), 0) + 1;
       snapshot.restoreMessagePanelScroll(localSnapshot.scrollTop, localSnapshot.pinnedToBottom ?? true);
-      if (hasInterruptedStreaming) {
-        snapshot.savePracticeSnapshot();
-      }
+      snapshot.savePracticeSnapshot();
+      return;
+    }
+    if (state.messages.length > 0) {
+      messages.value = state.messages.map(toChatMessage);
+      messageId = Math.max(...messages.value.map((item) => item.id), 0) + 1;
+      snapshot.restoreMessagePanelScroll(localSnapshot?.scrollTop, localSnapshot?.pinnedToBottom ?? true);
+      snapshot.savePracticeSnapshot();
+      return;
+    }
+    if (localSnapshot && localSnapshot.questionCode === state.currentQuestion?.code && localSnapshot.messages.length > 0) {
+      messages.value = localSnapshot.messages.map(stream.normalizeRestoredMessage);
+      messageId = Math.max(...messages.value.map((item) => item.id), 0) + 1;
+      snapshot.restoreMessagePanelScroll(localSnapshot.scrollTop, localSnapshot.pinnedToBottom ?? true);
       return;
     }
 
@@ -397,6 +408,26 @@ export function usePracticeChat() {
     messages.value = [buildAssistantMessage(text, state.currentQuestion, null)];
     snapshot.savePracticeSnapshot();
     snapshot.scrollToBottom(true);
+  }
+
+  /**
+   * 判断本地快照是否包含未完成的流式消息。
+   */
+  function hasInterruptedStreamingMessage(snapshotMessages: ChatMessage[]): boolean {
+    return snapshotMessages.some((item) => item.streaming);
+  }
+
+  /**
+   * 转换服务端跨端聊天消息。
+   */
+  function toChatMessage(message: PracticeChatHistoryMessage): ChatMessage {
+    return {
+      id: messageId++,
+      role: message.role,
+      text: message.text,
+      question: message.question,
+      grading: message.grading,
+    };
   }
 
   /**

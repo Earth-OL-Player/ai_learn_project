@@ -23,6 +23,7 @@ public class PracticeService {
     private final QuestionSelectionService questionSelectionService;
     private final PracticeGradingService practiceGradingService;
     private final PracticeDiscussionService practiceDiscussionService;
+    private final PracticeChatHistoryService practiceChatHistoryService;
     private final PracticeResponseAssembler responseAssembler;
     private final PracticeMessageClassifier messageClassifier;
 
@@ -33,6 +34,7 @@ public class PracticeService {
      * @param questionSelectionService 抽题策略服务
      * @param practiceGradingService 评分成长服务
      * @param practiceDiscussionService 当前题 AI 讨论服务
+     * @param practiceChatHistoryService 跨端展示聊天记录服务
      * @param responseAssembler 响应组装服务
      * @param messageClassifier 消息意图识别服务
      */
@@ -41,12 +43,14 @@ public class PracticeService {
             QuestionSelectionService questionSelectionService,
             PracticeGradingService practiceGradingService,
             PracticeDiscussionService practiceDiscussionService,
+            PracticeChatHistoryService practiceChatHistoryService,
             PracticeResponseAssembler responseAssembler,
             PracticeMessageClassifier messageClassifier) {
         this.practiceSessionService = practiceSessionService;
         this.questionSelectionService = questionSelectionService;
         this.practiceGradingService = practiceGradingService;
         this.practiceDiscussionService = practiceDiscussionService;
+        this.practiceChatHistoryService = practiceChatHistoryService;
         this.responseAssembler = responseAssembler;
         this.messageClassifier = messageClassifier;
     }
@@ -87,7 +91,9 @@ public class PracticeService {
         List<String> questionTypes = questionSelectionService.normalizeTypes(request == null ? null : request.questionTypes());
         PracticeQuestionRecord question = questionSelectionService.selectQuestion(userId, questionTypes);
         practiceSessionService.startAnswering(userId, question);
-        return responseAssembler.questionResponse(question, "已为你抽取一道新题，请认真作答。答完后我会给出评分和建议。");
+        PracticeMessageResponse response = responseAssembler.questionResponse(question, "已为你抽取一道新题，请认真作答。答完后我会给出评分和建议。");
+        practiceChatHistoryService.replaceWithAssistantMessage(userId, response);
+        return response;
     }
 
     /**
@@ -98,9 +104,9 @@ public class PracticeService {
     @Transactional
     public PracticeMessageResponse retryCurrentQuestion() {
         Long userId = currentUserId();
-        PracticeQuestionRecord question = practiceSessionService.currentQuestion(userId);
-        practiceSessionService.startAnswering(userId, question);
-        return responseAssembler.questionResponse(question, "已重新进入本题作答，请再次提交你的答案。");
+        PracticeMessageResponse response = buildRetryCurrentQuestionResponse(userId);
+        practiceChatHistoryService.replaceWithAssistantMessage(userId, response);
+        return response;
     }
 
     /**
@@ -116,15 +122,19 @@ public class PracticeService {
         String content = messageClassifier.normalizeContent(request == null ? null : request.content());
         PracticeSessionRecord session = practiceSessionService.findSession(userId);
         String phase = session == null ? PracticeConstants.PHASE_QUESTIONING : session.getPhase();
+        String previousQuestionCode = session == null ? null : session.getQuestionCode();
 
         // 出题和评分仍需要完整业务结果；讨论阶段优先使用真实模型流式输出。
+        PracticeMessageResponse response;
         if (PracticeConstants.PHASE_QUESTIONING.equals(phase)) {
-            return handleQuestioningMessage(userId, content, request);
+            response = handleQuestioningMessage(userId, content, request);
+        } else if (PracticeConstants.PHASE_ANSWERING.equals(phase)) {
+            response = handleAnsweringMessage(userId, content);
+        } else {
+            response = handleDiscussingMessageStream(userId, content, request, chunkConsumer);
         }
-        if (PracticeConstants.PHASE_ANSWERING.equals(phase)) {
-            return handleAnsweringMessage(userId, content);
-        }
-        return handleDiscussingMessageStream(userId, content, request, chunkConsumer);
+        syncChatHistoryAfterStreamMessage(userId, content, phase, previousQuestionCode, response);
+        return response;
     }
 
     /**
@@ -178,7 +188,7 @@ public class PracticeService {
             PracticeMessageRequest request,
             Consumer<String> chunkConsumer) {
         if (messageClassifier.isRetryRequest(content)) {
-            return retryCurrentQuestion();
+            return buildRetryCurrentQuestionResponse(userId);
         }
         if (messageClassifier.isNextRequest(content) || messageClassifier.isExplicitQuestionRequest(content)) {
             return startRequestedQuestion(userId, content, request);
@@ -203,6 +213,62 @@ public class PracticeService {
         PracticeQuestionRecord question = questionSelectionService.selectQuestion(userId, requestedTypes);
         practiceSessionService.startAnswering(userId, question);
         return responseAssembler.questionResponse(question, "已根据你的请求切换到新题，请开始作答。");
+    }
+
+    /**
+     * 构造重新回答当前题响应。
+     *
+     * @param userId 用户ID
+     * @return 重新回答响应
+     */
+    private PracticeMessageResponse buildRetryCurrentQuestionResponse(Long userId) {
+        PracticeQuestionRecord question = practiceSessionService.currentQuestion(userId);
+        practiceSessionService.startAnswering(userId, question);
+        return responseAssembler.questionResponse(question, "已重新进入本题作答，请再次提交你的答案。");
+    }
+
+    /**
+     * 同步流式消息处理后的跨端展示聊天记录。
+     *
+     * @param userId 用户ID
+     * @param content 用户输入
+     * @param previousPhase 处理前阶段
+     * @param previousQuestionCode 处理前题目编码
+     * @param response 处理结果
+     */
+    private void syncChatHistoryAfterStreamMessage(
+            Long userId,
+            String content,
+            String previousPhase,
+            String previousQuestionCode,
+            PracticeMessageResponse response) {
+        if (PracticeConstants.ACTION_QUESTION.equals(response.action()) && shouldReplaceChatHistory(previousPhase, previousQuestionCode, response)) {
+            practiceChatHistoryService.replaceWithAssistantMessage(userId, response);
+            return;
+        }
+        if (!PracticeConstants.PHASE_QUESTIONING.equals(previousPhase)) {
+            practiceChatHistoryService.appendConversationTurn(userId, content, response);
+        }
+    }
+
+    /**
+     * 判断是否需要用新题消息覆盖当前轮聊天记录。
+     *
+     * @param previousPhase 处理前阶段
+     * @param previousQuestionCode 处理前题目编码
+     * @param response 处理结果
+     * @return 是否覆盖
+     */
+    private boolean shouldReplaceChatHistory(String previousPhase, String previousQuestionCode, PracticeMessageResponse response) {
+        if (PracticeConstants.PHASE_QUESTIONING.equals(previousPhase)) {
+            return true;
+        }
+        if (response.question() == null) {
+            return false;
+        }
+
+        // 切换新题时覆盖旧轮；同题重答走追加，保持原聊天上下文体验。
+        return !response.question().code().equals(previousQuestionCode);
     }
 
     /**

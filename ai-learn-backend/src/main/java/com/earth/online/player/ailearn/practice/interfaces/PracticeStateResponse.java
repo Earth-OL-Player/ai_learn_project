@@ -11,6 +11,7 @@ import java.util.List;
  * @param currentQuestion 当前题目
  * @param lastScore 当前题最近得分
  * @param questionTypes 可选题目分类
+ * @param messages 当前轮跨端展示聊天记录
  * @param growth 成长概览
  */
 public record PracticeStateResponse(
@@ -19,6 +20,7 @@ public record PracticeStateResponse(
         PracticeQuestionResponse currentQuestion,
         Integer lastScore,
         List<String> questionTypes,
+        List<PracticeChatMessageResponse> messages,
         GrowthResponse growth
 ) {
 }

@@ -19,14 +19,17 @@ import org.springframework.stereotype.Service;
 public class PracticeResponseAssembler {
 
     private final GrowthService growthService;
+    private final PracticeChatHistoryService practiceChatHistoryService;
 
     /**
      * 创建刷题响应组装服务。
      *
      * @param growthService 成长服务
+     * @param practiceChatHistoryService 跨端展示聊天记录服务
      */
-    public PracticeResponseAssembler(GrowthService growthService) {
+    public PracticeResponseAssembler(GrowthService growthService, PracticeChatHistoryService practiceChatHistoryService) {
         this.growthService = growthService;
+        this.practiceChatHistoryService = practiceChatHistoryService;
     }
 
     /**
@@ -48,6 +51,7 @@ public class PracticeResponseAssembler {
                 question == null ? null : toQuestionResponse(question),
                 session == null ? null : session.getLastScore(),
                 questionTypes,
+                session == null ? List.of() : practiceChatHistoryService.readChatHistory(session.getChatHistoryJson()),
                 growthService.getCurrentGrowth()
         );
     }

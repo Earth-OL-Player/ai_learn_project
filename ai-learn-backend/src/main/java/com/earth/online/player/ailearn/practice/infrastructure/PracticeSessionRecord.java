@@ -14,6 +14,7 @@ public class PracticeSessionRecord {
     private String lastGradingSummary;
     private String discussionHistoryJson;
     private Integer discussionFollowUpCount;
+    private String chatHistoryJson;
 
     /** 获取状态ID。 */
     public Long getId() { return id; }
@@ -68,4 +69,10 @@ public class PracticeSessionRecord {
 
     /** 设置当前题评分后的连续追问次数。 */
     public void setDiscussionFollowUpCount(Integer discussionFollowUpCount) { this.discussionFollowUpCount = discussionFollowUpCount; }
+
+    /** 获取当前轮跨端展示聊天记录JSON。 */
+    public String getChatHistoryJson() { return chatHistoryJson; }
+
+    /** 设置当前轮跨端展示聊天记录JSON。 */
+    public void setChatHistoryJson(String chatHistoryJson) { this.chatHistoryJson = chatHistoryJson; }
 }

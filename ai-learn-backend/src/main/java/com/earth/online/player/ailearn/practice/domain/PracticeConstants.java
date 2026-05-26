@@ -43,6 +43,12 @@ public final class PracticeConstants {
     /** 讨论历史单条内容最大长度。 */
     public static final int MAX_DISCUSSION_HISTORY_CONTENT_LENGTH = 1000;
 
+    /** 当前轮跨端展示聊天最大消息数。 */
+    public static final int MAX_CHAT_HISTORY_MESSAGES = 24;
+
+    /** 当前轮跨端展示聊天单条文本最大长度。 */
+    public static final int MAX_CHAT_HISTORY_CONTENT_LENGTH = 4000;
+
     /** 合格答案最低分。 */
     public static final int PASS_SCORE = 60;
 

@@ -17,6 +17,7 @@ export interface PracticeState {
   currentQuestion: PracticeQuestion | null;
   lastScore: number | null;
   questionTypes: string[];
+  messages: PracticeChatHistoryMessage[];
   growth: GrowthInfo;
 }
 
@@ -46,6 +47,13 @@ export interface PracticeMessageResult {
   question: PracticeQuestion | null;
   grading: PracticeGrading | null;
   growth: GrowthInfo;
+}
+
+export interface PracticeChatHistoryMessage {
+  role: 'assistant' | 'user';
+  text: string;
+  question: PracticeQuestion | null;
+  grading: PracticeGrading | null;
 }
 
 export interface PracticeActionPayload {
