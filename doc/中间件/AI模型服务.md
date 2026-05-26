@@ -95,7 +95,8 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 - 生产环境保持 `AI_SERVICE_LOG_LEVEL=INFO` 或更高级别，不得把用户完整答案、题目、参考答案、聊天记录和模型完整回复写入常规日志。
 - 仅允许本地开发排查时临时设置 `AI_SERVICE_LOG_LEVEL=DEBUG`，排查完成后需要恢复为 `INFO`。
 - Java 后端已对 AI 评分/讨论入口增加单机内存级频率和并发限流；生产多实例部署时需要迁移到 Redis、网关或其他集中式限流组件，避免各实例额度互不感知。
-- 评分结构化输出通过 LangChain `with_structured_output(..., method="json_mode")` 解析，避免 DeepSeek reasoning 模型触发工具调用 `tool_choice` 兼容问题；仍需要保留兜底，避免模型异常输出影响刷题主流程。
+- 评分结构化输出通过 LangChain `create_agent(..., response_format=PracticeGradeResponse)` 约束返回结构；`hitPoints`、`missingPoints`、`problems` 已定义为必填数组字段，避免部分模型省略可选字段后被 Pydantic 默认补成空数组。
+- DeepSeek 与 GPT 等模型对结构化工具参数的遵循程度可能不同，排查评分差异时需要结合 traceId 查看 `structured_response` 和工具调用参数；如果非满分结果没有返回缺失点或问题点，AI 服务会判定为结构化解析失败并交由 Java 后端本地规则兜底，避免前端展示不可解释的空数组评分。
 - DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
 - Java 后端内部调用路径、Header、响应码和内容类型集中在 `AiServiceConstants`，新增 AI 内部接口时需同步维护该常量类与本文档。
 - Java 后端调用 Python AI 服务时必须透传 `X-Trace-Id`；Python AI 服务响应和日志也必须继续携带同一个 `traceId`。
