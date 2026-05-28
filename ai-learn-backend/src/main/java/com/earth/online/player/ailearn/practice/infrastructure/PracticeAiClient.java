@@ -158,20 +158,20 @@ public class PracticeAiClient {
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                logJsonObservability(path, traceId, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_HTTP_STATUS, null);
+                logJsonObservability(path, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_HTTP_STATUS, null);
                 LOGGER.warn("AI 服务调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
                 return Optional.empty();
             }
             JsonNode root = objectMapper.readTree(response.body());
             if (!AiServiceConstants.SUCCESS_CODE.equals(root.path("code").asText())) {
-                logJsonObservability(path, traceId, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_BUSINESS, root.path("observability"));
+                logJsonObservability(path, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_BUSINESS, root.path("observability"));
                 LOGGER.warn("AI 服务业务响应失败，已进入本地兜底：path={} code={}", path, root.path("code").asText());
                 return Optional.empty();
             }
-            logJsonObservability(path, traceId, true, false, response.statusCode(), startMillis, "", root.path("observability"));
+            logJsonObservability(path, true, false, response.statusCode(), startMillis, "", root.path("observability"));
             return Optional.ofNullable(root.get("data"));
         } catch (Exception exception) {
-            logJsonObservability(path, traceId, false, true, 0, startMillis, errorCategory(exception), null);
+            logJsonObservability(path, false, true, 0, startMillis, errorCategory(exception), null);
             LOGGER.warn("AI 服务调用异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         }
@@ -200,18 +200,18 @@ public class PracticeAiClient {
                     .build();
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
-                logStreamObservability(path, traceId, false, true, response.statusCode(), startMillis, -1L, ERROR_CATEGORY_HTTP_STATUS);
+                logStreamObservability(path, false, true, response.statusCode(), startMillis, -1L, ERROR_CATEGORY_HTTP_STATUS);
                 LOGGER.warn("AI 服务流式调用返回非成功状态，已进入本地兜底：path={} status={}", path, response.statusCode());
                 return Optional.empty();
             }
             return readEventStream(response, chunkConsumer, startMillis);
         } catch (IOException exception) {
-            logStreamObservability(path, traceId, false, true, 0, startMillis, -1L, errorCategory(exception));
+            logStreamObservability(path, false, true, 0, startMillis, -1L, errorCategory(exception));
             LOGGER.warn("AI 服务流式调用 IO 异常，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         } catch (InterruptedException exception) {
             Thread.currentThread().interrupt();
-            logStreamObservability(path, traceId, false, true, 0, startMillis, -1L, ERROR_CATEGORY_EXCEPTION);
+            logStreamObservability(path, false, true, 0, startMillis, -1L, ERROR_CATEGORY_EXCEPTION);
             LOGGER.warn("AI 服务流式调用被中断，已进入本地兜底：path={}", path, exception);
             return Optional.empty();
         }
@@ -252,7 +252,6 @@ public class PracticeAiClient {
         }
         logStreamObservability(
                 AiServiceConstants.PRACTICE_DISCUSS_STREAM_PATH,
-                currentTraceId(),
                 !replyBuilder.isEmpty(),
                 replyBuilder.isEmpty(),
                 response.statusCode(),
@@ -315,8 +314,7 @@ public class PracticeAiClient {
 
         // 只记录片段长度和耗时，避免模型回答正文进入日志。
         LOGGER.info(
-                "Java 后端收到 AI 服务流式片段：traceId={} count={} chars={} elapsedMs={}",
-                currentTraceId(),
+                "Java 后端收到 AI 服务流式片段：count={} chars={} elapsedMs={}",
                 chunkCount,
                 content.length(),
                 System.currentTimeMillis() - startMillis
@@ -407,7 +405,6 @@ public class PracticeAiClient {
      * 记录 JSON AI 调用观测事件。
      *
      * @param path 请求路径
-     * @param traceId 请求链路标识
      * @param success 是否调用成功
      * @param fallbackUsed 是否进入兜底
      * @param status HTTP 状态码
@@ -417,7 +414,6 @@ public class PracticeAiClient {
      */
     private void logJsonObservability(
             String path,
-            String traceId,
             boolean success,
             boolean fallbackUsed,
             int status,
@@ -425,8 +421,7 @@ public class PracticeAiClient {
             String errorCategory,
             JsonNode observability) {
         LOGGER.info(
-                "AI 调用观测：traceId={} path={} stream=false success={} fallbackUsed={} status={} durationMs={} model={} inputTokens={} outputTokens={} totalTokens={} estimatedCost={} errorCategory={}",
-                traceId,
+                "AI 调用观测：path={} stream=false success={} fallbackUsed={} status={} durationMs={} model={} inputTokens={} outputTokens={} totalTokens={} estimatedCost={} errorCategory={}",
                 path,
                 success,
                 fallbackUsed,
@@ -445,7 +440,6 @@ public class PracticeAiClient {
      * 记录流式 AI 调用观测事件。
      *
      * @param path 请求路径
-     * @param traceId 请求链路标识
      * @param success 是否调用成功
      * @param fallbackUsed 是否进入兜底
      * @param status HTTP 状态码
@@ -455,7 +449,6 @@ public class PracticeAiClient {
      */
     private void logStreamObservability(
             String path,
-            String traceId,
             boolean success,
             boolean fallbackUsed,
             int status,
@@ -463,8 +456,7 @@ public class PracticeAiClient {
             long firstChunkMs,
             String errorCategory) {
         LOGGER.info(
-                "AI 调用观测：traceId={} path={} stream=true success={} fallbackUsed={} status={} firstTokenMs={} durationMs={} model={} outputTokens={} estimatedCost={} errorCategory={}",
-                traceId,
+                "AI 调用观测：path={} stream=true success={} fallbackUsed={} status={} firstTokenMs={} durationMs={} model={} outputTokens={} estimatedCost={} errorCategory={}",
                 path,
                 success,
                 fallbackUsed,

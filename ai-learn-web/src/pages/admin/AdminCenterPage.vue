@@ -22,6 +22,9 @@
         <el-menu-item index="/admin/model-configs">
           <span>模型配置</span>
         </el-menu-item>
+        <el-menu-item index="/admin/log-levels">
+          <span>日志管理</span>
+        </el-menu-item>
       </el-menu>
     </aside>
 

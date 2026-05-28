@@ -23,6 +23,9 @@ public final class AiServiceConstants {
     /** AI 服务本题流式讨论接口。 */
     public static final String PRACTICE_DISCUSS_STREAM_PATH = "/internal/v1/practice/discuss/stream";
 
+    /** AI 服务日志级别管理接口。 */
+    public static final String LOG_LEVEL_PATH = "/internal/v1/log-levels";
+
     private AiServiceConstants() {
     }
 }

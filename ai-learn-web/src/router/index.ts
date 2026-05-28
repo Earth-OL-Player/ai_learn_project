@@ -16,6 +16,7 @@ const UserManagePage = () => import('../pages/admin/UserManagePage.vue');
 const SystemQuestionBankManagePage = () => import('../pages/admin/SystemQuestionBankManagePage.vue');
 const RedemptionCodeManagePage = () => import('../pages/admin/RedemptionCodeManagePage.vue');
 const ModelConfigManagePage = () => import('../pages/admin/ModelConfigManagePage.vue');
+const LogLevelManagePage = () => import('../pages/admin/LogLevelManagePage.vue');
 
 /**
  * 创建前端路由实例。
@@ -99,6 +100,12 @@ const router = createRouter({
               name: 'admin-model-configs',
               component: ModelConfigManagePage,
               meta: { title: '模型配置', requiresAuth: true, requiresSuperAdmin: true },
+            },
+            {
+              path: 'log-levels',
+              name: 'admin-log-levels',
+              component: LogLevelManagePage,
+              meta: { title: '日志管理', requiresAuth: true, requiresSuperAdmin: true },
             },
           ],
         },

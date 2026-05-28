@@ -63,6 +63,12 @@ management:
         include: health,metrics
 
 logging:
+  pattern:
+    # 控制台日志显式读取 MDC 中的 traceId，便于按请求链路排查问题。
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%logger{36}] traceId=%X{traceId} [%thread] %msg%n%wEx"
   level:
     root: INFO
     com.earth.online.player.ailearn: INFO
+    # 禁用 JDK HttpClient 内部分块调试日志，避免流式响应刷屏。
+    jdk.internal.httpclient: OFF
+    jdk.internal.httpclient.debug: OFF

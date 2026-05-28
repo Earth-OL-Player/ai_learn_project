@@ -101,7 +101,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 - DeepSeek V4 默认思考模式已在客户端请求层关闭；如果服务器侧强制开启或供应商参数发生变化，需要按官方文档同步调整 `extra_body` 参数。
 - Java 后端内部调用路径、Header、响应码和内容类型集中在 `AiServiceConstants`，新增 AI 内部接口时需同步维护该常量类与本文档。
 - Java 后端调用 Python AI 服务时必须透传 `X-Trace-Id`；Python AI 服务响应和日志也必须继续携带同一个 `traceId`。
-- 当前观测看板先以结构化日志作为数据源，字段包含评分成功率所需的 `success`、兜底率所需的 `fallbackUsed`、超时率所需的 `errorCategory=TIMEOUT`、流式首包 `firstTokenMs`、总耗时 `durationMs`、模型名、Token 用量和成本占位。生产接入 Prometheus、ELK、Grafana 或云厂商 APM 时，应直接按这些字段聚合 P95、超时率、兜底率和成本看板。
+- 当前观测信息先以结构化日志字段落地，字段包含评分成功率所需的 `success`、兜底率所需的 `fallbackUsed`、超时率所需的 `errorCategory=TIMEOUT`、流式首包 `firstTokenMs`、总耗时 `durationMs`、模型名、Token 用量和成本占位。后续如接入监控能力，应直接按这些字段统计 P95、超时率、兜底率和成本。
 
 ## 9. sprint202614 本地联调和 422 排查补充
 
@@ -131,7 +131,7 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 3. Python AI 服务优先使用 Java 透传的 `X-Trace-Id`，HTTP 入站日志、评分日志、流式讨论日志和模型调用日志使用同一个 traceId。
 4. Java 后端新增 `AI 调用观测` 日志，字段包括 `traceId`、`path`、`stream`、`success`、`fallbackUsed`、`status`、`firstTokenMs`、`durationMs`、`model`、`inputTokens`、`outputTokens`、`totalTokens`、`estimatedCost`、`errorCategory`。
 5. Python 评分接口在统一响应中返回 `observability` 元数据，Java 后端会读取其中的模型和 Token 用量并落日志；没有供应商用量时字段为 `unavailable`。
-6. 当前没有引入新的中间件；后续接入指标看板时，可从 Java/Python 日志聚合 P95、评分成功率、超时率、兜底率、Token 用量和成本。
+6. 当前没有引入新的中间件；后续接入指标能力时，可基于 Java/Python 结构化日志字段统计 P95、评分成功率、超时率、兜底率、Token 用量和成本。
 
 ## 10. sprint2616 答题上下文与智能拦截补充
 
