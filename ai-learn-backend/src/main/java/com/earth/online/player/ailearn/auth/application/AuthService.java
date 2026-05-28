@@ -9,7 +9,7 @@ import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.JwtTokenService;
 import com.earth.online.player.ailearn.common.security.TokenInvalidationService;
-import com.earth.online.player.ailearn.system.infrastructure.SystemSettingMapper;
+import com.earth.online.player.ailearn.system.application.SystemSettingCache;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.domain.UserSummary;
 import com.earth.online.player.ailearn.user.domain.UserSummaryConverter;
@@ -25,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class AuthService {
 
     private final UserMapper userMapper;
-    private final SystemSettingMapper systemSettingMapper;
+    private final SystemSettingCache systemSettingCache;
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenService jwtTokenService;
     private final TokenInvalidationService tokenInvalidationService;
@@ -34,19 +34,19 @@ public class AuthService {
      * 创建认证应用服务。
      *
      * @param userMapper 用户仓储
-     * @param systemSettingMapper 系统设置仓储
+     * @param systemSettingCache 系统设置缓存
      * @param passwordEncoder 密码编码器
      * @param jwtTokenService JWT 服务
      * @param tokenInvalidationService 令牌失效服务
      */
     public AuthService(
             UserMapper userMapper,
-            SystemSettingMapper systemSettingMapper,
+            SystemSettingCache systemSettingCache,
             PasswordEncoder passwordEncoder,
             JwtTokenService jwtTokenService,
             TokenInvalidationService tokenInvalidationService) {
         this.userMapper = userMapper;
-        this.systemSettingMapper = systemSettingMapper;
+        this.systemSettingCache = systemSettingCache;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenService = jwtTokenService;
         this.tokenInvalidationService = tokenInvalidationService;
@@ -134,7 +134,7 @@ public class AuthService {
      * @return 最大用户数
      */
     private int resolveMaxUsers() {
-        String value = systemSettingMapper.findValue(AuthConstants.MAX_USERS_SETTING_KEY);
+        String value = systemSettingCache.findValue(AuthConstants.MAX_USERS_SETTING_KEY);
         if (value == null || value.isBlank()) {
             return AuthConstants.DEFAULT_MAX_USERS;
         }

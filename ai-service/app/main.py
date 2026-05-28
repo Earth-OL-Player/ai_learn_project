@@ -8,6 +8,7 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.responses import Response
 
 from app.api.log_levels import router as log_levels_router
+from app.api.model_cache import router as model_cache_router
 from app.api.practice import router as practice_router
 from app.config.log_config import configure_logger
 
@@ -58,3 +59,4 @@ def health() -> dict[str, str]:
 # 刷题 Agent 为后端内部接口。
 app.include_router(practice_router)
 app.include_router(log_levels_router)
+app.include_router(model_cache_router)

@@ -102,19 +102,6 @@ public interface SystemQuestionAdminMapper {
     SystemQuestionRecord findByCodeAny(@Param("code") String code);
 
     /**
-     * 查询全部题目分类。
-     *
-     * @return 分类列表
-     */
-    @Select("""
-            SELECT DISTINCT question_type
-            FROM questions
-            WHERE deleted = 0
-            ORDER BY question_type ASC
-            """)
-    List<String> findQuestionTypes();
-
-    /**
      * 新增系统题目。
      *
      * @param record 写入记录

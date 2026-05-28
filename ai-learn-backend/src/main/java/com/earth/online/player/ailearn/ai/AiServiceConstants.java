@@ -26,6 +26,9 @@ public final class AiServiceConstants {
     /** AI 服务日志级别管理接口。 */
     public static final String LOG_LEVEL_PATH = "/internal/v1/log-levels";
 
+    /** AI 服务模型构造缓存失效接口。 */
+    public static final String MODEL_CACHE_INVALIDATE_PATH = "/internal/v1/model-cache/invalidate";
+
     private AiServiceConstants() {
     }
 }

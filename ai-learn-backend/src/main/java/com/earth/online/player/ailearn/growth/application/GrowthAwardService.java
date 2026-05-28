@@ -10,7 +10,9 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.stereotype.Service;
 
 /**
@@ -24,14 +26,17 @@ public class GrowthAwardService {
     private static final LocalTime EARLY_MORNING_END = LocalTime.of(8, 0);
 
     private final GrowthMapper growthMapper;
+    private final BadgeRuleCache badgeRuleCache;
 
     /**
      * 创建成长徽章服务。
      *
      * @param growthMapper 成长仓储
+     * @param badgeRuleCache 徽章静态规则缓存
      */
-    public GrowthAwardService(GrowthMapper growthMapper) {
+    public GrowthAwardService(GrowthMapper growthMapper, BadgeRuleCache badgeRuleCache) {
         this.growthMapper = growthMapper;
+        this.badgeRuleCache = badgeRuleCache;
     }
 
     /**
@@ -73,7 +78,11 @@ public class GrowthAwardService {
      * @return 徽章墙
      */
     public List<BadgeResponse> findBadgeWall(Long userId) {
-        return growthMapper.findBadgeWall(userId).stream()
+        Map<Long, BadgeRecord> acquiredBadges = findAcquiredBadges(userId);
+
+        // 徽章定义走 10 分钟短 TTL，用户获得状态仍实时查询，避免新徽章延迟展示。
+        return badgeRuleCache.findAllBadges().stream()
+                .map(record -> mergeAcquiredStatus(record, acquiredBadges.get(record.getId())))
                 .filter(this::isConfiguredBadge)
                 .filter(this::isVisibleOnWall)
                 .sorted(Comparator.comparingInt(record -> BadgeRule.orderOf(record.getRuleCode())))
@@ -89,6 +98,59 @@ public class GrowthAwardService {
      */
     public int calculateLearningDays(Long userId) {
         return growthMapper.countLearningDays(userId);
+    }
+
+    /**
+     * 查询用户已获得徽章映射。
+     *
+     * @param userId 用户ID
+     * @return 已获得徽章映射
+     */
+    private Map<Long, BadgeRecord> findAcquiredBadges(Long userId) {
+        Map<Long, BadgeRecord> acquiredBadges = new HashMap<>();
+        for (BadgeRecord badge : growthMapper.findAcquiredBadges(userId)) {
+            acquiredBadges.put(badge.getId(), badge);
+        }
+        return acquiredBadges;
+    }
+
+    /**
+     * 合并徽章静态定义和用户获得状态。
+     *
+     * @param badge 徽章静态定义
+     * @param acquiredBadge 用户已获得记录
+     * @return 合并后的徽章记录
+     */
+    private static BadgeRecord mergeAcquiredStatus(BadgeRecord badge, BadgeRecord acquiredBadge) {
+        BadgeRecord mergedBadge = copyBadgeRecord(badge);
+        if (acquiredBadge == null) {
+            mergedBadge.setAcquired(Boolean.FALSE);
+            mergedBadge.setAcquiredAt(null);
+            return mergedBadge;
+        }
+
+        // 获得时间必须来自实时用户记录，不能使用缓存中的静态定义。
+        mergedBadge.setAcquired(Boolean.TRUE);
+        mergedBadge.setAcquiredAt(acquiredBadge.getAcquiredAt());
+        return mergedBadge;
+    }
+
+    /**
+     * 复制徽章记录。
+     *
+     * @param source 原始记录
+     * @return 复制记录
+     */
+    private static BadgeRecord copyBadgeRecord(BadgeRecord source) {
+        BadgeRecord target = new BadgeRecord();
+        target.setId(source.getId());
+        target.setName(source.getName());
+        target.setDescription(source.getDescription());
+        target.setIcon(source.getIcon());
+        target.setRuleCode(source.getRuleCode());
+        target.setAcquired(source.getAcquired());
+        target.setAcquiredAt(source.getAcquiredAt());
+        return target;
     }
 
     /**

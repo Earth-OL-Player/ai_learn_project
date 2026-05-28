@@ -76,16 +76,22 @@ public class SystemQuestionAdminService {
 
     private final UserMapper userMapper;
     private final SystemQuestionAdminMapper systemQuestionAdminMapper;
+    private final QuestionTypeCache questionTypeCache;
 
     /**
      * 创建系统题库管理服务。
      *
      * @param userMapper 用户仓储
      * @param systemQuestionAdminMapper 系统题库仓储
+     * @param questionTypeCache 题目分类缓存
      */
-    public SystemQuestionAdminService(UserMapper userMapper, SystemQuestionAdminMapper systemQuestionAdminMapper) {
+    public SystemQuestionAdminService(
+            UserMapper userMapper,
+            SystemQuestionAdminMapper systemQuestionAdminMapper,
+            QuestionTypeCache questionTypeCache) {
         this.userMapper = userMapper;
         this.systemQuestionAdminMapper = systemQuestionAdminMapper;
+        this.questionTypeCache = questionTypeCache;
     }
 
     /**
@@ -150,9 +156,11 @@ public class SystemQuestionAdminService {
         if (sameCode != null) {
             writeRecord.setId(sameCode.getId());
             systemQuestionAdminMapper.update(writeRecord);
+            questionTypeCache.invalidateAfterCommit();
             return toResponse(systemQuestionAdminMapper.findById(sameCode.getId()));
         }
         systemQuestionAdminMapper.insert(writeRecord);
+        questionTypeCache.invalidateAfterCommit();
         return toResponse(systemQuestionAdminMapper.findById(writeRecord.getId()));
     }
 
@@ -175,6 +183,7 @@ public class SystemQuestionAdminService {
 
         // 编辑时同步写入新旧字段，保证历史页面和新功能都可读取。
         systemQuestionAdminMapper.update(writeRecord);
+        questionTypeCache.invalidateAfterCommit();
         return toResponse(systemQuestionAdminMapper.findById(id));
     }
 
@@ -194,6 +203,7 @@ public class SystemQuestionAdminService {
         if (affected == 0) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "系统题目不存在或已删除");
         }
+        questionTypeCache.invalidateAfterCommit();
         return true;
     }
 
@@ -210,6 +220,7 @@ public class SystemQuestionAdminService {
 
         // 只清空题库主表，用户历史最高分汇总继续保留用于成长经验计算。
         systemQuestionAdminMapper.truncateQuestions();
+        questionTypeCache.invalidateAfterCommit();
         return true;
     }
 
@@ -220,7 +231,7 @@ public class SystemQuestionAdminService {
      */
     public List<String> findQuestionTypes() {
         requireSuperAdmin();
-        return systemQuestionAdminMapper.findQuestionTypes();
+        return questionTypeCache.findQuestionTypes();
     }
 
     /**
@@ -278,6 +289,9 @@ public class SystemQuestionAdminService {
         ImportSystemQuestionsPrecheckResponse precheckResponse = analysis.toPrecheckResponse();
         int importedCount = createdCount + updatedCount;
         int skippedCount = precheckResponse.totalCount() - importedCount;
+        if (importedCount > 0) {
+            questionTypeCache.invalidateAfterCommit();
+        }
         return new ImportSystemQuestionsResponse(
                 importedCount,
                 createdCount,

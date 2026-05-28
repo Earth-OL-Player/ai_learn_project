@@ -10,6 +10,7 @@ class PracticeModelConfig(BaseModel):
     model: str = ""
     baseUrl: str = ""
     apiKey: str = ""
+    configFingerprint: str = ""
 
 
 class PracticeGradeRequest(BaseModel):

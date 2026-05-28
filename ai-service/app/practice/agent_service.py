@@ -39,16 +39,21 @@ class PracticeAgentService:
         """初始化刷题 Agent 服务门面。"""
         self._provider_adapter = provider_adapter or PracticeProviderAdapter()
         prompt_builder = PracticePromptBuilder()
-        model_factory = PracticeModelFactory(self._provider_adapter)
+        self._model_factory = PracticeModelFactory(self._provider_adapter)
         sanitizer = PracticeLogSanitizer(self._provider_adapter)
         llm_logger = PracticeLlmLogger(self._provider_adapter, sanitizer)
 
         # 默认依赖在门面内装配，外部接口保持原有调用方式。
         self._local_fallback = local_fallback or PracticeLocalFallback()
         self._sse_encoder = sse_encoder or PracticeSseEncoder()
-        self._grading_agent = grading_agent or PracticeGradingAgent(model_factory, prompt_builder, llm_logger, self._provider_adapter)
+        self._grading_agent = grading_agent or PracticeGradingAgent(
+            self._model_factory,
+            prompt_builder,
+            llm_logger,
+            self._provider_adapter,
+        )
         self._discussion_agent = discussion_agent or PracticeDiscussionAgent(
-            model_factory,
+            self._model_factory,
             prompt_builder,
             llm_logger,
             self._provider_adapter,
@@ -112,6 +117,12 @@ class PracticeAgentService:
         fallback_response = self._local_fallback.discuss(request)
         yield self._sse_encoder.message(fallback_response.reply)
         yield self._sse_encoder.done()
+
+    def clear_cached_model_objects(self) -> int:
+        """清理模型和 Agent 构造缓存。"""
+        cleared_count = self._model_factory.clear_cached_objects()
+        logger.info("Python AI 服务模型和 Agent 缓存已清理：clearedObjects=%s", cleared_count)
+        return cleared_count
 
 
 practice_agent_service = PracticeAgentService()

@@ -24,14 +24,17 @@ public class QuestionService {
     private static final int DEFAULT_PAGE_SIZE = 10;
 
     private final QuestionMapper questionMapper;
+    private final QuestionTypeCache questionTypeCache;
 
     /**
      * 创建题库查询服务。
      *
      * @param questionMapper 题库仓储
+     * @param questionTypeCache 题目分类缓存
      */
-    public QuestionService(QuestionMapper questionMapper) {
+    public QuestionService(QuestionMapper questionMapper, QuestionTypeCache questionTypeCache) {
         this.questionMapper = questionMapper;
+        this.questionTypeCache = questionTypeCache;
     }
 
     /**
@@ -70,7 +73,7 @@ public class QuestionService {
      * @return 题目分类列表
      */
     public List<String> findQuestionTypes() {
-        return questionMapper.findQuestionTypes();
+        return questionTypeCache.findQuestionTypes();
     }
 
     /**

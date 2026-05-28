@@ -13,20 +13,33 @@ import org.apache.ibatis.annotations.Select;
 public interface GrowthMapper {
 
     /**
-     * 查询用户徽章墙。
+     * 查询全部徽章静态定义。
      *
-     * @param userId 用户ID
      * @return 徽章列表
      */
     @Select("""
             SELECT b.id, b.name, b.description, b.icon, b.rule_code,
-                   CASE WHEN ub.id IS NULL THEN 0 ELSE 1 END AS acquired,
-                   ub.acquired_at
+                   0 AS acquired, NULL AS acquired_at
             FROM badges b
-            LEFT JOIN user_badges ub ON ub.badge_id = b.id AND ub.user_id = #{userId}
             ORDER BY b.id ASC
             """)
-    List<BadgeRecord> findBadgeWall(@Param("userId") Long userId);
+    List<BadgeRecord> findAllBadges();
+
+    /**
+     * 查询用户已获得徽章。
+     *
+     * @param userId 用户ID
+     * @return 已获得徽章列表
+     */
+    @Select("""
+            SELECT b.id, b.name, b.description, b.icon, b.rule_code,
+                   1 AS acquired, ub.acquired_at
+            FROM user_badges ub
+            INNER JOIN badges b ON b.id = ub.badge_id
+            WHERE ub.user_id = #{userId}
+            ORDER BY b.id ASC
+            """)
+    List<BadgeRecord> findAcquiredBadges(@Param("userId") Long userId);
 
     /**
      * 按规则查询徽章。

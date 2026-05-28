@@ -1,5 +1,6 @@
 package com.earth.online.player.ailearn.model.application;
 
+import com.earth.online.player.ailearn.ai.AiModelCacheClient;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
@@ -29,6 +30,8 @@ import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -39,6 +42,8 @@ import java.util.List;
 import java.util.Locale;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.springframework.util.StringUtils;
 
 /**
@@ -55,11 +60,15 @@ public class ModelEntitlementService {
     private static final int RANDOM_CODE_LENGTH = 12;
     private static final String CODE_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     private static final String CSV_HEADER = "code,code_type,code_type_text,status,status_text,used_by_username,used_at,created_at\n";
+    private static final String SHA_256_ALGORITHM = "SHA-256";
+    private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final ModelEntitlementMapper modelEntitlementMapper;
     private final UserMapper userMapper;
     private final ModelAuthorizationProperties authorizationProperties;
+    private final AiModelCacheClient aiModelCacheClient;
+    private final ModelConfigCache modelConfigCache;
 
     /**
      * 创建模型权益应用服务。
@@ -67,14 +76,20 @@ public class ModelEntitlementService {
      * @param modelEntitlementMapper 模型权益仓储
      * @param userMapper 用户仓储
      * @param authorizationProperties 授权入口配置
+     * @param aiModelCacheClient AI 服务模型缓存客户端
+     * @param modelConfigCache 模型配置缓存
      */
     public ModelEntitlementService(
             ModelEntitlementMapper modelEntitlementMapper,
             UserMapper userMapper,
-            ModelAuthorizationProperties authorizationProperties) {
+            ModelAuthorizationProperties authorizationProperties,
+            AiModelCacheClient aiModelCacheClient,
+            ModelConfigCache modelConfigCache) {
         this.modelEntitlementMapper = modelEntitlementMapper;
         this.userMapper = userMapper;
         this.authorizationProperties = authorizationProperties;
+        this.aiModelCacheClient = aiModelCacheClient;
+        this.modelConfigCache = modelConfigCache;
     }
 
     /**
@@ -142,7 +157,7 @@ public class ModelEntitlementService {
      */
     public List<AdminModelConfigResponse> findAdminModelConfigs() {
         requireSuperAdmin("仅超级管理员可维护模型配置");
-        List<ModelConfigRecord> records = modelEntitlementMapper.findAllModelConfigs();
+        List<ModelConfigRecord> records = modelConfigCache.findAllModelConfigs();
 
         // 返回固定三档配置，缺失记录时使用系统默认模型名兜底。
         return List.of(ModelLevel.BASIC, ModelLevel.PRO, ModelLevel.SUPER).stream()
@@ -167,7 +182,12 @@ public class ModelEntitlementService {
         record.setBaseUrl(trimToNull(request == null ? null : request.baseUrl()));
         record.setApiKey(trimToNull(request == null ? null : request.apiKey()));
         modelEntitlementMapper.upsertModelConfig(record);
-        return toAdminModelConfigResponse(level, modelEntitlementMapper.findModelConfig(level.name()));
+        ModelConfigRecord savedRecord = modelEntitlementMapper.findModelConfig(level.name());
+
+        // 配置提交后主动失效 Java 和 Python 缓存，TTL 只保留为兜底机制。
+        modelConfigCache.invalidateAfterCommit(level.name());
+        notifyModelCacheAfterCommit();
+        return toAdminModelConfigResponse(level, savedRecord);
     }
 
     /**
@@ -756,7 +776,7 @@ public class ModelEntitlementService {
      * @return 模型名称
      */
     private String resolveModelName(ModelLevel level) {
-        ModelConfigRecord record = modelEntitlementMapper.findModelConfig(level.name());
+        ModelConfigRecord record = modelConfigCache.findModelConfig(level.name());
         if (record != null && StringUtils.hasText(record.getModelName())) {
             return record.getModelName().trim();
         }
@@ -770,15 +790,81 @@ public class ModelEntitlementService {
      * @return 请求级模型配置
      */
     private AiModelRequestConfig resolveRequestConfig(ModelLevel level) {
-        ModelConfigRecord record = modelEntitlementMapper.findModelConfig(level.name());
+        ModelConfigRecord record = modelConfigCache.findModelConfig(level.name());
         if (record == null) {
-            return new AiModelRequestConfig(level.defaultModelName(), "", "");
+            String modelName = level.defaultModelName();
+            return new AiModelRequestConfig(modelName, "", "", modelConfigFingerprint(modelName, "", "", null));
         }
+        String modelName = StringUtils.hasText(record.getModelName())
+                ? record.getModelName().trim()
+                : level.defaultModelName();
+        String baseUrl = trimToEmpty(record.getBaseUrl());
+        String apiKey = trimToEmpty(record.getApiKey());
+
+        // 指纹只透传摘要值，避免 API Key 明文进入 Python 缓存 key 或日志。
         return new AiModelRequestConfig(
-                StringUtils.hasText(record.getModelName()) ? record.getModelName().trim() : level.defaultModelName(),
-                trimToEmpty(record.getBaseUrl()),
-                trimToEmpty(record.getApiKey())
+                modelName,
+                baseUrl,
+                apiKey,
+                modelConfigFingerprint(modelName, baseUrl, apiKey, record.getUpdatedAt())
         );
+    }
+
+    /**
+     * 在事务提交后通知 AI 服务清理模型缓存。
+     */
+    private void notifyModelCacheAfterCommit() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            aiModelCacheClient.invalidateModelCache();
+            return;
+        }
+
+        // 等数据库提交成功后再通知 Python，避免事务回滚时提前清理缓存。
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                aiModelCacheClient.invalidateModelCache();
+            }
+        });
+    }
+
+    /**
+     * 生成模型配置指纹。
+     *
+     * @param modelName 模型名称
+     * @param baseUrl 基础地址
+     * @param apiKey API Key
+     * @param updatedAt 更新时间
+     * @return 配置指纹
+     */
+    private String modelConfigFingerprint(String modelName, String baseUrl, String apiKey, LocalDateTime updatedAt) {
+        String updatedAtText = updatedAt == null ? "" : updatedAt.truncatedTo(ChronoUnit.MILLIS).toString();
+        String rawFingerprint = "model=" + trimToEmpty(modelName)
+                + "\nbaseUrl=" + trimToEmpty(baseUrl)
+                + "\napiKey=" + trimToEmpty(apiKey)
+                + "\nupdatedAt=" + updatedAtText;
+        return sha256Hex(rawFingerprint);
+    }
+
+    /**
+     * 生成 SHA-256 十六进制摘要。
+     *
+     * @param value 原始内容
+     * @return 十六进制摘要
+     */
+    private String sha256Hex(String value) {
+        try {
+            byte[] digest = MessageDigest.getInstance(SHA_256_ALGORITHM).digest(value.getBytes(StandardCharsets.UTF_8));
+            char[] output = new char[digest.length * 2];
+            for (int i = 0; i < digest.length; i++) {
+                int current = digest[i] & 0xff;
+                output[i * 2] = HEX_CHARS[current >>> 4];
+                output[i * 2 + 1] = HEX_CHARS[current & 0x0f];
+            }
+            return new String(output);
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("当前 JDK 不支持 SHA-256 摘要", exception);
+        }
     }
 
     /**

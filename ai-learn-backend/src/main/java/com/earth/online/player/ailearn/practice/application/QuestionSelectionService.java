@@ -4,6 +4,7 @@ import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeQuestionRecord;
+import com.earth.online.player.ailearn.question.application.QuestionTypeCache;
 import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.List;
@@ -28,14 +29,17 @@ public class QuestionSelectionService {
     private static final double RANDOM_WEIGHT_MAX = 1.35D;
 
     private final PracticeMapper practiceMapper;
+    private final QuestionTypeCache questionTypeCache;
 
     /**
      * 创建刷题抽题策略服务。
      *
      * @param practiceMapper 刷题仓储
+     * @param questionTypeCache 题目分类缓存
      */
-    public QuestionSelectionService(PracticeMapper practiceMapper) {
+    public QuestionSelectionService(PracticeMapper practiceMapper, QuestionTypeCache questionTypeCache) {
         this.practiceMapper = practiceMapper;
+        this.questionTypeCache = questionTypeCache;
     }
 
     /**
@@ -44,7 +48,7 @@ public class QuestionSelectionService {
      * @return 分类列表
      */
     public List<String> findQuestionTypes() {
-        return practiceMapper.findQuestionTypes();
+        return questionTypeCache.findQuestionTypes();
     }
 
     /**
@@ -81,7 +85,7 @@ public class QuestionSelectionService {
      * @return 分类列表
      */
     public List<String> mergeRequestedTypes(String content, List<String> selectedTypes) {
-        List<String> availableTypes = practiceMapper.findQuestionTypes();
+        List<String> availableTypes = questionTypeCache.findQuestionTypes();
         List<String> normalizedSelected = normalizeTypes(selectedTypes);
         List<String> mentionedTypes = availableTypes.stream()
                 .filter(type -> content.toUpperCase(Locale.ROOT).contains(type.toUpperCase(Locale.ROOT)))

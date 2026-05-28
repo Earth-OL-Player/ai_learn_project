@@ -11,7 +11,7 @@ import com.earth.online.player.ailearn.common.security.AuthContext;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
-import com.earth.online.player.ailearn.system.infrastructure.SystemSettingMapper;
+import com.earth.online.player.ailearn.system.application.SystemSettingCache;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
 import java.time.OffsetDateTime;
@@ -41,22 +41,22 @@ public class AdminUserService {
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
-    private final SystemSettingMapper systemSettingMapper;
+    private final SystemSettingCache systemSettingCache;
 
     /**
      * 创建管理员用户管理服务。
      *
      * @param userMapper 用户仓储
      * @param passwordEncoder 密码编码器
-     * @param systemSettingMapper 系统设置仓储
+     * @param systemSettingCache 系统设置缓存
      */
     public AdminUserService(
             UserMapper userMapper,
             PasswordEncoder passwordEncoder,
-            SystemSettingMapper systemSettingMapper) {
+            SystemSettingCache systemSettingCache) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
-        this.systemSettingMapper = systemSettingMapper;
+        this.systemSettingCache = systemSettingCache;
     }
 
     /**
@@ -158,7 +158,7 @@ public class AdminUserService {
     public UserLimitResponse updateUserLimit(UserLimitRequest request) {
         requireSuperAdmin();
         int maxUsers = normalizeMaxUsers(request == null ? null : request.maxUsers());
-        systemSettingMapper.upsertValue(MAX_USERS_SETTING_KEY, String.valueOf(maxUsers));
+        systemSettingCache.upsertValue(MAX_USERS_SETTING_KEY, String.valueOf(maxUsers));
         return new UserLimitResponse(maxUsers, userMapper.countActiveUsers());
     }
 
@@ -168,7 +168,7 @@ public class AdminUserService {
      * @return 最大用户数
      */
     public int resolveMaxUsers() {
-        String value = systemSettingMapper.findValue(MAX_USERS_SETTING_KEY);
+        String value = systemSettingCache.findValue(MAX_USERS_SETTING_KEY);
         if (!StringUtils.hasText(value)) {
             return DEFAULT_MAX_USERS;
         }

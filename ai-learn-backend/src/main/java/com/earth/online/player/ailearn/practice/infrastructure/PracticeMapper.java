@@ -14,19 +14,6 @@ import org.apache.ibatis.annotations.Update;
 public interface PracticeMapper {
 
     /**
-     * 查询可用题目分类。
-     *
-     * @return 分类列表
-     */
-    @Select("""
-            SELECT DISTINCT question_type
-            FROM questions
-            WHERE deleted = 0
-            ORDER BY question_type ASC
-            """)
-    List<String> findQuestionTypes();
-
-    /**
      * 查询候选题目。
      *
      * @param userId 用户ID

@@ -365,6 +365,10 @@ public class PracticeAiClient {
         configNode.put("model", modelConfig.model() == null ? "" : modelConfig.model());
         configNode.put("baseUrl", modelConfig.baseUrl() == null ? "" : modelConfig.baseUrl());
         configNode.put("apiKey", modelConfig.apiKey() == null ? "" : modelConfig.apiKey());
+        configNode.put(
+                "configFingerprint",
+                modelConfig.configFingerprint() == null ? "" : modelConfig.configFingerprint()
+        );
         payload.set("modelConfig", configNode);
     }
 
