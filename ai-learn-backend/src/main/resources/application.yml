@@ -33,9 +33,9 @@ app:
     token: ${AI_SERVICE_TOKEN:AI_SERVICE_TOKEN占位符}
     timeout-seconds: ${AI_SERVICE_TIMEOUT_SECONDS:15}
     stream-executor:
-      core-size: ${AI_STREAM_EXECUTOR_CORE_SIZE:4}
-      max-size: ${AI_STREAM_EXECUTOR_MAX_SIZE:8}
-      queue-capacity: ${AI_STREAM_EXECUTOR_QUEUE_CAPACITY:32}
+      core-size: ${AI_STREAM_EXECUTOR_CORE_SIZE:8}
+      max-size: ${AI_STREAM_EXECUTOR_MAX_SIZE:16}
+      queue-capacity: ${AI_STREAM_EXECUTOR_QUEUE_CAPACITY:64}
       keep-alive-seconds: ${AI_STREAM_EXECUTOR_KEEP_ALIVE_SECONDS:60}
       await-termination-seconds: ${AI_STREAM_EXECUTOR_AWAIT_TERMINATION_SECONDS:5}
   model-authorization:

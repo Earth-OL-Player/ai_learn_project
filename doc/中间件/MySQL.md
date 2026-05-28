@@ -1,9 +1,9 @@
 # MySQL 中间件说明
 
-版本：v1.23
-日期：2026-05-24
+版本：v1.24
+日期：2026-05-28
 适用工程：`ai-learn-backend`  
-适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、`sprint202627` 模型权益兑换与模型配置、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心、容量限制和模型权益
+适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、`sprint202627` 模型权益兑换与模型配置、`sprint202630` 性能组合索引优化、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心、容量限制和模型权益
 
 ## 1. 用途
 
@@ -25,6 +25,7 @@ MySQL 是项目的业务主库，用于保存用户注册登录数据、用户�
 - `model_configs` 保存初级、高级、超级三档模型的 model、baseUrl 和 apiKey；真实 apiKey 只能由超级管理员在管理端维护，禁止写入公开文档。
 - `redemption_codes` 保存模型权益兑换码，兑换码字段使用大小写敏感排序规则。
 - `user_model_entitlements` 保存用户高级/超级模型月度和永久权益，月度剩余天数由后端在查询、兑换和 AI 调用时懒结算。
+- `sprint202630` 后，`V10__add_performance_indexes.sql` 为题库、刷题统计、评论、建议、用户后台和兑换码后台补充组合索引。
 
 ## 2. 推荐版本
 
@@ -161,6 +162,8 @@ SHOW INDEX FROM users;
 SHOW INDEX FROM suggestions;
 SHOW INDEX FROM comments;
 SHOW INDEX FROM questions;
+SHOW INDEX FROM user_question_stats;
+SHOW INDEX FROM redemption_codes;
 SHOW INDEX FROM invalidated_tokens;
 SELECT id, username, gender, super_admin FROM users WHERE username = '本地用户名占位符';
 ```
@@ -169,7 +172,7 @@ SELECT id, username, gender, super_admin FROM users WHERE username = '本地用�
 
 1. 设置本地环境变量 `DATABASE_PASSWORD` 和 `JWT_SECRET`。
 2. 启动 `ai-learn-backend`。
-3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V6__create_model_authorization_tables.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表、当前题多轮讨论记忆字段和 JWT 失效记录。
+3. 确认 Flyway 已执行当前仓库最新 migration，至少包含 `V10__add_performance_indexes.sql`；历史归档库还应包含用户、互动、题库、刷题、RAG、成长徽章、超级管理员标识、当前题答案记忆字段、修仙境界默认值刷新、建议评论区评论流重构、刷题勋章强联动、系统设置表、当前题多轮讨论记忆字段和 JWT 失效记录。
 4. 调用 `/api/v1/auth/register` 注册用户。
 5. 查询 `users.password_hash`，确认保存的是 BCrypt 哈希而不是明文密码。
 6. 调用 `/api/v1/auth/login` 获取 token。
@@ -779,3 +782,54 @@ PUT  /api/v1/admin/model-configs/PRO
 - 兑换码属于付费权益凭证，导出文件不得上传到公开仓库或公共网盘。
 - 兑换码大小写敏感，人工排查时必须使用 `BINARY code = '<兑换码占位符>'` 精确查询。
 - 生产环境不得手工批量修改用户权益状态；特殊处理必须先备份并明确用户、等级和权益类型。
+
+## 20. sprint202630 性能组合索引说明
+
+本迭代新增 `V10__add_performance_indexes.sql`，用于匹配现有 Mapper 中的默认分页、热门排序、个人统计和兑换码后台筛选 SQL。
+
+新增内容：
+
+| 表 | 索引 | 支持场景 |
+| --- | --- | --- |
+| `questions` | `idx_questions_deleted_created_id` | 题库默认分页按创建时间排序。 |
+| `questions` | `idx_questions_deleted_id` | 题库管理端按主键分页。 |
+| `questions` | `idx_questions_deleted_importance_id` | AI 刷题候选题默认按重要度截取。 |
+| `questions` | `idx_questions_deleted_type_importance_id` | 题型过滤后的刷题候选题和面经文档读取。 |
+| `user_question_stats` | `idx_user_question_stats_user_answer_last_id` | 个人刷题记录分页和统计。 |
+| `comments` | `idx_comments_deleted_parent_created_id` | 父评论默认排序、子评论计数和子评论查询。 |
+| `comments` | `idx_comments_deleted_parent_like_created_id` | 父评论热门排序。 |
+| `suggestions` | `idx_suggestions_deleted_created_id` | 建议默认排序。 |
+| `suggestions` | `idx_suggestions_deleted_like_created_id` | 建议热门排序。 |
+| `users` | `idx_users_deleted_id` | 用户后台默认分页。 |
+| `redemption_codes` | `idx_redemption_codes_deleted_status_type_created_id` | 兑换码后台状态、类型筛选分页和导出。 |
+
+本地验证 SQL：
+
+```sql
+SELECT version, description, success FROM flyway_schema_history WHERE version = '10';
+SHOW INDEX FROM questions WHERE Key_name IN ('idx_questions_deleted_created_id', 'idx_questions_deleted_id', 'idx_questions_deleted_importance_id', 'idx_questions_deleted_type_importance_id');
+SHOW INDEX FROM user_question_stats WHERE Key_name = 'idx_user_question_stats_user_answer_last_id';
+SHOW INDEX FROM comments WHERE Key_name IN ('idx_comments_deleted_parent_created_id', 'idx_comments_deleted_parent_like_created_id');
+SHOW INDEX FROM suggestions WHERE Key_name IN ('idx_suggestions_deleted_created_id', 'idx_suggestions_deleted_like_created_id');
+SHOW INDEX FROM users WHERE Key_name = 'idx_users_deleted_id';
+SHOW INDEX FROM redemption_codes WHERE Key_name = 'idx_redemption_codes_deleted_status_type_created_id';
+```
+
+本地联调场景：
+
+```text
+GET /api/v1/questions?pageNo=1&pageSize=10
+GET /api/v1/practice/questions/types
+GET /api/v1/users/me/question-stats?pageNo=1&pageSize=10
+GET /api/v1/comments?pageNo=1&pageSize=10&sort=hot
+GET /api/v1/suggestions?pageNo=1&pageSize=10&sort=latest
+GET /api/v1/admin/users?pageNo=1&pageSize=10
+GET /api/v1/admin/redemption-codes?pageNo=1&pageSize=10
+```
+
+部署注意事项：
+
+- 发布前必须先备份 MySQL，并确认 Flyway 自动执行 V10 成功。
+- 本次只新增普通 BTree 组合索引，不新增外键、FULLTEXT 或新中间件。
+- `%keyword%` 模糊搜索不能充分利用普通 BTree 索引，默认列表和弱筛选路径才是主要收益点。
+- 生产发布建议选择低峰期执行，发布后通过 TDSQL 慢 SQL 和 `EXPLAIN` 观察索引命中情况。

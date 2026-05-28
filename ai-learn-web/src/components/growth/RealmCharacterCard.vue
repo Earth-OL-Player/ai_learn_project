@@ -94,8 +94,8 @@ function buildCharacterImagePath(rank: string, gender: CharacterAssetGender): st
   const assetConfig = CHARACTER_ASSET_CONFIG[gender];
   const imageConfig = RANK_CHARACTER_IMAGE_MAP[rank] || DEFAULT_RANK_CHARACTER_IMAGE;
 
-  // 文件名遵循 male/female_lv等级范围_段位拼音.png 的资源命名规则。
-  return `/rank-characters/${assetConfig.directory}/${assetConfig.prefix}_lv${imageConfig.levelRange}_${imageConfig.pinyin}.png`;
+  // 文件名遵循 male/female_lv等级范围_段位拼音.webp 的资源命名规则。
+  return `/rank-characters/${assetConfig.directory}/${assetConfig.prefix}_lv${imageConfig.levelRange}_${imageConfig.pinyin}.webp`;
 }
 </script>
 
