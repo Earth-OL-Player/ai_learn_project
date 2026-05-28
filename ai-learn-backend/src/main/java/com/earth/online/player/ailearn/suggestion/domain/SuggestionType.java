@@ -17,6 +17,12 @@ public enum SuggestionType {
     /** 内容建议。 */
     CONTENT("内容建议");
 
+    /** 建议类型请求参数正则。 */
+    public static final String TYPE_PATTERN = "FEATURE|EXPERIENCE|BUG|CONTENT";
+
+    /** 建议类型不合法提示。 */
+    public static final String INVALID_TYPE_MESSAGE = "建议类型不合法";
+
     private final String text;
 
     /**

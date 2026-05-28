@@ -2,6 +2,7 @@ package com.earth.online.player.ailearn.practice.application;
 
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeQuestionRecord;
 import com.earth.online.player.ailearn.question.application.QuestionTypeCache;
@@ -20,7 +21,6 @@ import org.springframework.util.StringUtils;
 public class QuestionSelectionService {
 
     private static final double BASE_WEIGHT = 1.0D;
-    private static final double MAX_PERCENT_SCORE = 100.0D;
     private static final double IMPORTANCE_WEIGHT_FACTOR = 3.0D;
     private static final double ANSWER_COUNT_WEIGHT_FACTOR = 4.0D;
     private static final double BEST_SCORE_WEIGHT_FACTOR = 5.0D;
@@ -120,8 +120,8 @@ public class QuestionSelectionService {
      * @return 权重
      */
     private double calculateWeight(PracticeQuestionRecord question) {
-        int answeredCount = safeInt(question.getAnsweredCount());
-        int bestScore = safeInt(question.getBestScore());
+        int answeredCount = NumberUtils.toIntOrZero(question.getAnsweredCount());
+        int bestScore = NumberUtils.toIntOrZero(question.getBestScore());
         double importanceScore = safeDouble(question.getImportanceScore());
 
         // 仅保留三个维度：答题次数越少、历史最高分越低、题目重要性越高，权重越高。
@@ -139,17 +139,7 @@ public class QuestionSelectionService {
      * @return 归一化分数
      */
     private double normalizePercent(double score) {
-        return Math.max(0.0D, Math.min(MAX_PERCENT_SCORE, score)) / MAX_PERCENT_SCORE;
-    }
-
-    /**
-     * 获取安全整数。
-     *
-     * @param value 原始值
-     * @return 安全值
-     */
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
+        return NumberUtils.normalizePercentScore(score);
     }
 
     /**

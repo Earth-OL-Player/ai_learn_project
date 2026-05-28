@@ -1,4 +1,5 @@
 import { del, get, post, put } from './http';
+import { buildQueryPath } from './queryParams';
 import type { PageResponse } from '../types/page';
 import type { AdminUserItem, AdminUserPayload, AdminUserQuery, UserLimitInfo } from '../types/admin-user';
 
@@ -6,11 +7,11 @@ import type { AdminUserItem, AdminUserPayload, AdminUserQuery, UserLimitInfo } f
  * 分页查询用户。
  */
 export function fetchAdminUsers(query: AdminUserQuery): Promise<PageResponse<AdminUserItem>> {
-  const params = new URLSearchParams();
-  params.set('pageNo', String(query.pageNo));
-  params.set('pageSize', String(query.pageSize));
-  appendOptionalParam(params, 'keyword', query.keyword);
-  return get<PageResponse<AdminUserItem>>(`/admin/users?${params.toString()}`);
+  return get<PageResponse<AdminUserItem>>(buildQueryPath('/admin/users', {
+    pageNo: query.pageNo,
+    pageSize: query.pageSize,
+    keyword: query.keyword,
+  }));
 }
 
 /**
@@ -46,13 +47,4 @@ export function updateAdminUser(id: string, payload: AdminUserPayload): Promise<
  */
 export function deleteAdminUser(id: string): Promise<boolean> {
   return del<boolean>(`/admin/users/${id}`);
-}
-
-/**
- * 追加可选查询参数。
- */
-function appendOptionalParam(params: URLSearchParams, key: string, value?: string): void {
-  if (value) {
-    params.set(key, value);
-  }
 }

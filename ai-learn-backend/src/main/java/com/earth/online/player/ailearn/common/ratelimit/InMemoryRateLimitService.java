@@ -16,6 +16,7 @@ public class InMemoryRateLimitService {
     private static final long CLEANUP_INTERVAL_MILLIS = Duration.ofMinutes(1).toMillis();
     private static final long COUNTER_TTL_MILLIS = Duration.ofDays(1).toMillis();
     private static final String KEY_SEPARATOR = ":";
+    private static final String UNAVAILABLE_MESSAGE = "当前操作暂时不可用，请稍后重试";
 
     private final Map<String, WindowCounter> frequencyCounters = new ConcurrentHashMap<>();
     private final Map<String, AtomicInteger> concurrentCounters = new ConcurrentHashMap<>();
@@ -31,7 +32,7 @@ public class InMemoryRateLimitService {
      */
     public void checkFrequency(String ruleName, String identity, int maxRequests, int windowSeconds) {
         if (maxRequests <= 0 || windowSeconds <= 0) {
-            throw new RateLimitExceededException("当前操作暂时不可用，请稍后重试");
+            throw new RateLimitExceededException(UNAVAILABLE_MESSAGE);
         }
 
         // 定期清理过期窗口，避免内存级过渡方案长期运行后堆积无效键。
@@ -56,7 +57,7 @@ public class InMemoryRateLimitService {
      */
     public RateLimitLease acquireConcurrency(String ruleName, String identity, int maxConcurrent) {
         if (maxConcurrent <= 0) {
-            throw new RateLimitExceededException("当前操作暂时不可用，请稍后重试");
+            throw new RateLimitExceededException(UNAVAILABLE_MESSAGE);
         }
 
         String counterKey = buildCounterKey(ruleName, identity);

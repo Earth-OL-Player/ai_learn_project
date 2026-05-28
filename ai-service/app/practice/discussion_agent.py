@@ -14,6 +14,7 @@ from app.practice.prompts import DISCUSSION_SYSTEM_PROMPT, PracticePromptBuilder
 from app.practice.provider_adapter import PracticeProviderAdapter
 from app.practice.sse import PracticeSseEncoder
 from app.schemas.practice import PracticeDiscussRequest, PracticeDiscussResponse
+from app.time_utils import elapsed_milliseconds
 
 
 @dataclass
@@ -56,7 +57,7 @@ class PracticeDiscussionAgent:
         try:
             yield from self._stream_discuss_by_agent(request, messages, trace_id, start_time)
         except Exception as exc:  # noqa: BLE001 - Agent 流式异常统一进入本地兜底。
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            elapsed_ms = elapsed_milliseconds(start_time)
             logger.warning(
                 "【AI智能刷题流程-流式讨论】Agent 流式讨论失败：traceId=%s durationMs=%s error=%s",
                 trace_id,
@@ -65,8 +66,7 @@ class PracticeDiscussionAgent:
                 exc_info=True,
             )
             fallback_response = self._local_fallback.discuss(request)
-            yield self._sse_encoder.message(fallback_response.reply)
-            yield self._sse_encoder.done()
+            yield from self._sse_encoder.complete_message(fallback_response.reply)
 
     def generate_discuss_reply(self, request: PracticeDiscussRequest, trace_id: str) -> PracticeDiscussResponse | None:
         """使用 LangChain Agent 非流式为讨论链路兜底生成完整回复。"""
@@ -92,7 +92,7 @@ class PracticeDiscussionAgent:
                 return None
 
             # Agent 流式无可见片段时记录完整返回，排查时可直接看到最终回复内容。
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            elapsed_ms = elapsed_milliseconds(start_time)
             self._llm_logger.log_response(trace_id, "本题讨论-Agent非流式兜底", {"reply": reply, "rawResult": result}, elapsed_ms)
             logger.info(
                 "【AI智能刷题流程-讨论】Agent 非流式讨论兜底完成：traceId=%s durationMs=%s replyChars=%s",
@@ -102,7 +102,7 @@ class PracticeDiscussionAgent:
             )
             return PracticeDiscussResponse(reply=reply)
         except Exception as exc:  # noqa: BLE001 - Agent 和图执行异常统一进入本地兜底。
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            elapsed_ms = elapsed_milliseconds(start_time)
             logger.warning(
                 "【AI智能刷题流程-讨论】Agent 非流式讨论兜底失败，使用本地兜底：traceId=%s durationMs=%s error=%s",
                 trace_id,
@@ -140,11 +140,12 @@ class PracticeDiscussionAgent:
             logger.warning("Agent 流式链路无可见片段，切换 Agent 非流式兜底：traceId=%s", trace_id)
             fallback_response = self.generate_discuss_reply(request, trace_id) or self._local_fallback.discuss(request)
             full_reply_parts.append(fallback_response.reply)
-            yield self._sse_encoder.message(fallback_response.reply)
-        yield self._sse_encoder.done()
+            yield from self._sse_encoder.complete_message(fallback_response.reply)
+        else:
+            yield self._sse_encoder.done()
 
         # 流式完成后只记录汇总结果，避免 token 级日志刷屏。
-        elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+        elapsed_ms = elapsed_milliseconds(start_time)
         full_reply = "".join(full_reply_parts)
         self._llm_logger.log_response(trace_id, "本题讨论-Agent流式汇总", {"reply": full_reply}, elapsed_ms)
         logger.info(

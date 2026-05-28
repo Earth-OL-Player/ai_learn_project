@@ -17,7 +17,6 @@ import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
-import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 /**
@@ -31,9 +30,6 @@ public class AuthFilter extends OncePerRequestFilter {
     public static final String REFRESH_TOKEN_HEADER = "X-Refresh-Token";
 
     private static final Logger LOGGER = LoggerFactory.getLogger(AuthFilter.class);
-
-    private static final String AUTHORIZATION_HEADER = "Authorization";
-    private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenService jwtTokenService;
     private final TokenInvalidationService tokenInvalidationService;
@@ -153,7 +149,8 @@ public class AuthFilter extends OncePerRequestFilter {
      * @return JWT 解析结果
      */
     private JwtParseResult parseActiveToken(HttpServletRequest request) {
-        JwtParseResult parseResult = jwtTokenService.parseTokenDetail(resolveToken(request));
+        JwtParseResult parseResult = jwtTokenService.parseTokenDetail(
+                AuthSupport.resolveBearerToken(request.getHeader(AuthSupport.AUTHORIZATION_HEADER)));
         tokenInvalidationService.ensureTokenActive(parseResult.tokenId());
         AuthContext.setUser(parseResult.user());
         return parseResult;
@@ -166,8 +163,7 @@ public class AuthFilter extends OncePerRequestFilter {
      * @return 是否携带 Bearer token
      */
     private boolean hasBearerToken(HttpServletRequest request) {
-        String authorization = request.getHeader(AUTHORIZATION_HEADER);
-        return StringUtils.hasText(authorization) && authorization.startsWith(BEARER_PREFIX);
+        return AuthSupport.hasBearerToken(request.getHeader(AuthSupport.AUTHORIZATION_HEADER));
     }
 
     /**
@@ -223,20 +219,6 @@ public class AuthFilter extends OncePerRequestFilter {
      */
     private boolean hasPathPrefix(String requestUri, String prefix) {
         return requestUri.equals(prefix) || requestUri.startsWith(prefix + "/");
-    }
-
-    /**
-     * 从请求头解析 Bearer token。
-     *
-     * @param request HTTP 请求
-     * @return token 字符串
-     */
-    private String resolveToken(HttpServletRequest request) {
-        String authorization = request.getHeader(AUTHORIZATION_HEADER);
-        if (!StringUtils.hasText(authorization) || !authorization.startsWith(BEARER_PREFIX)) {
-            throw new JwtUnauthorizedException("登录后即可使用该功能");
-        }
-        return authorization.substring(BEARER_PREFIX.length()).trim();
     }
 
     /**

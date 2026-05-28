@@ -82,6 +82,9 @@ import { fetchMyGrowth } from '../../../api/practice';
 import RealmCharacterCard from '../../../components/growth/RealmCharacterCard.vue';
 import { useAuthStore } from '../../../stores/auth';
 import type { BadgeInfo, GrowthInfo } from '../../../types/growth';
+import { resolveErrorMessage } from '../../../utils/errorMessage';
+import { clampPercentValue, roundNumber } from '../../../utils/numberDisplay';
+import { resolveUserDisplayName } from '../../../utils/userDisplay';
 
 interface BadgeGroup {
   category: string;
@@ -100,7 +103,7 @@ const growth = ref<GrowthInfo | null>(null);
 const authStore = useAuthStore();
 
 // 展示角色卡昵称时优先使用用户昵称，保持与个人中心一致。
-const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
+const displayName = computed(() => resolveUserDisplayName(authStore.user));
 
 // 将成长指标整理为卡片数据，便于模板保持简洁。
 const growthStats = computed(() => {
@@ -112,7 +115,7 @@ const growthStats = computed(() => {
   return [
     { title: '当前总经验', value: growth.value.currentExperience },
     { title: '累计答题', value: growth.value.answeredCount },
-    { title: '平均得分', value: Number(growth.value.averageScore.toFixed(1)) },
+    { title: '平均得分', value: roundNumber(growth.value.averageScore) },
     { title: '学习天数', value: growth.value.streakDays, suffix: '天' },
   ];
 });
@@ -143,7 +146,7 @@ const levelProgressPercent = computed(() => {
 
   // 限制百分比范围，防止异常数据撑满或反向展示进度条。
   const progress = levelTotalExperience <= 0 ? 0 : (levelEarnedExperience / levelTotalExperience) * 100;
-  return Math.min(100, Math.max(0, Number(progress.toFixed(1))));
+  return clampPercentValue(progress, 1);
 });
 
 /**
@@ -154,7 +157,7 @@ async function loadGrowth(): Promise<void> {
   try {
     growth.value = await fetchMyGrowth();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '成长信息加载失败');
+    ElMessage.error(resolveErrorMessage(error, '成长信息加载失败'));
   } finally {
     loading.value = false;
   }

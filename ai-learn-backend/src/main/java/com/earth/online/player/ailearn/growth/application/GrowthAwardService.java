@@ -1,5 +1,6 @@
 package com.earth.online.player.ailearn.growth.application;
 
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
 import com.earth.online.player.ailearn.growth.domain.BadgeRule;
 import com.earth.online.player.ailearn.growth.infrastructure.BadgeRecord;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
@@ -7,7 +8,6 @@ import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
 import java.time.DayOfWeek;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -122,7 +122,7 @@ public class GrowthAwardService {
      * @return 合并后的徽章记录
      */
     private static BadgeRecord mergeAcquiredStatus(BadgeRecord badge, BadgeRecord acquiredBadge) {
-        BadgeRecord mergedBadge = copyBadgeRecord(badge);
+        BadgeRecord mergedBadge = BadgeRecordCopies.copy(badge);
         if (acquiredBadge == null) {
             mergedBadge.setAcquired(Boolean.FALSE);
             mergedBadge.setAcquiredAt(null);
@@ -133,24 +133,6 @@ public class GrowthAwardService {
         mergedBadge.setAcquired(Boolean.TRUE);
         mergedBadge.setAcquiredAt(acquiredBadge.getAcquiredAt());
         return mergedBadge;
-    }
-
-    /**
-     * 复制徽章记录。
-     *
-     * @param source 原始记录
-     * @return 复制记录
-     */
-    private static BadgeRecord copyBadgeRecord(BadgeRecord source) {
-        BadgeRecord target = new BadgeRecord();
-        target.setId(source.getId());
-        target.setName(source.getName());
-        target.setDescription(source.getDescription());
-        target.setIcon(source.getIcon());
-        target.setRuleCode(source.getRuleCode());
-        target.setAcquired(source.getAcquired());
-        target.setAcquiredAt(source.getAcquiredAt());
-        return target;
     }
 
     /**
@@ -284,7 +266,7 @@ public class GrowthAwardService {
                 rule.categoryName(),
                 rule.hidden(),
                 Boolean.TRUE.equals(record.getAcquired()),
-                record.getAcquiredAt() == null ? null : record.getAcquiredAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                DateTimeUtils.toOffsetDateTime(record.getAcquiredAt())
         );
     }
 }

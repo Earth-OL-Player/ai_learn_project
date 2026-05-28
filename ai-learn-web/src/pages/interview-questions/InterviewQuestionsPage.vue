@@ -79,6 +79,8 @@ import 'element-plus/es/components/skeleton/style/css';
 import { onBeforeUnmount, onMounted, ref } from 'vue';
 import { fetchInterviewQuestionDocument, fetchPublicQuestionTypes } from '../../api/questions';
 import type { QuestionDetail } from '../../types/question';
+import { resolveErrorMessage } from '../../utils/errorMessage';
+import { formatNumberDisplay as formatNumber } from '../../utils/numberDisplay';
 import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
 const activeQuestionType = ref('');
@@ -105,7 +107,7 @@ async function initializeInterviewDocument(): Promise<void> {
     activeQuestionType.value = questionTypes.value[0] || '';
     questionDetails.value = activeQuestionType.value ? await fetchInterviewQuestionDocument(activeQuestionType.value) : [];
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '热门面试题加载失败');
+    ElMessage.error(resolveErrorMessage(error, '热门面试题加载失败'));
   } finally {
     loading.value = false;
   }
@@ -141,7 +143,7 @@ async function loadInterviewDocumentByCategory(questionType: string): Promise<vo
     questionDetails.value = await fetchInterviewQuestionDocument(questionType);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '热门面试题加载失败');
+    ElMessage.error(resolveErrorMessage(error, '热门面试题加载失败'));
   } finally {
     loading.value = false;
   }
@@ -176,13 +178,6 @@ function convertAnswerHeadingToBold(line: string): string {
   }
 
   return `**${headingMatch[2].trim()}**`;
-}
-
-/**
- * 格式化数值展示，去除无意义的小数零。
- */
-function formatNumber(value: number): string {
-  return Number.isInteger(value) ? String(value) : value.toFixed(1).replace(/\.0$/, '');
 }
 
 /**

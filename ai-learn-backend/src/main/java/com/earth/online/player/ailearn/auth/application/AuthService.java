@@ -10,6 +10,8 @@ import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.JwtTokenService;
 import com.earth.online.player.ailearn.common.security.TokenInvalidationService;
 import com.earth.online.player.ailearn.system.application.SystemSettingCache;
+import com.earth.online.player.ailearn.user.application.UserDefaults;
+import com.earth.online.player.ailearn.user.application.UserProfileValidator;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.domain.UserSummary;
 import com.earth.online.player.ailearn.user.domain.UserSummaryConverter;
@@ -60,9 +62,9 @@ public class AuthService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AuthResponse register(RegisterRequest request) {
-        String username = request.username().trim();
-        String nickname = request.nickname().trim();
-        String email = request.email().trim();
+        String username = UserProfileValidator.normalizeUsername(request.username());
+        String nickname = UserProfileValidator.normalizeNickname(request.nickname());
+        String email = UserProfileValidator.normalizeEmail(request.email());
         if (userMapper.findByUsernameAny(username) != null) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "用户名已存在，请更换后重试");
         }
@@ -82,9 +84,7 @@ public class AuthService {
         user.setGender(null);
         user.setMotto(null);
         user.setPasswordHash(passwordEncoder.encode(request.password()));
-        user.setExperience(AuthConstants.DEFAULT_EXPERIENCE);
-        user.setLevelCode(AuthConstants.DEFAULT_LEVEL_CODE);
-        user.setRankCode(AuthConstants.DEFAULT_RANK_CODE);
+        UserDefaults.applyNewUserGrowth(user);
         user.setSuperAdmin(AuthConstants.DEFAULT_SUPER_ADMIN);
         userMapper.insert(user);
 

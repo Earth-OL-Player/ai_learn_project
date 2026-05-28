@@ -9,7 +9,7 @@
             aria-label="用户名"
             autocomplete="username"
             placeholder="3-32位字母、数字、下划线"
-            maxlength="32"
+            :maxlength="USER_PROFILE_LIMITS.usernameMaxLength"
             size="large"
             clearable
           />
@@ -21,7 +21,7 @@
             autocomplete="new-password"
             placeholder="8-64位密码"
             type="password"
-            maxlength="64"
+            :maxlength="USER_PROFILE_LIMITS.passwordMaxLength"
             size="large"
             show-password
           />
@@ -33,7 +33,7 @@
           aria-label="昵称"
           autocomplete="nickname"
           placeholder="必填，1-64位且不可重复"
-          maxlength="64"
+          :maxlength="USER_PROFILE_LIMITS.nicknameMaxLength"
           size="large"
           clearable
         />
@@ -44,7 +44,7 @@
           aria-label="邮箱"
           autocomplete="email"
           placeholder="必填，例如 demo@example.com，且不可重复"
-          maxlength="128"
+          :maxlength="USER_PROFILE_LIMITS.emailMaxLength"
           size="large"
           clearable
         />
@@ -53,10 +53,12 @@
     </el-form>
 
     <template #footer>
-      <div class="auth-dialog-footer modern-auth-footer">
-        <el-button round size="large" @click="visible = false">取消</el-button>
-        <el-button type="primary" round size="large" :loading="submitting" @click="submitRegister">注册并登录</el-button>
-      </div>
+      <AuthDialogFooter
+        confirm-text="注册并登录"
+        :loading="submitting"
+        @cancel="visible = false"
+        @confirm="submitRegister"
+      />
     </template>
   </el-dialog>
 </template>
@@ -65,12 +67,21 @@
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { reactive, ref } from 'vue';
 import { useAuthStore } from '../../stores/auth';
+import { resolveErrorMessage } from '../../utils/errorMessage';
+import {
+  isValidEmail,
+  isValidNickname,
+  isValidPasswordLength,
+  isValidUsername,
+  USER_PROFILE_LIMITS,
+  USER_PROFILE_MESSAGES,
+} from '../../utils/userProfileValidation';
+import AuthDialogFooter from './AuthDialogFooter.vue';
 
 const visible = defineModel<boolean>({ required: true });
 const authStore = useAuthStore();
 const submitting = ref(false);
 const formError = ref('');
-const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 // 注册表单与后端接口字段保持一致。
 const form = reactive({
@@ -84,28 +95,31 @@ const form = reactive({
  * 校验注册表单。
  */
 function validateForm(): boolean {
-  if (!/^[A-Za-z0-9_]{3,32}$/.test(form.username)) {
-    formError.value = '用户名仅支持3到32位字母、数字和下划线';
-    ElMessage.warning(formError.value);
-    return false;
+  if (!isValidUsername(form.username)) {
+    return rejectForm(USER_PROFILE_MESSAGES.usernameInvalid);
   }
-  if (form.password.length < 8 || form.password.length > 64) {
-    formError.value = '密码长度需为8到64位';
-    ElMessage.warning(formError.value);
-    return false;
+  if (!isValidPasswordLength(form.password)) {
+    return rejectForm(USER_PROFILE_MESSAGES.passwordInvalid);
   }
-  if (!form.nickname || form.nickname.length > 64) {
-    formError.value = '昵称不能为空，且不能超过64位';
-    ElMessage.warning(formError.value);
-    return false;
+  if (!isValidNickname(form.nickname)) {
+    return rejectForm(USER_PROFILE_MESSAGES.nicknameInvalid);
   }
-  if (!emailPattern.test(form.email)) {
-    formError.value = '请输入正确的邮箱地址';
-    ElMessage.warning(formError.value);
-    return false;
+  if (!isValidEmail(form.email)) {
+    return rejectForm(USER_PROFILE_MESSAGES.emailInvalid);
   }
   formError.value = '';
   return true;
+}
+
+/**
+ * 提示注册表单错误。
+ *
+ * @param message 错误提示
+ */
+function rejectForm(message: string): false {
+  formError.value = message;
+  ElMessage.warning(message);
+  return false;
 }
 
 /**
@@ -127,7 +141,7 @@ async function submitRegister(): Promise<void> {
     visible.value = false;
     form.password = '';
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '注册失败，请稍后重试';
+    formError.value = resolveErrorMessage(error, '注册失败，请稍后重试');
     ElMessage.error(formError.value);
   } finally {
     submitting.value = false;

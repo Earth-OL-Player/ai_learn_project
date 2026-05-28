@@ -1,4 +1,5 @@
 import { del, get, getBlob, post, put } from './http';
+import { buildQueryPath, type QueryParams } from './queryParams';
 import type { PageResponse } from '../types/page';
 
 export type RedemptionCodeType =
@@ -37,8 +38,7 @@ export interface AdminRedemptionCodeQuery {
  * 分页查询兑换码。
  */
 export function fetchAdminRedemptionCodes(query: AdminRedemptionCodeQuery): Promise<PageResponse<AdminRedemptionCode>> {
-  const params = buildQueryParams(query);
-  return get<PageResponse<AdminRedemptionCode>>(`/admin/redemption-codes?${params.toString()}`);
+  return get<PageResponse<AdminRedemptionCode>>(buildQueryPath('/admin/redemption-codes', buildRedemptionCodeQuery(query)));
 }
 
 /**
@@ -69,28 +69,18 @@ export function deleteAdminRedemptionCode(id: string): Promise<boolean> {
  * 导出兑换码。
  */
 export function exportAdminRedemptionCodes(query: AdminRedemptionCodeQuery): Promise<Blob> {
-  const params = buildQueryParams(query);
-  return getBlob(`/admin/redemption-codes/export?${params.toString()}`);
+  return getBlob(buildQueryPath('/admin/redemption-codes/export', buildRedemptionCodeQuery(query)));
 }
 
 /**
- * 构造查询参数。
+ * 构造兑换码查询参数。
  */
-function buildQueryParams(query: AdminRedemptionCodeQuery): URLSearchParams {
-  const params = new URLSearchParams();
-  params.set('pageNo', String(query.pageNo));
-  params.set('pageSize', String(query.pageSize));
-  appendOptionalParam(params, 'keyword', query.keyword);
-  appendOptionalParam(params, 'codeType', query.codeType);
-  appendOptionalParam(params, 'status', query.status);
-  return params;
-}
-
-/**
- * 追加可选参数。
- */
-function appendOptionalParam(params: URLSearchParams, key: string, value?: string): void {
-  if (value) {
-    params.set(key, value);
-  }
+function buildRedemptionCodeQuery(query: AdminRedemptionCodeQuery): QueryParams {
+  return {
+    pageNo: query.pageNo,
+    pageSize: query.pageSize,
+    keyword: query.keyword,
+    codeType: query.codeType,
+    status: query.status,
+  };
 }

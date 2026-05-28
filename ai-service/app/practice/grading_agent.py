@@ -9,6 +9,7 @@ from app.practice.model_factory import PracticeModelFactory
 from app.practice.prompts import GRADE_SYSTEM_PROMPT, PracticePromptBuilder
 from app.practice.provider_adapter import PracticeProviderAdapter
 from app.schemas.practice import PracticeAiCallMetrics, PracticeGradeEvaluation, PracticeGradeRequest, PracticeGradeResponse
+from app.time_utils import elapsed_milliseconds
 
 
 @dataclass
@@ -59,7 +60,7 @@ class PracticeGradingAgent:
                 raise ValueError("Agent 未返回结构化评分结果")
 
             # LangChain Agent 结构化输出成功后记录完整评分结果，便于按 traceId 复盘返回。
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            elapsed_ms = elapsed_milliseconds(start_time)
             self._llm_logger.log_response(trace_id, "答案评分-Agent非流式", {"grading": grading, "rawResult": result}, elapsed_ms)
             metrics = self._build_metrics(trace_id, elapsed_ms, True, "", result, request)
             logger.info(
@@ -75,7 +76,7 @@ class PracticeGradingAgent:
             )
             return PracticeGradeAgentResult(grading=grading, metrics=metrics)
         except Exception as exc:  # noqa: BLE001 - Agent、网络和结构化解析异常统一交由 Java 后端兜底。
-            elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+            elapsed_ms = elapsed_milliseconds(start_time)
             metrics = self._build_metrics(trace_id, elapsed_ms, False, self._error_category(exc), None, request)
             logger.warning(
                 "【AI智能刷题流程-评分】Agent 结构化评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s errorCategory=%s error=%s",

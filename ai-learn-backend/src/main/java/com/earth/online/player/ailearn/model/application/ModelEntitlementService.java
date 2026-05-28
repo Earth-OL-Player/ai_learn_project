@@ -7,6 +7,11 @@ import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.AuthContext;
 import com.earth.online.player.ailearn.common.security.AuthSupport;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.common.util.IdRequestUtils;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
+import com.earth.online.player.ailearn.common.util.PageRequestUtils;
+import com.earth.online.player.ailearn.common.util.TextUtils;
 import com.earth.online.player.ailearn.model.domain.AiModelRequestConfig;
 import com.earth.online.player.ailearn.model.domain.ModelAuthorizationProperties;
 import com.earth.online.player.ailearn.model.domain.ModelEntitlementKind;
@@ -26,16 +31,13 @@ import com.earth.online.player.ailearn.model.interfaces.AdminRedemptionCodeUpdat
 import com.earth.online.player.ailearn.model.interfaces.ModelEntitlementStatusResponse;
 import com.earth.online.player.ailearn.model.interfaces.RedeemModelCodeRequest;
 import com.earth.online.player.ailearn.model.interfaces.RedeemModelCodeResponse;
-import com.earth.online.player.ailearn.user.domain.User;
-import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
+import com.earth.online.player.ailearn.user.application.CurrentUserService;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.List;
@@ -52,20 +54,20 @@ import org.springframework.util.StringUtils;
 @Service
 public class ModelEntitlementService {
 
-    private static final int DEFAULT_PAGE_NO = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 100;
     private static final int MAX_GENERATE_QUANTITY = 500;
     private static final int MONTHLY_DAYS = 30;
     private static final int RANDOM_CODE_LENGTH = 12;
     private static final String CODE_CHARS = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz";
     private static final String CSV_HEADER = "code,code_type,code_type_text,status,status_text,used_by_username,used_at,created_at\n";
+    private static final String MODEL_CONFIG_ADMIN_MESSAGE = "仅超级管理员可维护模型配置";
+    private static final String REDEMPTION_CODE_ADMIN_MESSAGE = "仅超级管理员可维护兑换码";
+    private static final String HIGHER_ENTITLEMENT_MESSAGE = "当前权益已高于兑换码，无需兑换";
     private static final String SHA_256_ALGORITHM = "SHA-256";
     private static final char[] HEX_CHARS = "0123456789abcdef".toCharArray();
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final ModelEntitlementMapper modelEntitlementMapper;
-    private final UserMapper userMapper;
+    private final CurrentUserService currentUserService;
     private final ModelAuthorizationProperties authorizationProperties;
     private final AiModelCacheClient aiModelCacheClient;
     private final ModelConfigCache modelConfigCache;
@@ -74,19 +76,19 @@ public class ModelEntitlementService {
      * 创建模型权益应用服务。
      *
      * @param modelEntitlementMapper 模型权益仓储
-     * @param userMapper 用户仓储
+     * @param currentUserService 当前用户服务
      * @param authorizationProperties 授权入口配置
      * @param aiModelCacheClient AI 服务模型缓存客户端
      * @param modelConfigCache 模型配置缓存
      */
     public ModelEntitlementService(
             ModelEntitlementMapper modelEntitlementMapper,
-            UserMapper userMapper,
+            CurrentUserService currentUserService,
             ModelAuthorizationProperties authorizationProperties,
             AiModelCacheClient aiModelCacheClient,
             ModelConfigCache modelConfigCache) {
         this.modelEntitlementMapper = modelEntitlementMapper;
-        this.userMapper = userMapper;
+        this.currentUserService = currentUserService;
         this.authorizationProperties = authorizationProperties;
         this.aiModelCacheClient = aiModelCacheClient;
         this.modelConfigCache = modelConfigCache;
@@ -156,7 +158,7 @@ public class ModelEntitlementService {
      * @return 模型配置列表
      */
     public List<AdminModelConfigResponse> findAdminModelConfigs() {
-        requireSuperAdmin("仅超级管理员可维护模型配置");
+        requireSuperAdmin(MODEL_CONFIG_ADMIN_MESSAGE);
         List<ModelConfigRecord> records = modelConfigCache.findAllModelConfigs();
 
         // 返回固定三档配置，缺失记录时使用系统默认模型名兜底。
@@ -174,13 +176,13 @@ public class ModelEntitlementService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminModelConfigResponse saveAdminModelConfig(String levelCode, AdminModelConfigRequest request) {
-        requireSuperAdmin("仅超级管理员可维护模型配置");
+        requireSuperAdmin(MODEL_CONFIG_ADMIN_MESSAGE);
         ModelLevel level = resolveLevel(levelCode);
         ModelConfigRecord record = new ModelConfigRecord();
         record.setModelLevel(level.name());
         record.setModelName(normalizeModelName(request == null ? null : request.modelName(), level));
-        record.setBaseUrl(trimToNull(request == null ? null : request.baseUrl()));
-        record.setApiKey(trimToNull(request == null ? null : request.apiKey()));
+        record.setBaseUrl(TextUtils.trimToNull(request == null ? null : request.baseUrl()));
+        record.setApiKey(TextUtils.trimToNull(request == null ? null : request.apiKey()));
         modelEntitlementMapper.upsertModelConfig(record);
         ModelConfigRecord savedRecord = modelEntitlementMapper.findModelConfig(level.name());
 
@@ -206,11 +208,11 @@ public class ModelEntitlementService {
             String keyword,
             String codeType,
             String status) {
-        requireSuperAdmin("仅超级管理员可维护兑换码");
-        int safePageNo = normalizePageNo(pageNo);
-        int safePageSize = normalizePageSize(pageSize);
-        int offset = (safePageNo - 1) * safePageSize;
-        String safeKeyword = trimToNull(keyword);
+        requireSuperAdmin(REDEMPTION_CODE_ADMIN_MESSAGE);
+        int safePageNo = PageRequestUtils.normalizePageNo(pageNo);
+        int safePageSize = PageRequestUtils.normalizePageSize(pageSize);
+        int offset = PageRequestUtils.calculateOffset(safePageNo, safePageSize);
+        String safeKeyword = TextUtils.trimToNull(keyword);
         String safeCodeType = normalizeOptionalCodeType(codeType);
         String safeStatus = normalizeOptionalStatus(status);
 
@@ -232,7 +234,7 @@ public class ModelEntitlementService {
      */
     @Transactional(rollbackFor = Exception.class)
     public List<AdminRedemptionCodeResponse> generateRedemptionCodes(AdminRedemptionCodeGenerateRequest request) {
-        requireSuperAdmin("仅超级管理员可维护兑换码");
+        requireSuperAdmin(REDEMPTION_CODE_ADMIN_MESSAGE);
         RedemptionCodeType codeType = resolveCodeType(request == null ? null : request.codeType());
         int quantity = normalizeGenerateQuantity(request == null ? null : request.quantity());
         List<AdminRedemptionCodeResponse> responses = new ArrayList<>();
@@ -256,7 +258,7 @@ public class ModelEntitlementService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminRedemptionCodeResponse updateRedemptionCode(Long id, AdminRedemptionCodeUpdateRequest request) {
-        requireSuperAdmin("仅超级管理员可维护兑换码");
+        requireSuperAdmin(REDEMPTION_CODE_ADMIN_MESSAGE);
         RedemptionCodeRecord record = findRedemptionForAdmin(id);
         if (!RedemptionCodeStatus.UNUSED.name().equals(record.getStatus())) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "已使用兑换码不能修改类型");
@@ -274,7 +276,7 @@ public class ModelEntitlementService {
      */
     @Transactional(rollbackFor = Exception.class)
     public boolean deleteRedemptionCode(Long id) {
-        requireSuperAdmin("仅超级管理员可维护兑换码");
+        requireSuperAdmin(REDEMPTION_CODE_ADMIN_MESSAGE);
         RedemptionCodeRecord record = findRedemptionForAdmin(id);
         if (!RedemptionCodeStatus.UNUSED.name().equals(record.getStatus())) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "已使用兑换码不能删除");
@@ -295,8 +297,8 @@ public class ModelEntitlementService {
      * @return CSV 字节
      */
     public byte[] exportRedemptionCodes(String keyword, String codeType, String status) {
-        requireSuperAdmin("仅超级管理员可维护兑换码");
-        String safeKeyword = trimToNull(keyword);
+        requireSuperAdmin(REDEMPTION_CODE_ADMIN_MESSAGE);
+        String safeKeyword = TextUtils.trimToNull(keyword);
         String safeCodeType = normalizeOptionalCodeType(codeType);
         String safeStatus = normalizeOptionalStatus(status);
         StringBuilder builder = new StringBuilder("\uFEFF").append(CSV_HEADER);
@@ -493,11 +495,11 @@ public class ModelEntitlementService {
      */
     private void validateRedeemAllowed(List<UserModelEntitlementRecord> entitlements, RedemptionCodeType codeType) {
         if (hasActivePermanent(entitlements, ModelLevel.SUPER)) {
-            throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "当前权益已高于兑换码，无需兑换");
+            throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), HIGHER_ENTITLEMENT_MESSAGE);
         }
         if (hasActivePermanent(entitlements, ModelLevel.PRO)
                 && (codeType == RedemptionCodeType.PRO_MONTHLY || codeType == RedemptionCodeType.PRO_PERMANENT)) {
-            throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "当前权益已高于兑换码，无需兑换");
+            throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), HIGHER_ENTITLEMENT_MESSAGE);
         }
         if (codeType == RedemptionCodeType.PRO_PERMANENT_TO_SUPER && !hasActivePermanent(entitlements, ModelLevel.PRO)) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "当前不是高级模型永久用户，无法使用该兑换码");
@@ -798,8 +800,8 @@ public class ModelEntitlementService {
         String modelName = StringUtils.hasText(record.getModelName())
                 ? record.getModelName().trim()
                 : level.defaultModelName();
-        String baseUrl = trimToEmpty(record.getBaseUrl());
-        String apiKey = trimToEmpty(record.getApiKey());
+        String baseUrl = TextUtils.trimToEmpty(record.getBaseUrl());
+        String apiKey = TextUtils.trimToEmpty(record.getApiKey());
 
         // 指纹只透传摘要值，避免 API Key 明文进入 Python 缓存 key 或日志。
         return new AiModelRequestConfig(
@@ -839,9 +841,9 @@ public class ModelEntitlementService {
      */
     private String modelConfigFingerprint(String modelName, String baseUrl, String apiKey, LocalDateTime updatedAt) {
         String updatedAtText = updatedAt == null ? "" : updatedAt.truncatedTo(ChronoUnit.MILLIS).toString();
-        String rawFingerprint = "model=" + trimToEmpty(modelName)
-                + "\nbaseUrl=" + trimToEmpty(baseUrl)
-                + "\napiKey=" + trimToEmpty(apiKey)
+        String rawFingerprint = "model=" + TextUtils.trimToEmpty(modelName)
+                + "\nbaseUrl=" + TextUtils.trimToEmpty(baseUrl)
+                + "\napiKey=" + TextUtils.trimToEmpty(apiKey)
                 + "\nupdatedAt=" + updatedAtText;
         return sha256Hex(rawFingerprint);
     }
@@ -881,8 +883,8 @@ public class ModelEntitlementService {
                 .append(csv(record.getStatus())).append(',')
                 .append(csv(statusText(record.getStatus()))).append(',')
                 .append(csv(record.getUsedByUsername())).append(',')
-                .append(csv(toOffsetDateTime(record.getUsedAt()))).append(',')
-                .append(csv(toOffsetDateTime(record.getCreatedAt()))).append('\n');
+                .append(csv(DateTimeUtils.toOffsetDateTime(record.getUsedAt()))).append(',')
+                .append(csv(DateTimeUtils.toOffsetDateTime(record.getCreatedAt()))).append('\n');
     }
 
     /**
@@ -911,9 +913,9 @@ public class ModelEntitlementService {
                 level.name(),
                 level.label(),
                 record == null || !StringUtils.hasText(record.getModelName()) ? level.defaultModelName() : record.getModelName(),
-                record == null ? "" : trimToEmpty(record.getBaseUrl()),
-                record == null ? "" : trimToEmpty(record.getApiKey()),
-                record == null ? null : toOffsetDateTime(record.getUpdatedAt())
+                record == null ? "" : TextUtils.trimToEmpty(record.getBaseUrl()),
+                record == null ? "" : TextUtils.trimToEmpty(record.getApiKey()),
+                record == null ? null : DateTimeUtils.toOffsetDateTime(record.getUpdatedAt())
         );
     }
 
@@ -935,8 +937,8 @@ public class ModelEntitlementService {
                 statusText(record.getStatus()),
                 record.getUsedByUserId() == null ? "" : String.valueOf(record.getUsedByUserId()),
                 record.getUsedByUsername(),
-                toOffsetDateTime(record.getUsedAt()),
-                toOffsetDateTime(record.getCreatedAt()),
+                DateTimeUtils.toOffsetDateTime(record.getUsedAt()),
+                DateTimeUtils.toOffsetDateTime(record.getCreatedAt()),
                 unused,
                 unused
         );
@@ -949,10 +951,8 @@ public class ModelEntitlementService {
      * @return 兑换码记录
      */
     private RedemptionCodeRecord findRedemptionForAdmin(Long id) {
-        if (id == null || id < 1) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "兑换码ID不合法");
-        }
-        RedemptionCodeRecord record = modelEntitlementMapper.findRedemptionByIdForUpdate(id);
+        Long safeId = IdRequestUtils.requirePositive(id, "兑换码ID不合法");
+        RedemptionCodeRecord record = modelEntitlementMapper.findRedemptionByIdForUpdate(safeId);
         if (record == null) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "兑换码不存在或已删除");
         }
@@ -965,14 +965,7 @@ public class ModelEntitlementService {
      * @param forbiddenMessage 无权限提示
      */
     private void requireSuperAdmin(String forbiddenMessage) {
-        AuthenticatedUser authenticatedUser = AuthContext.getUser();
-        if (authenticatedUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-        User user = userMapper.findById(authenticatedUser.userId());
-        if (user == null || !Boolean.TRUE.equals(user.getSuperAdmin())) {
-            throw new BusinessException(ResponseCode.AUTH_FORBIDDEN.code(), forbiddenMessage);
-        }
+        currentUserService.requireSuperAdmin(forbiddenMessage);
     }
 
     /**
@@ -1139,7 +1132,7 @@ public class ModelEntitlementService {
      * @return 剩余天数
      */
     private int safeRemainingDays(UserModelEntitlementRecord record) {
-        return record.getRemainingDays() == null ? 0 : Math.max(0, record.getRemainingDays());
+        return NumberUtils.toNonNegativeInt(record.getRemainingDays());
     }
 
     /**
@@ -1249,29 +1242,6 @@ public class ModelEntitlementService {
     }
 
     /**
-     * 规整页码。
-     *
-     * @param pageNo 原始页码
-     * @return 安全页码
-     */
-    private int normalizePageNo(Integer pageNo) {
-        return pageNo == null || pageNo < DEFAULT_PAGE_NO ? DEFAULT_PAGE_NO : pageNo;
-    }
-
-    /**
-     * 规整每页数量。
-     *
-     * @param pageSize 原始每页数量
-     * @return 安全每页数量
-     */
-    private int normalizePageSize(Integer pageSize) {
-        if (pageSize == null || pageSize < 1) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    /**
      * 转换状态文案。
      *
      * @param status 状态编码
@@ -1285,23 +1255,13 @@ public class ModelEntitlementService {
     }
 
     /**
-     * 规整可选文本。
-     *
-     * @param value 原始文本
-     * @return 规整文本
-     */
-    private String trimToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    /**
      * 规整授权入口完整网址。
      *
      * @param value 原始授权地址
      * @return 安全授权地址
      */
     private String normalizeAuthorizationUrl(String value) {
-        String safeUrl = trimToEmpty(value);
+        String safeUrl = TextUtils.trimToEmpty(value);
         if (!StringUtils.hasText(safeUrl) || !isHttpWebsiteUrl(safeUrl)) {
             return "";
         }
@@ -1328,23 +1288,4 @@ public class ModelEntitlementService {
         }
     }
 
-    /**
-     * 规整文本为空字符串。
-     *
-     * @param value 原始文本
-     * @return 安全文本
-     */
-    private String trimToEmpty(String value) {
-        return StringUtils.hasText(value) ? value.trim() : "";
-    }
-
-    /**
-     * 转换本地时间。
-     *
-     * @param value 本地时间
-     * @return 带偏移时间
-     */
-    private OffsetDateTime toOffsetDateTime(LocalDateTime value) {
-        return value == null ? null : value.atZone(ZoneId.systemDefault()).toOffsetDateTime();
-    }
 }

@@ -38,6 +38,7 @@ import 'element-plus/es/components/card/style/css';
 import { onMounted, ref } from 'vue';
 import { fetchAdminModelConfigs, saveAdminModelConfig, type AdminModelConfig } from '../../api/adminModelConfigs';
 import type { ModelLevel } from '../../api/modelEntitlements';
+import { resolveErrorMessage } from '../../utils/errorMessage';
 
 const configs = ref<AdminModelConfig[]>([]);
 const savingLevel = ref<ModelLevel | null>(null);
@@ -67,7 +68,7 @@ async function saveConfig(item: AdminModelConfig): Promise<void> {
     Object.assign(item, saved);
     ElMessage.success('模型配置已保存');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存失败');
+    ElMessage.error(resolveErrorMessage(error, '保存失败'));
   } finally {
     savingLevel.value = null;
   }
@@ -75,7 +76,7 @@ async function saveConfig(item: AdminModelConfig): Promise<void> {
 
 onMounted(() => {
   loadConfigs().catch((error: unknown) => {
-    ElMessage.error(error instanceof Error ? error.message : '模型配置加载失败');
+    ElMessage.error(resolveErrorMessage(error, '模型配置加载失败'));
   });
 });
 </script>

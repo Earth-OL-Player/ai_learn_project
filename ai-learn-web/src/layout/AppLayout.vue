@@ -109,6 +109,7 @@ import LoginDialog from '../components/auth/LoginDialog.vue';
 import RegisterDialog from '../components/auth/RegisterDialog.vue';
 import LoginGuideDialog from '../components/common/LoginGuideDialog.vue';
 import { useAuthStore } from '../stores/auth';
+import { resolveAvatarText, resolveUserDisplayName } from '../utils/userDisplay';
 
 type ThemeMode = 'light' | 'dark';
 
@@ -138,8 +139,8 @@ const mobileNavItems: MobileNavItem[] = [
 
 // 当前菜单直接跟随路由路径，保证刷新后高亮正确。
 const activeMenu = computed(() => route.path);
-const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
-const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase());
+const displayName = computed(() => resolveUserDisplayName(authStore.user));
+const avatarText = computed(() => resolveAvatarText(displayName.value));
 const isDarkMode = computed(() => themeMode.value === 'dark');
 const themeToggleLabel = computed(() => (isDarkMode.value ? '切换到白天模式' : '切换到黑夜模式'));
 

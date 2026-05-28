@@ -11,6 +11,7 @@ from app.api.log_levels import router as log_levels_router
 from app.api.model_cache import router as model_cache_router
 from app.api.practice import router as practice_router
 from app.config.log_config import configure_logger
+from app.time_utils import elapsed_milliseconds
 
 app = FastAPI(title="AI Learn Service", version="0.2.0")
 logger = configure_logger("ai_service.http")
@@ -27,7 +28,7 @@ async def log_http_request(request: Request, call_next: Callable[[Request], Awai
     response = await call_next(request)
 
     # 请求结束时输出状态码和耗时，辅助定位是否被鉴权、路由或业务逻辑拦截。
-    duration_ms = round((time.perf_counter() - start_time) * 1000)
+    duration_ms = elapsed_milliseconds(start_time)
     if trace_id:
         response.headers["X-Trace-Id"] = trace_id
     logger.info("Python AI 服务请求完成：traceId=%s method=%s path=%s status=%s durationMs=%s", trace_id, request.method, request.url.path, response.status_code, duration_ms)
@@ -54,6 +55,20 @@ async def log_validation_error(request: Request, exc: RequestValidationError) ->
 def health() -> dict[str, str]:
     """健康检查。"""
     return {"status": "UP"}
+
+
+@app.get("/")
+def root() -> dict[str, str]:
+    """返回 AI 服务基础状态，避免浏览器访问根路径时出现 404。"""
+    # 根路径只暴露基础状态和可访问入口，不返回内部鉴权信息。
+    return {"service": "AI Learn Service", "status": "UP", "healthPath": "/health", "docsPath": "/docs"}
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+def favicon() -> Response:
+    """忽略浏览器自动请求的站点图标。"""
+    # 当前服务不提供页面图标，返回 204 避免日志中出现无意义的 404。
+    return Response(status_code=204)
 
 
 # 刷题 Agent 为后端内部接口。

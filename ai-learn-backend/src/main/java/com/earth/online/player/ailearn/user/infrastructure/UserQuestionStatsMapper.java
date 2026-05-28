@@ -21,24 +21,17 @@ public interface UserQuestionStatsMapper {
      * @param pageSize 每页数量
      * @return 刷题汇总列表
      */
-    @Select("""
-            <script>
+    @Select({
+            "<script>",
+            """
             SELECT stats.question_code, q.question, q.question_type, stats.answer_count,
                    stats.best_score, stats.last_score, stats.first_answered_at, stats.last_answered_at
-            FROM user_question_stats stats
-            INNER JOIN questions q ON q.code = stats.question_code AND q.deleted = 0
-            WHERE stats.user_id = #{userId}
-              AND stats.answer_count &gt; 0
-            <if test='keyword != null and keyword != ""'>
-              AND q.question LIKE CONCAT('%', #{keyword}, '%')
-            </if>
-            <if test='questionType != null and questionType != ""'>
-              AND q.question_type = #{questionType}
-            </if>
-            ORDER BY stats.last_answered_at DESC, stats.id DESC
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+            """,
+            UserQuestionStatsSql.USER_QUESTION_STATS_FILTER_SQL,
+            "ORDER BY stats.last_answered_at DESC, stats.id DESC",
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<UserQuestionStatsRecord> findPage(
             @Param("userId") Long userId,
             @Param("keyword") String keyword,
@@ -55,21 +48,12 @@ public interface UserQuestionStatsMapper {
      * @param questionType 题目类型
      * @return 记录数量
      */
-    @Select("""
-            <script>
-            SELECT COUNT(1)
-            FROM user_question_stats stats
-            INNER JOIN questions q ON q.code = stats.question_code AND q.deleted = 0
-            WHERE stats.user_id = #{userId}
-              AND stats.answer_count &gt; 0
-            <if test='keyword != null and keyword != ""'>
-              AND q.question LIKE CONCAT('%', #{keyword}, '%')
-            </if>
-            <if test='questionType != null and questionType != ""'>
-              AND q.question_type = #{questionType}
-            </if>
-            </script>
-            """)
+    @Select({
+            "<script>",
+            "SELECT COUNT(1)",
+            UserQuestionStatsSql.USER_QUESTION_STATS_FILTER_SQL,
+            "</script>"
+    })
     long countPage(
             @Param("userId") Long userId,
             @Param("keyword") String keyword,
@@ -133,4 +117,30 @@ public interface UserQuestionStatsMapper {
             ORDER BY weak_count DESC, average_best_score ASC, question_count DESC
             """)
     List<UserQuestionTypeStatsRecord> findTypeStats(@Param("userId") Long userId);
+}
+
+/**
+ * 用户刷题汇总 Mapper 复用 SQL 片段。
+ */
+final class UserQuestionStatsSql {
+
+    /** 当前用户已作答题目汇总通用关联和筛选条件。 */
+    static final String USER_QUESTION_STATS_FILTER_SQL = """
+            FROM user_question_stats stats
+            INNER JOIN questions q ON q.code = stats.question_code AND q.deleted = 0
+            WHERE stats.user_id = #{userId}
+              AND stats.answer_count &gt; 0
+            <if test='keyword != null and keyword != ""'>
+              AND q.question LIKE CONCAT('%', #{keyword}, '%')
+            </if>
+            <if test='questionType != null and questionType != ""'>
+              AND q.question_type = #{questionType}
+            </if>
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private UserQuestionStatsSql() {
+    }
 }

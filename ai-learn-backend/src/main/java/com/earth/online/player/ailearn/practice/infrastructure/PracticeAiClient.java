@@ -1,10 +1,11 @@
 package com.earth.online.player.ailearn.practice.infrastructure;
 
 import com.earth.online.player.ailearn.ai.AiServiceConstants;
+import com.earth.online.player.ailearn.ai.AiServiceHttpSupport;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.earth.online.player.ailearn.common.exception.ClientStreamClosedException;
-import com.earth.online.player.ailearn.common.trace.TraceContext;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.model.domain.AiModelRequestConfig;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -12,7 +13,6 @@ import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -58,10 +58,7 @@ public class PracticeAiClient {
         this.objectMapper = objectMapper;
 
         // Uvicorn 不支持 Java HttpClient 默认的明文 HTTP/2 升级请求，固定 HTTP/1.1 保证请求体稳定送达。
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(timeout())
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
+        this.httpClient = AiServiceHttpSupport.newHttpClient(timeout());
     }
 
     /**
@@ -145,17 +142,8 @@ public class PracticeAiClient {
      */
     private Optional<JsonNode> postJson(String path, JsonNode payload) {
         long startMillis = System.currentTimeMillis();
-        String traceId = currentTraceId();
         try {
-            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
-                    .uri(URI.create(normalizeBaseUrl() + path))
-                    .timeout(timeout())
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .header("Accept", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken()), traceId)
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
-                    .build();
+            HttpRequest request = buildPostRequest(path, payload, AiServiceConstants.JSON_CONTENT_TYPE);
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 logJsonObservability(path, false, true, response.statusCode(), startMillis, ERROR_CATEGORY_HTTP_STATUS, null);
@@ -187,17 +175,8 @@ public class PracticeAiClient {
      */
     private Optional<String> postEventStream(String path, JsonNode payload, Consumer<String> chunkConsumer) {
         long startMillis = System.currentTimeMillis();
-        String traceId = currentTraceId();
         try {
-            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
-                    .uri(URI.create(normalizeBaseUrl() + path))
-                    .timeout(timeout())
-                    .version(HttpClient.Version.HTTP_1_1)
-                    .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .header("Accept", AiServiceConstants.EVENT_STREAM_CONTENT_TYPE)
-                    .header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken()), traceId)
-                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
-                    .build();
+            HttpRequest request = buildPostRequest(path, payload, AiServiceConstants.EVENT_STREAM_CONTENT_TYPE);
             HttpResponse<java.io.InputStream> response = httpClient.send(request, HttpResponse.BodyHandlers.ofInputStream());
             if (response.statusCode() < 200 || response.statusCode() >= 300) {
                 logStreamObservability(path, false, true, response.statusCode(), startMillis, -1L, ERROR_CATEGORY_HTTP_STATUS);
@@ -238,7 +217,15 @@ public class PracticeAiClient {
             String line;
             while ((line = reader.readLine()) != null) {
                 if (line.isBlank()) {
-                    processStreamEvent(eventName, dataBuilder.toString(), replyBuilder, chunkConsumer, chunkCount, startMillis, firstChunkMillisHolder);
+                    processStreamEvent(
+                            eventName,
+                            dataBuilder.toString(),
+                            replyBuilder,
+                            chunkConsumer,
+                            chunkCount,
+                            startMillis,
+                            firstChunkMillisHolder
+                    );
                     eventName = "message";
                     dataBuilder.setLength(0);
                     continue;
@@ -392,17 +379,26 @@ public class PracticeAiClient {
     }
 
     /**
-     * 补充内部调用通用 Header。
+     * 构造 AI 服务内部 POST 请求。
      *
-     * @param builder 请求构造器
-     * @param traceId 请求链路标识
-     * @return 请求构造器
+     * @param path 请求路径
+     * @param payload 请求体
+     * @param acceptContentType 接收内容类型
+     * @return HTTP 请求
+     * @throws IOException JSON 序列化异常
      */
-    private HttpRequest.Builder addCommonHeaders(HttpRequest.Builder builder, String traceId) {
-        if (StringUtils.hasText(traceId)) {
-            builder.header(TraceContext.TRACE_ID_HEADER, traceId);
-        }
-        return builder;
+    private HttpRequest buildPostRequest(String path, JsonNode payload, String acceptContentType) throws IOException {
+        return AiServiceHttpSupport.newInternalRequestBuilder(
+                        properties,
+                        timeout(),
+                        AiServiceHttpSupport.normalizeBaseUrl(properties) + path)
+                .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
+                .header("Accept", acceptContentType)
+                .POST(HttpRequest.BodyPublishers.ofString(
+                        objectMapper.writeValueAsString(payload),
+                        StandardCharsets.UTF_8
+                ))
+                .build();
     }
 
     /**
@@ -425,7 +421,8 @@ public class PracticeAiClient {
             String errorCategory,
             JsonNode observability) {
         LOGGER.info(
-                "AI 调用观测：path={} stream=false success={} fallbackUsed={} status={} durationMs={} model={} inputTokens={} outputTokens={} totalTokens={} estimatedCost={} errorCategory={}",
+                "AI 调用观测：path={} stream=false success={} fallbackUsed={} status={} durationMs={} "
+                        + "model={} inputTokens={} outputTokens={} totalTokens={} estimatedCost={} errorCategory={}",
                 path,
                 success,
                 fallbackUsed,
@@ -460,7 +457,8 @@ public class PracticeAiClient {
             long firstChunkMs,
             String errorCategory) {
         LOGGER.info(
-                "AI 调用观测：path={} stream=true success={} fallbackUsed={} status={} firstTokenMs={} durationMs={} model={} outputTokens={} estimatedCost={} errorCategory={}",
+                "AI 调用观测：path={} stream=true success={} fallbackUsed={} status={} firstTokenMs={} durationMs={} "
+                        + "model={} outputTokens={} estimatedCost={} errorCategory={}",
                 path,
                 success,
                 fallbackUsed,
@@ -472,15 +470,6 @@ public class PracticeAiClient {
                 UNAVAILABLE,
                 errorCategory
         );
-    }
-
-    /**
-     * 读取当前线程 traceId。
-     *
-     * @return traceId
-     */
-    private String currentTraceId() {
-        return Optional.ofNullable(TraceContext.getTraceId()).orElse("");
     }
 
     /**
@@ -574,21 +563,12 @@ public class PracticeAiClient {
     }
 
     /**
-     * 规整基础地址。
-     *
-     * @return 基础地址
-     */
-    private String normalizeBaseUrl() {
-        return properties.getBaseUrl().replaceAll("/+$", "");
-    }
-
-    /**
      * 获取安全超时时间。
      *
      * @return 超时时间
      */
     private Duration timeout() {
-        return Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds()));
+        return AiServiceHttpSupport.timeout(properties);
     }
 
     /**
@@ -598,6 +578,6 @@ public class PracticeAiClient {
      * @return 安全得分
      */
     private int clampScore(int score) {
-        return Math.max(0, Math.min(100, score));
+        return NumberUtils.clampPercentScore(score);
     }
 }

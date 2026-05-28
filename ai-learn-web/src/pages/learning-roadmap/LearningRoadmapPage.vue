@@ -1,42 +1,14 @@
 <template>
   <section class="roadmap-page">
     <div :class="['markdown-layout', { 'is-toc-collapsed': isTocCollapsed }]">
-      <nav
-        v-if="tocItems.length"
-        :class="['markdown-toc-card', { 'is-collapsed': isTocCollapsed }]"
-        aria-label="目录"
-      >
-        <div class="markdown-toc-header">
-          <h3 v-if="!isTocCollapsed">目录</h3>
-          <button
-            type="button"
-            class="markdown-toc-toggle"
-            :aria-expanded="!isTocCollapsed"
-            aria-controls="learning-roadmap-toc-list"
-            :aria-label="isTocCollapsed ? '展开目录' : '收起目录'"
-            @click="toggleToc"
-          >
-            {{ isTocCollapsed ? '展开' : '收起' }}
-          </button>
-        </div>
-
-        <div id="learning-roadmap-toc-list" v-show="!isTocCollapsed" class="markdown-toc-list">
-          <a
-            v-for="item in tocItems"
-            :key="item.id"
-            :href="`#${item.id}`"
-            :class="[
-              'markdown-toc-link',
-              `markdown-toc-level-${item.level}`,
-              { 'is-active': activeTocId === item.id },
-            ]"
-            :aria-current="activeTocId === item.id ? 'location' : undefined"
-            @click="setActiveToc(item.id)"
-          >
-            {{ item.title }}
-          </a>
-        </div>
-      </nav>
+      <MarkdownToc
+        :items="tocItems"
+        :active-id="activeTocId"
+        :collapsed="isTocCollapsed"
+        list-id="learning-roadmap-toc-list"
+        @select="setActiveToc"
+        @toggle="toggleToc"
+      />
 
       <article class="markdown-card">
         <div class="markdown-body" v-html="safeRoadmapHtml"></div>
@@ -46,21 +18,23 @@
 </template>
 
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue';
+import { computed } from 'vue';
+import MarkdownToc from '../../components/common/MarkdownToc.vue';
 import roadmapMarkdown from '../../content/learning-roadmap/AI应用开发学习路线和资料集.md?raw';
+import {
+  buildMarkdownTocItems,
+  createHeadingIdGenerator,
+  installHeadingAnchorRenderer,
+  useMarkdownTocNavigation,
+} from '../../utils/markdownToc';
 import { createSafeMarkdownRenderer } from '../../utils/safeMarkdown';
 
-interface TocItem {
-  id: string;
-  level: number;
-  title: string;
-}
-
-let tocObserver: IntersectionObserver | null = null;
-const activeTocId = ref('');
-const isTocCollapsed = ref(false);
-const isMobileViewport = ref(false);
-let mobileViewportMediaQuery: MediaQueryList | null = null;
+const {
+  activeTocId,
+  isTocCollapsed,
+  setActiveToc,
+  toggleToc,
+} = useMarkdownTocNavigation();
 let headingIdGenerator = createHeadingIdGenerator();
 let imageCaptionNumber = 0;
 
@@ -94,7 +68,6 @@ const roadmapMarkdownRenderer = createSafeMarkdownRenderer({
   breaks: false,
   configureMarkdown(markdown) {
     const defaultImageRenderer = markdown.renderer.rules.image;
-    const defaultHeadingOpenRenderer = markdown.renderer.rules.heading_open;
 
     // 图片资源先解析成 Vite URL，再交给统一消毒链路保留安全标签。
     markdown.renderer.rules.image = (tokens, index, options, env, self) => {
@@ -117,16 +90,7 @@ const roadmapMarkdownRenderer = createSafeMarkdownRenderer({
     };
 
     // 本地 Markdown 标题保留锚点能力，渲染结果仍会经过统一消毒。
-    markdown.renderer.rules.heading_open = (tokens, index, options, env, self) => {
-      const title = tokens[index + 1]?.content || '';
-      const headingId = headingIdGenerator(title);
-      tokens[index].attrSet('id', headingId);
-      tokens[index].attrSet('tabindex', '-1');
-
-      return defaultHeadingOpenRenderer
-        ? defaultHeadingOpenRenderer(tokens, index, options, env, self)
-        : self.renderToken(tokens, index, options);
-    };
+    installHeadingAnchorRenderer(markdown, (title) => headingIdGenerator(title));
   },
 });
 
@@ -172,44 +136,6 @@ function resolveImageFigureClass(altText: string): string {
 }
 
 /**
- * 创建标题锚点生成器，重复标题自动追加序号。
- */
-function createHeadingIdGenerator(): (title: string) => string {
-  const headingIdCounter = new Map<string, number>();
-
-  return (title: string) => {
-    const baseId = title
-      .trim()
-      .toLowerCase()
-      .replace(/[`*_~()[\]{}]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/^-+|-+$/g, '') || 'section';
-    const count = headingIdCounter.get(baseId) || 0;
-    headingIdCounter.set(baseId, count + 1);
-    return count === 0 ? baseId : `${baseId}-${count + 1}`;
-  };
-}
-
-/**
- * 提取 Markdown 标题生成页面目录。
- */
-function buildTocItems(markdownText: string): TocItem[] {
-  const tocHeadingIdGenerator = createHeadingIdGenerator();
-  return markdownText
-    .split(/\r?\n/)
-    .map((line) => /^(#{2,4})\s+(.+?)\s*#*\s*$/.exec(line))
-    .filter((match): match is RegExpExecArray => Boolean(match))
-    .map((match) => {
-      const title = match[2].replace(/[`*_~]/g, '').trim();
-      return {
-        id: tocHeadingIdGenerator(title),
-        level: match[1].length,
-        title,
-      };
-    });
-}
-
-/**
  * 安全渲染 Markdown 原文为页面 HTML。
  */
 function renderRoadmapMarkdown(): string {
@@ -218,75 +144,7 @@ function renderRoadmapMarkdown(): string {
   return roadmapMarkdownRenderer.render(roadmapMarkdown);
 }
 
-/**
- * 设置当前激活目录。
- */
-function setActiveToc(tocId: string): void {
-  activeTocId.value = tocId;
-  if (isMobileViewport.value) {
-    isTocCollapsed.value = true;
-  }
-}
-
-/**
- * 切换目录展开和收起状态。
- */
-function toggleToc(): void {
-  isTocCollapsed.value = !isTocCollapsed.value;
-}
-
-/**
- * 同步手机端目录折叠状态。
- *
- * @param event 媒体查询变化事件
- */
-function syncMobileTocState(event?: MediaQueryListEvent): void {
-  isMobileViewport.value = event ? event.matches : Boolean(mobileViewportMediaQuery?.matches);
-  isTocCollapsed.value = isMobileViewport.value;
-}
-
-/**
- * 监听正文标题位置，自动高亮当前目录。
- */
-function observeTocHeadings(): void {
-  const headings = Array.from(document.querySelectorAll<HTMLElement>('.markdown-body h2[id], .markdown-body h3[id], .markdown-body h4[id]'));
-  if (!headings.length) {
-    return;
-  }
-
-  activeTocId.value = activeTocId.value || headings[0].id;
-  tocObserver = new IntersectionObserver((entries) => {
-    const visibleEntry = entries
-      .filter((entry) => entry.isIntersecting)
-      .sort((first, second) => first.boundingClientRect.top - second.boundingClientRect.top)[0];
-    if (visibleEntry?.target.id) {
-      activeTocId.value = visibleEntry.target.id;
-    }
-  }, {
-    root: null,
-    rootMargin: '-96px 0px -62% 0px',
-    threshold: 0,
-  });
-
-  headings.forEach((heading) => tocObserver?.observe(heading));
-}
-
 // Markdown 内容由前端项目内 md 文件直接渲染，修改 md 后开发环境会热更新。
 const safeRoadmapHtml = computed(() => renderRoadmapMarkdown());
-const tocItems = computed(() => buildTocItems(roadmapMarkdown));
-
-onMounted(async () => {
-  // 手机端默认收起长目录，让路线正文更快进入首屏。
-  mobileViewportMediaQuery = window.matchMedia('(max-width: 768px)');
-  syncMobileTocState();
-  mobileViewportMediaQuery.addEventListener('change', syncMobileTocState);
-  await nextTick();
-  observeTocHeadings();
-});
-
-onBeforeUnmount(() => {
-  tocObserver?.disconnect();
-  mobileViewportMediaQuery?.removeEventListener('change', syncMobileTocState);
-  mobileViewportMediaQuery = null;
-});
+const tocItems = computed(() => buildMarkdownTocItems(roadmapMarkdown));
 </script>

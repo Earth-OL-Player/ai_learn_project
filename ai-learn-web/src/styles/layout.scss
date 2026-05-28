@@ -154,11 +154,6 @@ a {
   margin: 0;
 }
 
-.placeholder-page {
-  max-width: 1180px;
-  margin: 0 auto;
-}
-
 .page-alert {
   margin-bottom: 18px;
 }
@@ -211,7 +206,6 @@ a {
 .overview-card,
 .resource-card,
 .suggestion-card,
-.placeholder-card,
 .stage-card {
   border: 0;
   border-radius: var(--radius-xl);
@@ -309,34 +303,6 @@ a {
   gap: 12px;
   padding-left: 20px;
   margin: 0;
-}
-
-.placeholder-page {
-  display: grid;
-  min-height: 520px;
-  place-items: center;
-}
-
-.placeholder-card {
-  width: min(560px, 100%);
-  text-align: center;
-}
-
-.placeholder-icon {
-  margin-bottom: 14px;
-  font-size: 52px;
-}
-
-.placeholder-card h3 {
-  margin: 0 0 12px;
-  color: var(--color-heading);
-  font-size: 26px;
-}
-
-.placeholder-card p {
-  margin: 0 0 18px;
-  color: var(--color-muted);
-  line-height: 1.8;
 }
 
 // 品牌标题和作者信息在同一行展示，减少顶部栏高度浪费。

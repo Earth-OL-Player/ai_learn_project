@@ -20,26 +20,21 @@ public interface PracticeMapper {
      * @param questionTypes 题目分类
      * @return 候选题目
      */
-    @Select("""
-            <script>
-            SELECT q.id, q.code, q.question, q.question_type, q.standard_answer,
-                   q.importance_score, q.occurrence_count,
-                   COALESCE(stats.answer_count, 0) AS answered_count,
-                   COALESCE(stats.best_score, 0) AS best_score
-            FROM questions q
-            LEFT JOIN user_question_stats stats
-              ON stats.question_code = q.code AND stats.user_id = #{userId}
-            WHERE q.deleted = 0
-            <if test='questionTypes != null and questionTypes.size() > 0'>
-              AND q.question_type IN
-              <foreach collection='questionTypes' item='item' open='(' separator=',' close=')'>
-                #{item}
-              </foreach>
-            </if>
-            ORDER BY q.importance_score DESC, q.id DESC
-            LIMIT 500
-            </script>
-            """)
+    @Select({
+            "<script>",
+            PracticeSql.QUESTION_SELECT_COLUMNS,
+            PracticeSql.QUESTION_WITH_USER_STATS_FROM_SQL,
+            "WHERE q.deleted = 0",
+            "<if test='questionTypes != null and questionTypes.size() > 0'>",
+            "  AND q.question_type IN",
+            "  <foreach collection='questionTypes' item='item' open='(' separator=',' close=')'>",
+            "    #{item}",
+            "  </foreach>",
+            "</if>",
+            "ORDER BY q.importance_score DESC, q.id DESC",
+            "LIMIT 500",
+            "</script>"
+    })
     List<PracticeQuestionRecord> findCandidates(
             @Param("userId") Long userId,
             @Param("questionTypes") List<String> questionTypes
@@ -52,16 +47,11 @@ public interface PracticeMapper {
      * @param questionCode 题目编码
      * @return 题目记录
      */
-    @Select("""
-            SELECT q.id, q.code, q.question, q.question_type, q.standard_answer,
-                   q.importance_score, q.occurrence_count,
-                   COALESCE(stats.answer_count, 0) AS answered_count,
-                   COALESCE(stats.best_score, 0) AS best_score
-            FROM questions q
-            LEFT JOIN user_question_stats stats
-              ON stats.question_code = q.code AND stats.user_id = #{userId}
-            WHERE q.code = #{questionCode} AND q.deleted = 0
-            """)
+    @Select({
+            PracticeSql.QUESTION_SELECT_COLUMNS,
+            PracticeSql.QUESTION_WITH_USER_STATS_FROM_SQL,
+            "WHERE q.code = #{questionCode} AND q.deleted = 0"
+    })
     PracticeQuestionRecord findQuestionByCode(
             @Param("userId") Long userId,
             @Param("questionCode") String questionCode
@@ -243,4 +233,31 @@ public interface PracticeMapper {
             @Param("statId") Long statId,
             @Param("score") int score
     );
+}
+
+/**
+ * 智能刷题 Mapper 复用 SQL 片段。
+ */
+final class PracticeSql {
+
+    /** 题目和当前用户答题概况通用查询字段。 */
+    static final String QUESTION_SELECT_COLUMNS = """
+            SELECT q.id, q.code, q.question, q.question_type, q.standard_answer,
+                   q.importance_score, q.occurrence_count,
+                   COALESCE(stats.answer_count, 0) AS answered_count,
+                   COALESCE(stats.best_score, 0) AS best_score
+            """;
+
+    /** 题目表与当前用户答题概况通用关联。 */
+    static final String QUESTION_WITH_USER_STATS_FROM_SQL = """
+            FROM questions q
+            LEFT JOIN user_question_stats stats
+              ON stats.question_code = q.code AND stats.user_id = #{userId}
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private PracticeSql() {
+    }
 }

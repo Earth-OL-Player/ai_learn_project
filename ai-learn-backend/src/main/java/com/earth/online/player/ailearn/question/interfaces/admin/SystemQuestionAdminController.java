@@ -2,12 +2,10 @@ package com.earth.online.player.ailearn.question.interfaces.admin;
 
 import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.response.PageResponse;
+import com.earth.online.player.ailearn.common.util.CsvDownloadUtils;
 import com.earth.online.player.ailearn.question.application.SystemQuestionAdminService;
 import jakarta.validation.Valid;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -135,15 +133,7 @@ public class SystemQuestionAdminController {
     @GetMapping("/template")
     public ResponseEntity<byte[]> downloadTemplate() {
         byte[] content = systemQuestionAdminService.buildTemplate();
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename("系统题库导入模板.csv", StandardCharsets.UTF_8)
-                .build();
-
-        // 模板接口直接返回文件流，不包装统一 JSON。
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-                .body(content);
+        return CsvDownloadUtils.buildUtf8CsvResponse("系统题库导入模板.csv", content);
     }
 
     /**

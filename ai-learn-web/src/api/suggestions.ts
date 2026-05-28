@@ -1,4 +1,5 @@
 import { get, post } from './http';
+import { buildQueryPath } from './queryParams';
 import type { PageResponse } from '../types/page';
 import type { CreateSuggestionPayload, SuggestionItem } from '../types/suggestion';
 
@@ -6,7 +7,7 @@ import type { CreateSuggestionPayload, SuggestionItem } from '../types/suggestio
  * 分页查询建议列表。
  */
 export function fetchSuggestions(pageNo: number, pageSize: number, sort: string): Promise<PageResponse<SuggestionItem>> {
-  return get<PageResponse<SuggestionItem>>(`/suggestions?pageNo=${pageNo}&pageSize=${pageSize}&sort=${sort}`);
+  return get<PageResponse<SuggestionItem>>(buildQueryPath('/suggestions', { pageNo, pageSize, sort }));
 }
 
 /**

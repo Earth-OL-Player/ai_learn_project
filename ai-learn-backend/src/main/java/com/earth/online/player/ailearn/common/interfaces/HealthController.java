@@ -1,7 +1,7 @@
 package com.earth.online.player.ailearn.common.interfaces;
 
 import com.earth.online.player.ailearn.common.response.ApiResponse;
-import java.time.OffsetDateTime;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
 import java.util.Map;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -24,7 +24,7 @@ public class HealthController {
         Map<String, String> healthInfo = Map.of(
                 "status", "UP",
                 "service", "ai-learn-backend",
-                "time", OffsetDateTime.now().toString()
+                "time", DateTimeUtils.currentOffsetDateTime().toString()
         );
         return ApiResponse.success(healthInfo);
     }

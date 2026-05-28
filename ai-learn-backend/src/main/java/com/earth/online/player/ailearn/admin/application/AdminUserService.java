@@ -4,19 +4,21 @@ import com.earth.online.player.ailearn.admin.interfaces.AdminUserRequest;
 import com.earth.online.player.ailearn.admin.interfaces.AdminUserResponse;
 import com.earth.online.player.ailearn.admin.interfaces.UserLimitRequest;
 import com.earth.online.player.ailearn.admin.interfaces.UserLimitResponse;
+import com.earth.online.player.ailearn.auth.domain.AuthConstants;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthContext;
-import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
-import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
-import com.earth.online.player.ailearn.growth.domain.GrowthRank;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.common.util.IdRequestUtils;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
+import com.earth.online.player.ailearn.common.util.PageRequestUtils;
+import com.earth.online.player.ailearn.common.util.TextUtils;
 import com.earth.online.player.ailearn.system.application.SystemSettingCache;
+import com.earth.online.player.ailearn.user.application.CurrentUserService;
+import com.earth.online.player.ailearn.user.application.UserDefaults;
+import com.earth.online.player.ailearn.user.application.UserProfileValidator;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
-import java.util.regex.Pattern;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,20 +30,13 @@ import org.springframework.util.StringUtils;
 @Service
 public class AdminUserService {
 
-    private static final int DEFAULT_PAGE_NO = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final int DEFAULT_EXPERIENCE = 0;
-    private static final int DEFAULT_MAX_USERS = 10000;
     private static final int MIN_MAX_USERS = 1;
     private static final int MAX_MAX_USERS = 1_000_000;
-    private static final String MAX_USERS_SETTING_KEY = "MAX_USERS";
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_]{3,32}$");
-    private static final Pattern EMAIL_PATTERN = Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
 
     private final UserMapper userMapper;
     private final PasswordEncoder passwordEncoder;
     private final SystemSettingCache systemSettingCache;
+    private final CurrentUserService currentUserService;
 
     /**
      * 创建管理员用户管理服务。
@@ -49,14 +44,17 @@ public class AdminUserService {
      * @param userMapper 用户仓储
      * @param passwordEncoder 密码编码器
      * @param systemSettingCache 系统设置缓存
+     * @param currentUserService 当前用户服务
      */
     public AdminUserService(
             UserMapper userMapper,
             PasswordEncoder passwordEncoder,
-            SystemSettingCache systemSettingCache) {
+            SystemSettingCache systemSettingCache,
+            CurrentUserService currentUserService) {
         this.userMapper = userMapper;
         this.passwordEncoder = passwordEncoder;
         this.systemSettingCache = systemSettingCache;
+        this.currentUserService = currentUserService;
     }
 
     /**
@@ -69,10 +67,10 @@ public class AdminUserService {
      */
     public PageResponse<AdminUserResponse> findPage(Integer pageNo, Integer pageSize, String keyword) {
         requireSuperAdmin();
-        int safePageNo = normalizePageNo(pageNo);
-        int safePageSize = normalizePageSize(pageSize);
-        String safeKeyword = trimToNull(keyword);
-        int offset = (safePageNo - 1) * safePageSize;
+        int safePageNo = PageRequestUtils.normalizePageNo(pageNo);
+        int safePageSize = PageRequestUtils.normalizePageSize(pageSize);
+        String safeKeyword = TextUtils.trimToNull(keyword);
+        int offset = PageRequestUtils.calculateOffset(safePageNo, safePageSize);
 
         // 管理列表只展示未删除用户，避免误操作历史账号。
         return new PageResponse<>(
@@ -106,10 +104,10 @@ public class AdminUserService {
      */
     @Transactional(rollbackFor = Exception.class)
     public AdminUserResponse update(Long id, AdminUserRequest request) {
-        AuthenticatedUser operator = requireSuperAdmin();
+        User operator = requireSuperAdmin();
         User existing = findExisting(id);
         User user = buildUser(request, existing, false);
-        if (operator.userId().equals(id) && Boolean.FALSE.equals(user.getSuperAdmin())) {
+        if (operator.getId().equals(id) && Boolean.FALSE.equals(user.getSuperAdmin())) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "不能取消自己的超级管理员权限");
         }
 
@@ -126,8 +124,8 @@ public class AdminUserService {
      */
     @Transactional(rollbackFor = Exception.class)
     public boolean delete(Long id) {
-        AuthenticatedUser operator = requireSuperAdmin();
-        if (operator.userId().equals(id)) {
+        User operator = requireSuperAdmin();
+        if (operator.getId().equals(id)) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "不能删除当前登录管理员");
         }
         findExisting(id);
@@ -158,7 +156,7 @@ public class AdminUserService {
     public UserLimitResponse updateUserLimit(UserLimitRequest request) {
         requireSuperAdmin();
         int maxUsers = normalizeMaxUsers(request == null ? null : request.maxUsers());
-        systemSettingCache.upsertValue(MAX_USERS_SETTING_KEY, String.valueOf(maxUsers));
+        systemSettingCache.upsertValue(AuthConstants.MAX_USERS_SETTING_KEY, String.valueOf(maxUsers));
         return new UserLimitResponse(maxUsers, userMapper.countActiveUsers());
     }
 
@@ -168,32 +166,24 @@ public class AdminUserService {
      * @return 最大用户数
      */
     public int resolveMaxUsers() {
-        String value = systemSettingCache.findValue(MAX_USERS_SETTING_KEY);
+        String value = systemSettingCache.findValue(AuthConstants.MAX_USERS_SETTING_KEY);
         if (!StringUtils.hasText(value)) {
-            return DEFAULT_MAX_USERS;
+            return AuthConstants.DEFAULT_MAX_USERS;
         }
         try {
             return normalizeMaxUsers(Integer.parseInt(value));
         } catch (NumberFormatException exception) {
-            return DEFAULT_MAX_USERS;
+            return AuthConstants.DEFAULT_MAX_USERS;
         }
     }
 
     /**
      * 校验当前用户必须是超级管理员。
      *
-     * @return 当前认证用户
+     * @return 当前超级管理员
      */
-    private AuthenticatedUser requireSuperAdmin() {
-        AuthenticatedUser authenticatedUser = AuthContext.getUser();
-        if (authenticatedUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-        User user = userMapper.findById(authenticatedUser.userId());
-        if (user == null || !Boolean.TRUE.equals(user.getSuperAdmin())) {
-            throw new BusinessException(ResponseCode.AUTH_FORBIDDEN.code(), "仅超级管理员可维护用户");
-        }
-        return authenticatedUser;
+    private User requireSuperAdmin() {
+        return currentUserService.requireSuperAdmin("仅超级管理员可维护用户");
     }
 
     /**
@@ -203,10 +193,8 @@ public class AdminUserService {
      * @return 用户信息
      */
     private User findExisting(Long id) {
-        if (id == null || id < 1) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "用户ID不合法");
-        }
-        User user = userMapper.findById(id);
+        Long safeId = IdRequestUtils.requirePositive(id, "用户ID不合法");
+        User user = userMapper.findById(safeId);
         if (user == null) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "用户不存在或已删除");
         }
@@ -225,9 +213,9 @@ public class AdminUserService {
         if (request == null) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "用户信息不能为空");
         }
-        String username = normalizeUsername(request.username());
-        String nickname = normalizeNickname(request.nickname());
-        String email = normalizeEmail(request.email());
+        String username = UserProfileValidator.normalizeUsername(request.username());
+        String nickname = UserProfileValidator.normalizeNickname(request.nickname());
+        String email = UserProfileValidator.normalizeEmail(request.email());
         validateUniqueness(username, nickname, email, existing == null ? null : existing.getId());
 
         // 新增必须提供密码；编辑时密码为空表示保持原密码。
@@ -236,11 +224,15 @@ public class AdminUserService {
         user.setUsername(username);
         user.setNickname(nickname);
         user.setEmail(email);
-        user.setAvatar(trimToNull(request.avatar()));
+        user.setAvatar(TextUtils.trimToNull(request.avatar()));
         user.setPasswordHash(resolvePasswordHash(request.password(), createMode));
-        user.setExperience(existing == null ? DEFAULT_EXPERIENCE : existing.getExperience());
-        user.setLevelCode(existing == null ? GrowthLevel.resolveByExperience(DEFAULT_EXPERIENCE).code() : existing.getLevelCode());
-        user.setRankCode(existing == null ? GrowthRank.resolveByExperience(DEFAULT_EXPERIENCE).code() : existing.getRankCode());
+        if (existing == null) {
+            UserDefaults.applyNewUserGrowth(user);
+        } else {
+            user.setExperience(existing.getExperience());
+            user.setLevelCode(existing.getLevelCode());
+            user.setRankCode(existing.getRankCode());
+        }
         user.setSuperAdmin(Boolean.TRUE.equals(request.superAdmin()));
         return user;
     }
@@ -286,49 +278,8 @@ public class AdminUserService {
             }
             return null;
         }
-        if (password.length() < 8 || password.length() > 64) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "密码长度需为8到64位");
-        }
+        UserProfileValidator.validatePasswordLength(password);
         return passwordEncoder.encode(password);
-    }
-
-    /**
-     * 规整用户名。
-     *
-     * @param username 原始用户名
-     * @return 安全用户名
-     */
-    private String normalizeUsername(String username) {
-        if (!StringUtils.hasText(username) || !USERNAME_PATTERN.matcher(username.trim()).matches()) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "用户名仅支持3到32位字母、数字和下划线");
-        }
-        return username.trim();
-    }
-
-    /**
-     * 规整昵称。
-     *
-     * @param nickname 原始昵称
-     * @return 安全昵称
-     */
-    private String normalizeNickname(String nickname) {
-        if (!StringUtils.hasText(nickname) || nickname.trim().length() > 64) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "昵称不能为空，且不能超过64位");
-        }
-        return nickname.trim();
-    }
-
-    /**
-     * 规整邮箱。
-     *
-     * @param email 原始邮箱
-     * @return 安全邮箱
-     */
-    private String normalizeEmail(String email) {
-        if (!StringUtils.hasText(email) || email.length() > 128 || !EMAIL_PATTERN.matcher(email.trim()).matches()) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "邮箱格式不正确");
-        }
-        return email.trim();
     }
 
     /**
@@ -345,39 +296,6 @@ public class AdminUserService {
     }
 
     /**
-     * 规整页码。
-     *
-     * @param pageNo 原始页码
-     * @return 安全页码
-     */
-    private int normalizePageNo(Integer pageNo) {
-        return pageNo == null || pageNo < DEFAULT_PAGE_NO ? DEFAULT_PAGE_NO : pageNo;
-    }
-
-    /**
-     * 规整每页数量。
-     *
-     * @param pageSize 原始每页数量
-     * @return 安全每页数量
-     */
-    private int normalizePageSize(Integer pageSize) {
-        if (pageSize == null || pageSize < 1) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    /**
-     * 规整可选文本。
-     *
-     * @param value 原始文本
-     * @return 规整文本
-     */
-    private String trimToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    /**
      * 转换用户响应。
      *
      * @param user 用户信息
@@ -391,19 +309,9 @@ public class AdminUserService {
                 user.getEmail(),
                 user.getAvatar(),
                 Boolean.TRUE.equals(user.getSuperAdmin()),
-                user.getExperience() == null ? 0 : user.getExperience(),
-                toOffsetDateTime(user.getCreatedAt()),
-                toOffsetDateTime(user.getUpdatedAt())
+                NumberUtils.toIntOrZero(user.getExperience()),
+                DateTimeUtils.toOffsetDateTime(user.getCreatedAt()),
+                DateTimeUtils.toOffsetDateTime(user.getUpdatedAt())
         );
-    }
-
-    /**
-     * 转换本地时间。
-     *
-     * @param value 本地时间
-     * @return 带偏移时间
-     */
-    private OffsetDateTime toOffsetDateTime(java.time.LocalDateTime value) {
-        return value == null ? null : value.atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
 }

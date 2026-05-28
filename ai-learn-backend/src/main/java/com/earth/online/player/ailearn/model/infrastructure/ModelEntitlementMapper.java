@@ -147,27 +147,14 @@ public interface ModelEntitlementMapper {
      * @param pageSize 每页数量
      * @return 兑换码列表
      */
-    @Select("""
-            <script>
-            SELECT rc.id, rc.code, rc.code_type, rc.status, rc.used_by_user_id,
-                   u.username AS used_by_username, rc.used_at, rc.created_at, rc.updated_at, rc.deleted
-            FROM redemption_codes rc
-            LEFT JOIN users u ON u.id = rc.used_by_user_id
-            WHERE rc.deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (rc.code LIKE CONCAT('%', #{keyword}, '%')
-                   OR u.username LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='codeType != null and codeType != ""'>
-              AND rc.code_type = #{codeType}
-            </if>
-            <if test='status != null and status != ""'>
-              AND rc.status = #{status}
-            </if>
-            ORDER BY rc.created_at DESC, rc.id DESC
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+    @Select({
+            "<script>",
+            ModelEntitlementSql.REDEMPTION_CODE_SELECT_COLUMNS,
+            ModelEntitlementSql.REDEMPTION_CODE_FILTER_SQL,
+            ModelEntitlementSql.REDEMPTION_CODE_ORDER_SQL,
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<RedemptionCodeRecord> findRedemptionPage(
             @Param("keyword") String keyword,
             @Param("codeType") String codeType,
@@ -184,24 +171,12 @@ public interface ModelEntitlementMapper {
      * @param status 兑换码状态
      * @return 总数
      */
-    @Select("""
-            <script>
-            SELECT COUNT(1)
-            FROM redemption_codes rc
-            LEFT JOIN users u ON u.id = rc.used_by_user_id
-            WHERE rc.deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (rc.code LIKE CONCAT('%', #{keyword}, '%')
-                   OR u.username LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='codeType != null and codeType != ""'>
-              AND rc.code_type = #{codeType}
-            </if>
-            <if test='status != null and status != ""'>
-              AND rc.status = #{status}
-            </if>
-            </script>
-            """)
+    @Select({
+            "<script>",
+            "SELECT COUNT(1)",
+            ModelEntitlementSql.REDEMPTION_CODE_FILTER_SQL,
+            "</script>"
+    })
     long countRedemptionPage(
             @Param("keyword") String keyword,
             @Param("codeType") String codeType,
@@ -216,26 +191,13 @@ public interface ModelEntitlementMapper {
      * @param status 兑换码状态
      * @return 兑换码列表
      */
-    @Select("""
-            <script>
-            SELECT rc.id, rc.code, rc.code_type, rc.status, rc.used_by_user_id,
-                   u.username AS used_by_username, rc.used_at, rc.created_at, rc.updated_at, rc.deleted
-            FROM redemption_codes rc
-            LEFT JOIN users u ON u.id = rc.used_by_user_id
-            WHERE rc.deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (rc.code LIKE CONCAT('%', #{keyword}, '%')
-                   OR u.username LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='codeType != null and codeType != ""'>
-              AND rc.code_type = #{codeType}
-            </if>
-            <if test='status != null and status != ""'>
-              AND rc.status = #{status}
-            </if>
-            ORDER BY rc.created_at DESC, rc.id DESC
-            </script>
-            """)
+    @Select({
+            "<script>",
+            ModelEntitlementSql.REDEMPTION_CODE_SELECT_COLUMNS,
+            ModelEntitlementSql.REDEMPTION_CODE_FILTER_SQL,
+            ModelEntitlementSql.REDEMPTION_CODE_ORDER_SQL,
+            "</script>"
+    })
     List<RedemptionCodeRecord> findRedemptionsForExport(
             @Param("keyword") String keyword,
             @Param("codeType") String codeType,
@@ -331,4 +293,42 @@ public interface ModelEntitlementMapper {
             WHERE id = #{id} AND status = 'UNUSED' AND deleted = 0
             """)
     int markRedemptionUsed(@Param("id") Long id, @Param("userId") Long userId, @Param("usedAt") LocalDateTime usedAt);
+}
+
+/**
+ * 模型权益 Mapper 复用 SQL 片段。
+ */
+final class ModelEntitlementSql {
+
+    /** 兑换码列表通用查询字段。 */
+    static final String REDEMPTION_CODE_SELECT_COLUMNS = """
+            SELECT rc.id, rc.code, rc.code_type, rc.status, rc.used_by_user_id,
+                   u.username AS used_by_username, rc.used_at, rc.created_at, rc.updated_at, rc.deleted
+            """;
+
+    /** 兑换码管理查询通用关联和筛选条件。 */
+    static final String REDEMPTION_CODE_FILTER_SQL = """
+            FROM redemption_codes rc
+            LEFT JOIN users u ON u.id = rc.used_by_user_id
+            WHERE rc.deleted = 0
+            <if test='keyword != null and keyword != ""'>
+              AND (rc.code LIKE CONCAT('%', #{keyword}, '%')
+                   OR u.username LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test='codeType != null and codeType != ""'>
+              AND rc.code_type = #{codeType}
+            </if>
+            <if test='status != null and status != ""'>
+              AND rc.status = #{status}
+            </if>
+            """;
+
+    /** 兑换码列表和导出保持一致的排序规则。 */
+    static final String REDEMPTION_CODE_ORDER_SQL = "ORDER BY rc.created_at DESC, rc.id DESC";
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private ModelEntitlementSql() {
+    }
 }

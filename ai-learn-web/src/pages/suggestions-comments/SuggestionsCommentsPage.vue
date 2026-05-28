@@ -40,7 +40,7 @@
             v-if="activeTab === 'suggestions'"
             v-model="suggestionForm.content"
             class="composer-input"
-            maxlength="1000"
+            :maxlength="TEXT_MAX_LENGTH"
             placeholder="请输入你的建议"
             @focus="guardComposerFocus"
           ></textarea>
@@ -48,7 +48,7 @@
             v-else
             v-model="commentForm.content"
             class="composer-input"
-            maxlength="1000"
+            :maxlength="TEXT_MAX_LENGTH"
             placeholder="请输入你的评论"
             @focus="guardComposerFocus"
           ></textarea>
@@ -102,7 +102,11 @@
               </div>
 
               <div v-if="replyTarget?.id === item.id" class="reply-composer">
-                <textarea v-model="replyContent" maxlength="1000" :placeholder="`回复 ${resolveAuthorName(item.author)}`"></textarea>
+                <textarea
+                  v-model="replyContent"
+                  :maxlength="TEXT_MAX_LENGTH"
+                  :placeholder="`回复 ${resolveAuthorName(item.author)}`"
+                ></textarea>
                 <div class="reply-footer">
                   <span>回复同样只能使用纯文字。</span>
                   <div>
@@ -172,6 +176,14 @@ import { createSuggestion, fetchSuggestions, toggleSuggestionLike } from '../../
 import { useAuthStore } from '../../stores/auth';
 import type { CommentItem } from '../../types/comment';
 import type { AuthorSummary, SuggestionItem } from '../../types/suggestion';
+import { formatRelativeDateTime as formatTime } from '../../utils/dateTimeFormat';
+import { resolveErrorMessage } from '../../utils/errorMessage';
+import {
+  DEFAULT_VISITOR_DISPLAY_NAME,
+  resolveAvatarText,
+  resolveUserAvatarText,
+  resolveUserDisplayName,
+} from '../../utils/userDisplay';
 
 type ActiveTab = 'suggestions' | 'comments';
 type SortType = 'hot' | 'latest';
@@ -180,6 +192,7 @@ type LikeKind = 'suggestion' | 'comment';
 const PAGE_SIZE = 10;
 const TEXT_MIN_LENGTH = 2;
 const TEXT_MAX_LENGTH = 1000;
+const TEXT_LENGTH_RANGE_TEXT = `${TEXT_MIN_LENGTH}到${TEXT_MAX_LENGTH}位`;
 const UNSUPPORTED_TEXT_PATTERN = /[@＠\p{Extended_Pictographic}\uFE0F\u200D]/u;
 
 const route = useRoute();
@@ -224,9 +237,9 @@ const activeSubmitText = computed(() => (activeTab.value === 'suggestions' ? '�
 const activeEmptyText = computed(() => (activeTab.value === 'suggestions' ? '暂无建议，期待你的第一条反馈' : '暂无评论，欢迎开始交流'));
 const isActiveEmpty = computed(() => (activeTab.value === 'suggestions' ? suggestions.value.length === 0 : comments.value.length === 0));
 
-const currentDisplayName = computed(() => authStore.user?.nickname || authStore.user?.username || '访客');
+const currentDisplayName = computed(() => resolveUserDisplayName(authStore.user, DEFAULT_VISITOR_DISPLAY_NAME));
 const currentAvatarSrc = computed(() => authStore.user?.avatar || undefined);
-const currentAvatarText = computed(() => currentDisplayName.value.slice(0, 1).toUpperCase());
+const currentAvatarText = computed(() => resolveAvatarText(currentDisplayName.value, DEFAULT_VISITOR_DISPLAY_NAME));
 
 /**
  * 切换建议区或评论区。
@@ -554,7 +567,7 @@ async function ensureLoggedIn(): Promise<boolean> {
 function validatePlainText(value: string, label: string): string | null {
   const content = value.trim();
   if (content.length < TEXT_MIN_LENGTH || content.length > TEXT_MAX_LENGTH) {
-    ElMessage.warning(`${label}长度需在2到1000位之间`);
+    ElMessage.warning(`${label}长度需在${TEXT_LENGTH_RANGE_TEXT}之间`);
     return null;
   }
   if (UNSUPPORTED_TEXT_PATTERN.test(content)) {
@@ -575,7 +588,7 @@ async function requireLogin(): Promise<void> {
  * 获取作者展示名。
  */
 function resolveAuthorName(author: AuthorSummary): string {
-  return author.nickname || author.username || 'AI 学习者';
+  return resolveUserDisplayName(author);
 }
 
 /**
@@ -589,7 +602,7 @@ function authorAvatarSrc(author: AuthorSummary): string | undefined {
  * 获取作者默认头像文字。
  */
 function authorAvatarText(author: AuthorSummary): string {
-  return resolveAuthorName(author).slice(0, 1).toUpperCase();
+  return resolveUserAvatarText(author);
 }
 
 /**
@@ -612,47 +625,6 @@ function formatLikeCount(value: number): string {
     return `${(value / 10000).toFixed(1)}万`;
   }
   return String(value);
-}
-
-/**
- * 格式化本地展示时间。
- */
-function formatTime(value: string | null): string {
-  if (!value) {
-    return '刚刚';
-  }
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return '刚刚';
-  }
-
-  // 一天内显示相对时间，历史内容显示完整日期和分钟。
-  const diffMs = Date.now() - date.getTime();
-  const minuteMs = 60 * 1000;
-  const hourMs = 60 * minuteMs;
-  if (diffMs >= 0 && diffMs < minuteMs) {
-    return '刚刚';
-  }
-  if (diffMs >= minuteMs && diffMs < hourMs) {
-    return `${Math.floor(diffMs / minuteMs)}分钟前`;
-  }
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
-/**
- * 解析接口错误文案。
- */
-function resolveErrorMessage(error: unknown): string {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return '操作失败，请稍后重试';
 }
 
 onMounted(async () => {

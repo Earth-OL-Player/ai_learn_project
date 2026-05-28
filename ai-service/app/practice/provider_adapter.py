@@ -11,6 +11,12 @@ from app.schemas.practice import PracticeModelConfig
 
 # DeepSeek V4 默认开启思考模式，评分和讨论链路统一关闭。
 DEEPSEEK_THINKING_DISABLED_BODY = {"thinking": {"type": "disabled"}}
+TOKEN_USAGE_NESTED_KEYS = ("token_usage", "usage", "usage_metadata", "response_metadata")
+INPUT_TOKEN_KEYS = ("input_tokens", "prompt_tokens")
+OUTPUT_TOKEN_KEYS = ("output_tokens", "completion_tokens")
+TOTAL_TOKEN_KEYS = ("total_tokens",)
+
+TokenUsage = dict[str, int | None]
 
 
 class PracticeProviderAdapter:
@@ -108,14 +114,14 @@ class PracticeProviderAdapter:
             return self.dict_output_tokens(chunk)
         return self.message_output_tokens(chunk)
 
-    def call_token_usage(self, result: Any) -> dict[str, int | None]:
+    def call_token_usage(self, result: Any) -> TokenUsage:
         """从 LangChain 调用结果中读取 Token 用量。"""
         if isinstance(result, dict):
             messages = result.get("messages")
             if isinstance(messages, list):
                 for message in reversed(messages):
                     token_usage = self.message_token_usage(message)
-                    if any(value is not None for value in token_usage.values()):
+                    if self._has_token_usage(token_usage):
                         return token_usage
             return self.dict_token_usage(result)
         return self.message_token_usage(result)
@@ -162,45 +168,38 @@ class PracticeProviderAdapter:
 
     def message_output_tokens(self, message: Any) -> int | None:
         """从消息对象中读取输出 Token。"""
-        usage_metadata = getattr(message, "usage_metadata", None)
-        output_tokens = self.dict_output_tokens(usage_metadata)
-        if output_tokens is not None:
-            return output_tokens
+        for usage_value in self._message_usage_sources(message):
+            output_tokens = self.dict_output_tokens(usage_value)
+            if output_tokens is not None:
+                return output_tokens
+        return None
 
-        # 部分供应商把 token 用量放在响应元数据内。
-        response_metadata = getattr(message, "response_metadata", None)
-        return self.dict_output_tokens(response_metadata)
-
-    def message_token_usage(self, message: Any) -> dict[str, int | None]:
+    def message_token_usage(self, message: Any) -> TokenUsage:
         """从消息对象中读取输入、输出和总 Token。"""
-        usage_metadata = getattr(message, "usage_metadata", None)
-        token_usage = self.dict_token_usage(usage_metadata)
-        if any(value is not None for value in token_usage.values()):
-            return token_usage
+        for usage_value in self._message_usage_sources(message):
+            token_usage = self.dict_token_usage(usage_value)
+            if self._has_token_usage(token_usage):
+                return token_usage
+        return self._empty_token_usage()
 
-        # 部分供应商把完整用量放在响应元数据内。
-        response_metadata = getattr(message, "response_metadata", None)
-        return self.dict_token_usage(response_metadata)
-
-    def dict_token_usage(self, value: Any) -> dict[str, int | None]:
+    def dict_token_usage(self, value: Any) -> TokenUsage:
         """从字典结构中读取不同供应商常见的 Token 用量字段。"""
-        empty_usage: dict[str, int | None] = {"inputTokens": None, "outputTokens": None, "totalTokens": None}
         if not isinstance(value, dict):
-            return empty_usage
+            return self._empty_token_usage()
 
         # 兼容 OpenAI、LangChain 和 OpenAI 兼容供应商的字段命名。
-        input_tokens = self._first_int(value, ("input_tokens", "prompt_tokens"))
-        output_tokens = self._first_int(value, ("output_tokens", "completion_tokens"))
-        total_tokens = self._first_int(value, ("total_tokens",))
+        input_tokens = self._first_int(value, INPUT_TOKEN_KEYS)
+        output_tokens = self._first_int(value, OUTPUT_TOKEN_KEYS)
+        total_tokens = self._first_int(value, TOTAL_TOKEN_KEYS)
         if input_tokens is not None or output_tokens is not None or total_tokens is not None:
             return {"inputTokens": input_tokens, "outputTokens": output_tokens, "totalTokens": total_tokens}
 
         # LangChain 或供应商 SDK 可能把 usage 再嵌套一层。
-        for nested_key in ("token_usage", "usage", "usage_metadata", "response_metadata"):
+        for nested_key in TOKEN_USAGE_NESTED_KEYS:
             token_usage = self.dict_token_usage(value.get(nested_key))
-            if any(item is not None for item in token_usage.values()):
+            if self._has_token_usage(token_usage):
                 return token_usage
-        return empty_usage
+        return self._empty_token_usage()
 
     def dict_output_tokens(self, value: Any) -> int | None:
         """从字典结构中读取不同供应商常见的输出 Token 字段。"""
@@ -208,17 +207,28 @@ class PracticeProviderAdapter:
             return None
 
         # OpenAI 兼容供应商通常使用 output_tokens 或 completion_tokens。
-        for key in ("output_tokens", "completion_tokens"):
-            token_count = value.get(key)
-            if isinstance(token_count, int):
-                return token_count
+        token_count = self._first_int(value, OUTPUT_TOKEN_KEYS)
+        if token_count is not None:
+            return token_count
 
         # LangChain 和供应商 SDK 可能再包一层 usage 结构。
-        for nested_key in ("token_usage", "usage", "usage_metadata", "response_metadata"):
+        for nested_key in TOKEN_USAGE_NESTED_KEYS:
             token_count = self.dict_output_tokens(value.get(nested_key))
             if token_count is not None:
                 return token_count
         return None
+
+    def _message_usage_sources(self, message: Any) -> tuple[Any, Any]:
+        """按优先级读取消息对象中的 Token 用量来源。"""
+        return getattr(message, "usage_metadata", None), getattr(message, "response_metadata", None)
+
+    def _empty_token_usage(self) -> TokenUsage:
+        """构造空 Token 用量，避免复用可变字典。"""
+        return {"inputTokens": None, "outputTokens": None, "totalTokens": None}
+
+    def _has_token_usage(self, token_usage: TokenUsage) -> bool:
+        """判断 Token 用量中是否包含供应商返回的真实值。"""
+        return any(item is not None for item in token_usage.values())
 
     def _first_int(self, value: dict[str, Any], keys: tuple[str, ...]) -> int | None:
         """按优先级读取第一个整型字段。"""

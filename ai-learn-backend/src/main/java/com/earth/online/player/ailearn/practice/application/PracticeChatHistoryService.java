@@ -1,18 +1,16 @@
 package com.earth.online.player.ailearn.practice.application;
 
+import com.earth.online.player.ailearn.common.util.TextUtils;
 import com.earth.online.player.ailearn.practice.domain.PracticeConstants;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeSessionRecord;
 import com.earth.online.player.ailearn.practice.interfaces.PracticeChatMessageResponse;
 import com.earth.online.player.ailearn.practice.interfaces.PracticeMessageResponse;
-import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 /**
  * 当前轮刷题跨端展示聊天记录服务。
@@ -46,15 +44,7 @@ public class PracticeChatHistoryService {
      * @return 聊天消息列表
      */
     public List<PracticeChatMessageResponse> readChatHistory(String historyJson) {
-        if (!StringUtils.hasText(historyJson)) {
-            return Collections.emptyList();
-        }
-        try {
-            return objectMapper.readValue(historyJson, CHAT_HISTORY_TYPE);
-        } catch (JsonProcessingException ignored) {
-            // 展示历史解析失败不影响当前刷题状态恢复，直接返回空列表。
-            return Collections.emptyList();
-        }
+        return PracticeHistoryJsonSupport.readList(objectMapper, historyJson, CHAT_HISTORY_TYPE);
     }
 
     /**
@@ -64,7 +54,10 @@ public class PracticeChatHistoryService {
      * @param assistantResponse 助手响应
      */
     public void replaceWithAssistantMessage(Long userId, PracticeMessageResponse assistantResponse) {
-        practiceMapper.updateChatHistory(userId, writeChatHistory(List.of(toAssistantMessage(assistantResponse))));
+        practiceMapper.updateChatHistory(
+                userId,
+                PracticeHistoryJsonSupport.writeList(objectMapper, List.of(toAssistantMessage(assistantResponse)))
+        );
     }
 
     /**
@@ -82,7 +75,10 @@ public class PracticeChatHistoryService {
 
         // 当前轮记录只保留有限消息数，切题时会被覆盖，避免无限增长。
         int fromIndex = Math.max(0, messages.size() - PracticeConstants.MAX_CHAT_HISTORY_MESSAGES);
-        practiceMapper.updateChatHistory(userId, writeChatHistory(messages.subList(fromIndex, messages.size())));
+        practiceMapper.updateChatHistory(
+                userId,
+                PracticeHistoryJsonSupport.writeList(objectMapper, messages.subList(fromIndex, messages.size()))
+        );
     }
 
     /**
@@ -94,7 +90,7 @@ public class PracticeChatHistoryService {
     private PracticeChatMessageResponse toUserMessage(String content) {
         return new PracticeChatMessageResponse(
                 USER_ROLE,
-                limitText(content, PracticeConstants.MAX_CHAT_HISTORY_CONTENT_LENGTH),
+                TextUtils.limitText(content, PracticeConstants.MAX_CHAT_HISTORY_CONTENT_LENGTH),
                 null,
                 null
         );
@@ -109,40 +105,10 @@ public class PracticeChatHistoryService {
     private PracticeChatMessageResponse toAssistantMessage(PracticeMessageResponse response) {
         return new PracticeChatMessageResponse(
                 ASSISTANT_ROLE,
-                limitText(response.message(), PracticeConstants.MAX_CHAT_HISTORY_CONTENT_LENGTH),
+                TextUtils.limitText(response.message(), PracticeConstants.MAX_CHAT_HISTORY_CONTENT_LENGTH),
                 PracticeConstants.ACTION_QUESTION.equals(response.action()) ? response.question() : null,
                 response.grading()
         );
     }
 
-    /**
-     * 序列化聊天记录。
-     *
-     * @param messages 聊天消息
-     * @return JSON字符串
-     */
-    private String writeChatHistory(List<PracticeChatMessageResponse> messages) {
-        try {
-            return objectMapper.writeValueAsString(messages);
-        } catch (JsonProcessingException ignored) {
-            // 序列化失败时写入空数组，避免坏数据阻塞主流程。
-            return "[]";
-        }
-    }
-
-    /**
-     * 限制文本长度。
-     *
-     * @param text 原始文本
-     * @param maxLength 最大长度
-     * @return 截断后的文本
-     */
-    private String limitText(String text, int maxLength) {
-        if (text == null || text.length() <= maxLength) {
-            return text;
-        }
-
-        // 截断后保留明确提示，便于跨端展示时知道内容被压缩过。
-        return text.substring(0, maxLength) + "……";
-    }
 }

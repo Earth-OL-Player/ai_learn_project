@@ -48,23 +48,22 @@ class PracticeModelFactory:
         key = self._cache_key(model_config)
 
         # 评分 Agent 绑定结构化输出格式，必须和讨论 Agent 分开缓存。
-        return self._get_or_create(self._grading_agents, key, lambda: create_agent(
-            model=self.chat_model(model_config),
-            tools=[],
-            system_prompt=GRADE_SYSTEM_PROMPT,
-            response_format=PracticeGradeEvaluation,
-        ))
+        return self._get_or_create(
+            self._grading_agents,
+            key,
+            lambda: self._create_agent(model_config, GRADE_SYSTEM_PROMPT, PracticeGradeEvaluation),
+        )
 
     def discussion_agent(self, model_config: PracticeModelConfig | None = None) -> Any:
         """获取本题讨论 Agent。"""
         key = self._cache_key(model_config)
 
         # 讨论 Agent 需要支持自由文本和流式输出，单独维护缓存实例。
-        return self._get_or_create(self._discussion_agents, key, lambda: create_agent(
-            model=self.chat_model(model_config),
-            tools=[],
-            system_prompt=DISCUSSION_SYSTEM_PROMPT,
-        ))
+        return self._get_or_create(
+            self._discussion_agents,
+            key,
+            lambda: self._create_agent(model_config, DISCUSSION_SYSTEM_PROMPT),
+        )
 
     def chat_model(self, model_config: PracticeModelConfig | None = None) -> Any:
         """获取聊天模型。"""
@@ -105,6 +104,22 @@ class PracticeModelFactory:
             max_output_tokens=int(kwargs.get("max_completion_tokens") or 0),
             config_fingerprint=(model_config.configFingerprint if model_config else "").strip(),
         )
+
+    def _create_agent(
+        self,
+        model_config: PracticeModelConfig | None,
+        system_prompt: str,
+        response_format: Any | None = None,
+    ) -> Any:
+        """按刷题场景统一创建 LangChain Agent。"""
+        agent_kwargs: dict[str, Any] = {
+            "model": self.chat_model(model_config),
+            "tools": [],
+            "system_prompt": system_prompt,
+        }
+        if response_format is not None:
+            agent_kwargs["response_format"] = response_format
+        return create_agent(**agent_kwargs)
 
     def _get_or_create(
         self,

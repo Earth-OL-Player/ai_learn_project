@@ -6,12 +6,9 @@ import com.earth.online.player.ailearn.common.logging.infrastructure.AiServiceLo
 import com.earth.online.player.ailearn.common.logging.interfaces.LogLevelRequest;
 import com.earth.online.player.ailearn.common.logging.interfaces.LogLevelResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthSupport;
-import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
-import com.earth.online.player.ailearn.user.domain.User;
-import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.user.application.CurrentUserService;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Locale;
 import org.springframework.boot.logging.LogLevel;
@@ -40,20 +37,20 @@ public class LogLevelAdminService {
 
     private final LoggingSystem loggingSystem;
     private final AiServiceLogLevelClient aiServiceLogLevelClient;
-    private final UserMapper userMapper;
+    private final CurrentUserService currentUserService;
 
     /**
      * 创建日志级别应用服务。
      *
      * @param aiServiceLogLevelClient AI 服务日志级别客户端
-     * @param userMapper 用户仓储
+     * @param currentUserService 当前用户服务
      */
     public LogLevelAdminService(
             AiServiceLogLevelClient aiServiceLogLevelClient,
-            UserMapper userMapper) {
+            CurrentUserService currentUserService) {
         this.loggingSystem = LoggingSystem.get(LogLevelAdminService.class.getClassLoader());
         this.aiServiceLogLevelClient = aiServiceLogLevelClient;
-        this.userMapper = userMapper;
+        this.currentUserService = currentUserService;
     }
 
     /**
@@ -174,11 +171,7 @@ public class LogLevelAdminService {
      * 校验当前用户必须是超级管理员。
      */
     private void requireSuperAdmin() {
-        AuthenticatedUser authenticatedUser = AuthSupport.requireCurrentUser();
-        User user = userMapper.findById(authenticatedUser.userId());
-        if (user == null || !Boolean.TRUE.equals(user.getSuperAdmin())) {
-            throw new BusinessException(ResponseCode.AUTH_FORBIDDEN.code(), "仅超级管理员可管理日志级别");
-        }
+        currentUserService.requireSuperAdmin("仅超级管理员可管理日志级别");
     }
 
     /**
@@ -187,6 +180,6 @@ public class LogLevelAdminService {
      * @return 当前时间
      */
     private OffsetDateTime now() {
-        return OffsetDateTime.now(ZoneId.systemDefault());
+        return DateTimeUtils.currentOffsetDateTime();
     }
 }

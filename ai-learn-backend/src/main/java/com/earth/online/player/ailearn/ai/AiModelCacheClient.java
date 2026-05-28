@@ -1,10 +1,8 @@
 package com.earth.online.player.ailearn.ai;
 
-import com.earth.online.player.ailearn.common.trace.TraceContext;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -38,10 +36,7 @@ public class AiModelCacheClient {
         this.objectMapper = objectMapper;
 
         // Uvicorn 内部接口使用 HTTP/1.1，避免 Java HttpClient 默认升级影响本地服务。
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(timeout())
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
+        this.httpClient = AiServiceHttpSupport.newHttpClient(timeout());
     }
 
     /**
@@ -52,12 +47,9 @@ public class AiModelCacheClient {
             return;
         }
         try {
-            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint()))
-                    .timeout(timeout())
-                    .version(HttpClient.Version.HTTP_1_1)
+            HttpRequest request = AiServiceHttpSupport.newInternalRequestBuilder(properties, timeout(), endpoint())
                     .header("Accept", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .POST(HttpRequest.BodyPublishers.noBody()))
+                    .POST(HttpRequest.BodyPublishers.noBody())
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             logInvalidationResult(response);
@@ -100,21 +92,6 @@ public class AiModelCacheClient {
     }
 
     /**
-     * 补充 AI 服务内部调用请求头。
-     *
-     * @param builder 请求构造器
-     * @return 请求构造器
-     */
-    private HttpRequest.Builder addCommonHeaders(HttpRequest.Builder builder) {
-        builder.header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken());
-        String traceId = TraceContext.getTraceId();
-        if (StringUtils.hasText(traceId)) {
-            builder.header(TraceContext.TRACE_ID_HEADER, traceId);
-        }
-        return builder;
-    }
-
-    /**
      * 判断 AI 服务模型缓存接口是否可调用。
      *
      * @return 是否可调用
@@ -129,7 +106,7 @@ public class AiModelCacheClient {
      * @return 接口地址
      */
     private String endpoint() {
-        return properties.getBaseUrl().replaceAll("/+$", "") + AiServiceConstants.MODEL_CACHE_INVALIDATE_PATH;
+        return AiServiceHttpSupport.normalizeBaseUrl(properties) + AiServiceConstants.MODEL_CACHE_INVALIDATE_PATH;
     }
 
     /**
@@ -138,7 +115,6 @@ public class AiModelCacheClient {
      * @return 超时时间
      */
     private Duration timeout() {
-        int safeTimeoutSeconds = Math.min(MAX_INVALIDATE_TIMEOUT_SECONDS, Math.max(1, properties.getTimeoutSeconds()));
-        return Duration.ofSeconds(safeTimeoutSeconds);
+        return AiServiceHttpSupport.timeout(properties, MAX_INVALIDATE_TIMEOUT_SECONDS);
     }
 }

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import logging
-import time
 from typing import Any
 
 from langchain_core.messages import BaseMessage
@@ -12,6 +11,7 @@ from app.config.log_config import configure_logger
 from app.config.settings import settings
 from app.practice.provider_adapter import PracticeProviderAdapter
 from app.schemas.practice import PracticeModelConfig
+from app.time_utils import elapsed_milliseconds
 
 
 logger = configure_logger("ai_service.practice.llm")
@@ -111,7 +111,7 @@ class PracticeLlmLogger:
             return
 
         # 日志只打印长度和耗时，避免用户答案或模型全文进入日志。
-        elapsed_ms = round((time.perf_counter() - start_time) * 1000)
+        elapsed_ms = elapsed_milliseconds(start_time)
         logger.info(
             "【AI智能刷题流程-流式讨论】可见流式片段进度：traceId=%s source=%s count=%s chars=%s elapsedMs=%s",
             trace_id,

@@ -1,4 +1,5 @@
 import { get, put } from './http';
+import { buildQueryPath } from './queryParams';
 import type { PageResponse } from '../types/page';
 
 export type GenderCode = 'MALE' | 'FEMALE';
@@ -86,12 +87,12 @@ export function updateCurrentProfile(payload: UpdateProfilePayload): Promise<Cur
  * 查询当前用户智能刷题记录列表。
  */
 export function fetchCurrentUserQuestionStats(query: UserQuestionStatsQuery): Promise<PageResponse<UserQuestionStatsItem>> {
-  const params = new URLSearchParams();
-  params.set('pageNo', String(query.pageNo));
-  params.set('pageSize', String(query.pageSize));
-  appendOptionalParam(params, 'keyword', query.keyword);
-  appendOptionalParam(params, 'questionType', query.questionType);
-  return get<PageResponse<UserQuestionStatsItem>>(`/users/me/question-stats?${params.toString()}`);
+  return get<PageResponse<UserQuestionStatsItem>>(buildQueryPath('/users/me/question-stats', {
+    pageNo: query.pageNo,
+    pageSize: query.pageSize,
+    keyword: query.keyword,
+    questionType: query.questionType,
+  }));
 }
 
 /**
@@ -99,13 +100,4 @@ export function fetchCurrentUserQuestionStats(query: UserQuestionStatsQuery): Pr
  */
 export function fetchCurrentUserQuestionStatsOverview(): Promise<UserQuestionStatsOverview> {
   return get<UserQuestionStatsOverview>('/users/me/question-stats/overview');
-}
-
-/**
- * 追加可选查询参数。
- */
-function appendOptionalParam(params: URLSearchParams, key: string, value?: string): void {
-  if (value?.trim()) {
-    params.set(key, value.trim());
-  }
 }

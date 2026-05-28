@@ -32,7 +32,7 @@ public class TokenInvalidationService {
     @Transactional(rollbackFor = Exception.class)
     public void invalidate(JwtParseResult parseResult) {
         if (!StringUtils.hasText(parseResult.tokenId())) {
-            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
+            throw new JwtUnauthorizedException(AuthMessages.SESSION_INVALID_MESSAGE);
         }
 
         // 顺手清理自然过期记录，控制失效表体量。
@@ -52,7 +52,7 @@ public class TokenInvalidationService {
      */
     public void ensureTokenActive(String tokenId) {
         if (!StringUtils.hasText(tokenId) || invalidatedTokenMapper.countByTokenId(tokenId) > 0) {
-            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
+            throw new JwtUnauthorizedException(AuthMessages.SESSION_INVALID_MESSAGE);
         }
     }
 

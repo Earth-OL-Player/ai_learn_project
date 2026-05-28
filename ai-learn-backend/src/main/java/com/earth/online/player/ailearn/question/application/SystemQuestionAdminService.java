@@ -3,8 +3,11 @@ package com.earth.online.player.ailearn.question.application;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthContext;
-import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.common.util.IdRequestUtils;
+import com.earth.online.player.ailearn.common.util.PageRequestUtils;
+import com.earth.online.player.ailearn.common.util.TextUtils;
+import com.earth.online.player.ailearn.question.domain.SystemQuestionLimits;
 import com.earth.online.player.ailearn.question.infrastructure.SystemQuestionAdminMapper;
 import com.earth.online.player.ailearn.question.infrastructure.SystemQuestionRecord;
 import com.earth.online.player.ailearn.question.infrastructure.SystemQuestionWriteRecord;
@@ -15,8 +18,7 @@ import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQue
 import com.earth.online.player.ailearn.question.interfaces.admin.ImportSystemQuestionsPrecheckResponse;
 import com.earth.online.player.ailearn.question.interfaces.admin.SystemQuestionRequest;
 import com.earth.online.player.ailearn.question.interfaces.admin.SystemQuestionResponse;
-import com.earth.online.player.ailearn.user.domain.User;
-import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
+import com.earth.online.player.ailearn.user.application.CurrentUserService;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -24,8 +26,6 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.nio.charset.StandardCharsets;
 import java.security.SecureRandom;
-import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -42,14 +42,6 @@ import org.springframework.web.multipart.MultipartFile;
 @Service
 public class SystemQuestionAdminService {
 
-    private static final int DEFAULT_PAGE_NO = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final int MAX_IMPORT_ROWS = 1000;
-    private static final long MAX_IMPORT_FILE_SIZE = 2 * 1024 * 1024L;
-    private static final int MAX_CODE_LENGTH = 64;
-    private static final int MAX_QUESTION_TYPE_LENGTH = 32;
-    private static final int MAX_LONG_TEXT_LENGTH = 10000;
     private static final BigDecimal DEFAULT_IMPORTANCE_SCORE = BigDecimal.valueOf(60).setScale(1);
     private static final int DEFAULT_OCCURRENCE_COUNT = 0;
     private static final String CSV_HEADER = "code,question,question_type,standard_answer,importance_score,occurrence_count\n";
@@ -74,22 +66,22 @@ public class SystemQuestionAdminService {
     private static final String AUTO_CODE_TEXT = "导入时自动生成";
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    private final UserMapper userMapper;
+    private final CurrentUserService currentUserService;
     private final SystemQuestionAdminMapper systemQuestionAdminMapper;
     private final QuestionTypeCache questionTypeCache;
 
     /**
      * 创建系统题库管理服务。
      *
-     * @param userMapper 用户仓储
+     * @param currentUserService 当前用户服务
      * @param systemQuestionAdminMapper 系统题库仓储
      * @param questionTypeCache 题目分类缓存
      */
     public SystemQuestionAdminService(
-            UserMapper userMapper,
+            CurrentUserService currentUserService,
             SystemQuestionAdminMapper systemQuestionAdminMapper,
             QuestionTypeCache questionTypeCache) {
-        this.userMapper = userMapper;
+        this.currentUserService = currentUserService;
         this.systemQuestionAdminMapper = systemQuestionAdminMapper;
         this.questionTypeCache = questionTypeCache;
     }
@@ -109,11 +101,11 @@ public class SystemQuestionAdminService {
             String keyword,
             String questionType) {
         requireSuperAdmin();
-        int safePageNo = normalizePageNo(pageNo);
-        int safePageSize = normalizePageSize(pageSize);
-        String safeKeyword = trimToNull(keyword);
-        String safeQuestionType = trimToNull(questionType);
-        int offset = (safePageNo - 1) * safePageSize;
+        int safePageNo = PageRequestUtils.normalizePageNo(pageNo);
+        int safePageSize = PageRequestUtils.normalizePageSize(pageSize);
+        String safeKeyword = TextUtils.trimToNull(keyword);
+        String safeQuestionType = TextUtils.trimToNull(questionType);
+        int offset = PageRequestUtils.calculateOffset(safePageNo, safePageSize);
 
         // 系统题库列表只返回未删除题目，避免误展示历史版本。
         List<SystemQuestionResponse> records = systemQuestionAdminMapper
@@ -196,18 +188,14 @@ public class SystemQuestionAdminService {
     @Transactional
     public boolean delete(Long id) {
         requireSuperAdmin();
-        if (id == null || id < 1) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目ID不合法");
-        }
-        int affected = systemQuestionAdminMapper.deleteById(id);
+        Long safeId = IdRequestUtils.requirePositive(id, "题目ID不合法");
+        int affected = systemQuestionAdminMapper.deleteById(safeId);
         if (affected == 0) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "系统题目不存在或已删除");
         }
         questionTypeCache.invalidateAfterCommit();
         return true;
     }
-
-
 
     /**
      * 一键清空系统题库。
@@ -308,14 +296,7 @@ public class SystemQuestionAdminService {
      * 校验当前用户必须是超级管理员。
      */
     private void requireSuperAdmin() {
-        AuthenticatedUser authenticatedUser = AuthContext.getUser();
-        if (authenticatedUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-        User user = userMapper.findById(authenticatedUser.userId());
-        if (user == null || !Boolean.TRUE.equals(user.getSuperAdmin())) {
-            throw new BusinessException(ResponseCode.AUTH_FORBIDDEN.code(), "仅超级管理员可维护系统题库");
-        }
+        currentUserService.requireSuperAdmin("仅超级管理员可维护系统题库");
     }
 
     /**
@@ -325,10 +306,8 @@ public class SystemQuestionAdminService {
      * @return 题目记录
      */
     private SystemQuestionRecord findExisting(Long id) {
-        if (id == null || id < 1) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目ID不合法");
-        }
-        SystemQuestionRecord record = systemQuestionAdminMapper.findById(id);
+        Long safeId = IdRequestUtils.requirePositive(id, "题目ID不合法");
+        SystemQuestionRecord record = systemQuestionAdminMapper.findById(safeId);
         if (record == null) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "系统题目不存在或已删除");
         }
@@ -372,8 +351,11 @@ public class SystemQuestionAdminService {
         if (file == null || file.isEmpty()) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "请选择CSV文件");
         }
-        if (file.getSize() > MAX_IMPORT_FILE_SIZE) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "CSV文件不能超过2MB");
+        if (file.getSize() > SystemQuestionLimits.MAX_IMPORT_FILE_SIZE) {
+            throw new BusinessException(
+                    ResponseCode.PARAM_INVALID.code(),
+                    SystemQuestionLimits.IMPORT_FILE_TOO_LARGE_MESSAGE
+            );
         }
     }
 
@@ -419,8 +401,11 @@ public class SystemQuestionAdminService {
         } catch (IOException exception) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "CSV文件读取失败");
         }
-        if (rows.size() > MAX_IMPORT_ROWS) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "单次最多导入1000道题");
+        if (rows.size() > SystemQuestionLimits.MAX_IMPORT_ROWS) {
+            throw new BusinessException(
+                    ResponseCode.PARAM_INVALID.code(),
+                    SystemQuestionLimits.IMPORT_ROWS_TOO_MANY_MESSAGE
+            );
         }
         return new CsvParseResult(rows, issues);
     }
@@ -609,7 +594,7 @@ public class SystemQuestionAdminService {
             return new RowAnalysis(buildPreviewRow(row, ACTION_ERROR, false, List.of(), issues), null);
         }
         SystemQuestionRequest request = toRequest(row);
-        String code = trimToNull(request.code());
+        String code = TextUtils.trimToNull(request.code());
         if (StringUtils.hasText(code) && !seenCodes.add(code)) {
             issues.add(issue(row.rowIndex(), FIELD_CODE, LABEL_CODE, "题目编码在当前CSV中重复"));
             return new RowAnalysis(buildPreviewRow(row, ACTION_CONFLICT, false, List.of(), issues), null);
@@ -770,29 +755,6 @@ public class SystemQuestionAdminService {
     }
 
     /**
-     * 规整页码。
-     *
-     * @param pageNo 原始页码
-     * @return 安全页码
-     */
-    private int normalizePageNo(Integer pageNo) {
-        return pageNo == null || pageNo < DEFAULT_PAGE_NO ? DEFAULT_PAGE_NO : pageNo;
-    }
-
-    /**
-     * 规整每页数量。
-     *
-     * @param pageSize 原始每页数量
-     * @return 安全每页数量
-     */
-    private int normalizePageSize(Integer pageSize) {
-        if (pageSize == null || pageSize < 1) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    /**
      * 转换题目响应。
      *
      * @param record 题目记录
@@ -807,19 +769,9 @@ public class SystemQuestionAdminService {
                 record.getStandardAnswer(),
                 record.getImportanceScore(),
                 record.getOccurrenceCount(),
-                toOffsetDateTime(record.getCreatedAt()),
-                toOffsetDateTime(record.getUpdatedAt())
+                DateTimeUtils.toOffsetDateTime(record.getCreatedAt()),
+                DateTimeUtils.toOffsetDateTime(record.getUpdatedAt())
         );
-    }
-
-    /**
-     * 转换本地时间。
-     *
-     * @param value 本地时间
-     * @return 带偏移时间
-     */
-    private OffsetDateTime toOffsetDateTime(java.time.LocalDateTime value) {
-        return value == null ? null : value.atZone(ZoneId.systemDefault()).toOffsetDateTime();
     }
 
     /**
@@ -847,8 +799,8 @@ public class SystemQuestionAdminService {
             return null;
         }
         String safeCode = code.trim().toUpperCase(Locale.ROOT);
-        if (safeCode.length() > MAX_CODE_LENGTH) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目编码不能超过64个字符");
+        if (safeCode.length() > SystemQuestionLimits.MAX_CODE_LENGTH) {
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), SystemQuestionLimits.CODE_TOO_LONG_MESSAGE);
         }
         return safeCode;
     }
@@ -861,8 +813,8 @@ public class SystemQuestionAdminService {
      */
     private String normalizeQuestionType(String questionType) {
         String safeType = requireText(questionType, "题目分类不能为空").trim();
-        if (safeType.length() > MAX_QUESTION_TYPE_LENGTH) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目分类不能超过32个字符");
+        if (safeType.length() > SystemQuestionLimits.MAX_QUESTION_TYPE_LENGTH) {
+            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), SystemQuestionLimits.QUESTION_TYPE_TOO_LONG_MESSAGE);
         }
         return safeType;
     }
@@ -896,26 +848,48 @@ public class SystemQuestionAdminService {
     }
 
     /**
-     * 规整可选文本。
-     *
-     * @param value 原始文本
-     * @return 规整文本
-     */
-    private String trimToNull(String value) {
-        return StringUtils.hasText(value) ? value.trim() : null;
-    }
-
-    /**
      * 校验解析后的CSV行。
      *
      * @param row CSV行
      * @param issues 字段问题
      */
     private void validateParsedRow(ParsedCsvRow row, List<ImportSystemQuestionIssueResponse> issues) {
-        validateText(row.rowIndex(), FIELD_QUESTION, LABEL_QUESTION, row.question(), MAX_LONG_TEXT_LENGTH, true, issues);
-        validateText(row.rowIndex(), FIELD_QUESTION_TYPE, LABEL_QUESTION_TYPE, row.questionType(), MAX_QUESTION_TYPE_LENGTH, true, issues);
-        validateText(row.rowIndex(), FIELD_STANDARD_ANSWER, LABEL_STANDARD_ANSWER, row.standardAnswer(), MAX_LONG_TEXT_LENGTH, true, issues);
-        validateText(row.rowIndex(), FIELD_CODE, LABEL_CODE, row.code(), MAX_CODE_LENGTH, false, issues);
+        validateText(
+                row.rowIndex(),
+                FIELD_QUESTION,
+                LABEL_QUESTION,
+                row.question(),
+                SystemQuestionLimits.MAX_LONG_TEXT_LENGTH,
+                true,
+                issues
+        );
+        validateText(
+                row.rowIndex(),
+                FIELD_QUESTION_TYPE,
+                LABEL_QUESTION_TYPE,
+                row.questionType(),
+                SystemQuestionLimits.MAX_QUESTION_TYPE_LENGTH,
+                true,
+                issues
+        );
+        validateText(
+                row.rowIndex(),
+                FIELD_STANDARD_ANSWER,
+                LABEL_STANDARD_ANSWER,
+                row.standardAnswer(),
+                SystemQuestionLimits.MAX_LONG_TEXT_LENGTH,
+                true,
+                issues
+        );
+        validateText(
+                row.rowIndex(),
+                FIELD_CODE,
+                LABEL_CODE,
+                row.code(),
+                SystemQuestionLimits.MAX_CODE_LENGTH,
+                false,
+                issues
+        );
         validateScore(row.rowIndex(), row.importanceScore(), issues);
         validateOccurrenceCount(row.rowIndex(), row.occurrenceCount(), issues);
     }

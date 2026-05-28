@@ -124,57 +124,6 @@ canvas {
   }
 }
 
-@media (max-width: 900px) {
-  .markdown-layout,
-  .markdown-layout.is-toc-collapsed {
-    // Markdown 阅读页在平板竖屏以下切换为目录在上、正文在下。
-    grid-template-columns: 1fr;
-    gap: 16px;
-  }
-
-  .markdown-toc-card {
-    // 手机端目录只留在页面顶部，避免下滑阅读时悬浮遮挡正文。
-    position: static;
-    top: auto;
-    z-index: auto;
-    max-height: min(46vh, 340px);
-    padding: 14px;
-    border-radius: 20px;
-  }
-
-  .markdown-toc-card.is-collapsed {
-    padding: 12px;
-  }
-
-  .markdown-toc-card.is-collapsed .markdown-toc-header {
-    justify-content: space-between;
-  }
-
-  .markdown-toc-card.is-collapsed .markdown-toc-header::before {
-    color: var(--color-heading);
-    font-size: 16px;
-    font-weight: 800;
-    content: "目录";
-  }
-
-  .interview-category-card.is-collapsed .markdown-toc-header::before {
-    content: "分类";
-  }
-
-  .markdown-toc-card.is-collapsed .markdown-toc-toggle {
-    width: auto;
-    min-height: 44px;
-    padding: 8px 14px;
-    line-height: 1;
-    writing-mode: initial;
-  }
-
-  .markdown-toc-list {
-    max-height: 240px;
-    overscroll-behavior: contain;
-  }
-}
-
 @media (max-width: 768px) {
   body {
     // 手机端使用动态视口高度，减少浏览器地址栏收起展开带来的跳动。

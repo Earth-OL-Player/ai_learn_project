@@ -16,6 +16,11 @@ class PracticeSseEncoder:
         """构造消息片段事件。"""
         return self.build_event("message", {"content": content})
 
+    def complete_message(self, content: str) -> tuple[str, str]:
+        """构造单条消息后立即完成的事件序列。"""
+        # 本地兜底和异常兜底都必须先发送内容再发送完成事件。
+        return self.message(content), self.done()
+
     def done(self) -> str:
         """构造流式完成事件。"""
         return self.build_event("done", {})

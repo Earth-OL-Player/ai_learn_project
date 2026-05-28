@@ -76,7 +76,7 @@ public class JwtTokenService {
      */
     public JwtParseResult parseTokenDetail(String token) {
         if (!StringUtils.hasText(token)) {
-            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
+            throw new JwtUnauthorizedException(AuthMessages.SESSION_INVALID_MESSAGE);
         }
 
         try {
@@ -89,7 +89,7 @@ public class JwtTokenService {
             AuthenticatedUser user = buildAuthenticatedUser(claims);
             return new JwtParseResult(user, claims.getId(), claims.getExpiration().toInstant().getEpochSecond());
         } catch (JwtException | IllegalArgumentException exception) {
-            throw new JwtUnauthorizedException("登录状态已过期，请重新登录");
+            throw new JwtUnauthorizedException(AuthMessages.SESSION_EXPIRED_MESSAGE);
         }
     }
 
@@ -112,7 +112,7 @@ public class JwtTokenService {
         String subject = claims.getSubject();
         String username = claims.get(USERNAME_CLAIM, String.class);
         if (!StringUtils.hasText(subject) || !StringUtils.hasText(username)) {
-            throw new JwtUnauthorizedException("登录状态已失效，请重新登录");
+            throw new JwtUnauthorizedException(AuthMessages.SESSION_INVALID_MESSAGE);
         }
         return new AuthenticatedUser(Long.valueOf(subject), username);
     }

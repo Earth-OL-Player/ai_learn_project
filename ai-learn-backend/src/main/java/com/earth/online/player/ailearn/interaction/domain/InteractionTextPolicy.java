@@ -11,6 +11,9 @@ public final class InteractionTextPolicy {
     /** 内容最大长度。 */
     public static final int MAX_CONTENT_LENGTH = 1000;
 
+    /** 内容长度范围展示文本。 */
+    public static final String CONTENT_LENGTH_RANGE_TEXT = MIN_CONTENT_LENGTH + "到" + MAX_CONTENT_LENGTH + "位";
+
     private static final char HALF_WIDTH_AT = '@';
     private static final char FULL_WIDTH_AT = '＠';
     private static final int VARIATION_SELECTOR_START = 0xFE00;

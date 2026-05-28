@@ -1,24 +1,23 @@
 package com.earth.online.player.ailearn.common.logging.infrastructure;
 
 import com.earth.online.player.ailearn.ai.AiServiceConstants;
+import com.earth.online.player.ailearn.ai.AiServiceHttpSupport;
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.logging.ManagedLogService;
 import com.earth.online.player.ailearn.common.logging.interfaces.LogLevelResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.trace.TraceContext;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
-import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.util.Optional;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -48,10 +47,7 @@ public class AiServiceLogLevelClient {
     public AiServiceLogLevelClient(AiServiceProperties properties, ObjectMapper objectMapper) {
         this.properties = properties;
         this.objectMapper = objectMapper;
-        this.httpClient = HttpClient.newBuilder()
-                .connectTimeout(timeout())
-                .version(HttpClient.Version.HTTP_1_1)
-                .build();
+        this.httpClient = AiServiceHttpSupport.newHttpClient(timeout());
     }
 
     /**
@@ -64,12 +60,9 @@ public class AiServiceLogLevelClient {
             return Optional.empty();
         }
         try {
-            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint()))
-                    .timeout(timeout())
-                    .version(HttpClient.Version.HTTP_1_1)
+            HttpRequest request = AiServiceHttpSupport.newInternalRequestBuilder(properties, timeout(), endpoint())
                     .header("Accept", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .GET())
+                    .GET()
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return parseSuccessResponse(response.body(), DEFAULT_READY_MESSAGE);
@@ -94,13 +87,10 @@ public class AiServiceLogLevelClient {
         try {
             ObjectNode payload = objectMapper.createObjectNode();
             payload.put(LEVEL_FIELD, level);
-            HttpRequest request = addCommonHeaders(HttpRequest.newBuilder()
-                    .uri(URI.create(endpoint()))
-                    .timeout(timeout())
-                    .version(HttpClient.Version.HTTP_1_1)
+            HttpRequest request = AiServiceHttpSupport.newInternalRequestBuilder(properties, timeout(), endpoint())
                     .header("Content-Type", AiServiceConstants.JSON_CONTENT_TYPE)
                     .header("Accept", AiServiceConstants.JSON_CONTENT_TYPE)
-                    .PUT(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8)))
+                    .PUT(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload), StandardCharsets.UTF_8))
                     .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
             return parseSuccessResponse(response.body(), DEFAULT_SUCCESS_MESSAGE)
@@ -146,21 +136,6 @@ public class AiServiceLogLevelClient {
     }
 
     /**
-     * 补充 AI 服务内部调用通用请求头。
-     *
-     * @param builder 请求构造器
-     * @return 请求构造器
-     */
-    private HttpRequest.Builder addCommonHeaders(HttpRequest.Builder builder) {
-        builder.header(AiServiceConstants.INTERNAL_TOKEN_HEADER, properties.getToken());
-        String traceId = TraceContext.getTraceId();
-        if (StringUtils.hasText(traceId)) {
-            builder.header(TraceContext.TRACE_ID_HEADER, traceId);
-        }
-        return builder;
-    }
-
-    /**
      * 判断 AI 服务端点是否可调用。
      *
      * @return 是否存在基础地址
@@ -175,7 +150,7 @@ public class AiServiceLogLevelClient {
      * @return 完整端点地址
      */
     private String endpoint() {
-        return properties.getBaseUrl().replaceAll("/+$", "") + AiServiceConstants.LOG_LEVEL_PATH;
+        return AiServiceHttpSupport.normalizeBaseUrl(properties) + AiServiceConstants.LOG_LEVEL_PATH;
     }
 
     /**
@@ -184,7 +159,7 @@ public class AiServiceLogLevelClient {
      * @return 超时时间
      */
     private Duration timeout() {
-        return Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds()));
+        return AiServiceHttpSupport.timeout(properties);
     }
 
     /**
@@ -193,6 +168,6 @@ public class AiServiceLogLevelClient {
      * @return 当前时间
      */
     private OffsetDateTime now() {
-        return OffsetDateTime.now(ZoneId.systemDefault());
+        return DateTimeUtils.currentOffsetDateTime();
     }
 }

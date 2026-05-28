@@ -1,4 +1,5 @@
 import { get, post } from './http';
+import { buildQueryPath } from './queryParams';
 import type { CommentItem, CreateCommentPayload } from '../types/comment';
 import type { PageResponse } from '../types/page';
 
@@ -6,7 +7,7 @@ import type { PageResponse } from '../types/page';
  * 分页查询评论列表。
  */
 export function fetchComments(pageNo: number, pageSize: number, sort: string): Promise<PageResponse<CommentItem>> {
-  return get<PageResponse<CommentItem>>(`/comments?pageNo=${pageNo}&pageSize=${pageSize}&sort=${sort}`);
+  return get<PageResponse<CommentItem>>(buildQueryPath('/comments', { pageNo, pageSize, sort }));
 }
 
 /**

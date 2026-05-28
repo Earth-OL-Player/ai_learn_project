@@ -23,24 +23,17 @@ public interface SystemQuestionAdminMapper {
      * @param pageSize 每页数量
      * @return 题目列表
      */
-    @Select("""
-            <script>
+    @Select({
+            "<script>",
+            """
             SELECT id, code, question, question_type, standard_answer, importance_score,
                    occurrence_count, created_at, updated_at, deleted
-            FROM questions
-            WHERE deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (code LIKE CONCAT('%', #{keyword}, '%')
-                   OR question LIKE CONCAT('%', #{keyword}, '%')
-                   OR standard_answer LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='questionType != null and questionType != ""'>
-              AND question_type = #{questionType}
-            </if>
-            ORDER BY id ASC
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+            """,
+            SystemQuestionAdminSql.ADMIN_QUESTION_PAGE_FILTER_SQL,
+            "ORDER BY id ASC",
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<SystemQuestionRecord> findPage(
             @Param("keyword") String keyword,
             @Param("questionType") String questionType,
@@ -55,21 +48,12 @@ public interface SystemQuestionAdminMapper {
      * @param questionType 题目分类
      * @return 总数
      */
-    @Select("""
-            <script>
-            SELECT COUNT(1)
-            FROM questions
-            WHERE deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (code LIKE CONCAT('%', #{keyword}, '%')
-                   OR question LIKE CONCAT('%', #{keyword}, '%')
-                   OR standard_answer LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='questionType != null and questionType != ""'>
-              AND question_type = #{questionType}
-            </if>
-            </script>
-            """)
+    @Select({
+            "<script>",
+            "SELECT COUNT(1)",
+            SystemQuestionAdminSql.ADMIN_QUESTION_PAGE_FILTER_SQL,
+            "</script>"
+    })
     long countPage(@Param("keyword") String keyword, @Param("questionType") String questionType);
 
     /**
@@ -163,4 +147,30 @@ public interface SystemQuestionAdminMapper {
     @Update("TRUNCATE TABLE questions")
     void truncateQuestions();
 
+}
+
+/**
+ * 系统题库管理 Mapper 复用 SQL 片段。
+ */
+final class SystemQuestionAdminSql {
+
+    /** 系统题库管理列表与计数共用筛选条件。 */
+    static final String ADMIN_QUESTION_PAGE_FILTER_SQL = """
+            FROM questions
+            WHERE deleted = 0
+            <if test='keyword != null and keyword != ""'>
+              AND (code LIKE CONCAT('%', #{keyword}, '%')
+                   OR question LIKE CONCAT('%', #{keyword}, '%')
+                   OR standard_answer LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test='questionType != null and questionType != ""'>
+              AND question_type = #{questionType}
+            </if>
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private SystemQuestionAdminSql() {
+    }
 }

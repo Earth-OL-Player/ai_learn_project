@@ -1,4 +1,5 @@
 import { del, get, getBlob, post, postForm, put } from './http';
+import { buildQueryPath } from './queryParams';
 import type { PageResponse } from '../types/page';
 import type {
   ImportSystemQuestionsPrecheckResult,
@@ -12,12 +13,12 @@ import type {
  * 分页查询系统题库。
  */
 export function fetchSystemQuestions(query: SystemQuestionQuery): Promise<PageResponse<SystemQuestionItem>> {
-  const params = new URLSearchParams();
-  params.set('pageNo', String(query.pageNo));
-  params.set('pageSize', String(query.pageSize));
-  appendOptionalParam(params, 'keyword', query.keyword);
-  appendOptionalParam(params, 'questionType', query.questionType);
-  return get<PageResponse<SystemQuestionItem>>(`/admin/system-questions?${params.toString()}`);
+  return get<PageResponse<SystemQuestionItem>>(buildQueryPath('/admin/system-questions', {
+    pageNo: query.pageNo,
+    pageSize: query.pageSize,
+    keyword: query.keyword,
+    questionType: query.questionType,
+  }));
 }
 
 /**
@@ -66,25 +67,21 @@ export function downloadSystemQuestionTemplate(): Promise<Blob> {
  * 预检系统题库 CSV。
  */
 export function precheckImportSystemQuestions(file: File): Promise<ImportSystemQuestionsPrecheckResult> {
-  const formData = new FormData();
-  formData.append('file', file);
-  return postForm<ImportSystemQuestionsPrecheckResult>('/admin/system-questions/import/precheck', formData);
+  return postForm<ImportSystemQuestionsPrecheckResult>('/admin/system-questions/import/precheck', buildCsvImportForm(file));
 }
 
 /**
  * 导入系统题库 CSV。
  */
 export function importSystemQuestions(file: File): Promise<ImportSystemQuestionsResult> {
-  const formData = new FormData();
-  formData.append('file', file);
-  return postForm<ImportSystemQuestionsResult>('/admin/system-questions/import', formData);
+  return postForm<ImportSystemQuestionsResult>('/admin/system-questions/import', buildCsvImportForm(file));
 }
 
 /**
- * 追加可选查询参数。
+ * 构造系统题库 CSV 上传表单。
  */
-function appendOptionalParam(params: URLSearchParams, key: string, value?: string): void {
-  if (value) {
-    params.set(key, value);
-  }
+function buildCsvImportForm(file: File): FormData {
+  const formData = new FormData();
+  formData.append('file', file);
+  return formData;
 }

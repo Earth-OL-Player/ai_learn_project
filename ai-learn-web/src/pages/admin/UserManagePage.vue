@@ -15,7 +15,12 @@
         <small>达到上限后，注册页将提示用户等待管理员升级服务器并扩容。</small>
       </div>
       <div class="user-limit-action">
-        <el-input-number v-model="limitForm.maxUsers" :min="1" :max="1000000" :step="10" />
+        <el-input-number
+          v-model="limitForm.maxUsers"
+          :min="USER_LIMIT_MIN_USERS"
+          :max="USER_LIMIT_MAX_USERS"
+          :step="USER_LIMIT_STEP"
+        />
         <el-button type="primary" round :loading="savingLimit" @click="saveUserLimit">保存限制</el-button>
       </div>
     </el-card>
@@ -81,18 +86,36 @@
       <el-form :model="form" label-position="top">
         <div class="dialog-grid">
           <el-form-item label="用户名">
-            <el-input v-model.trim="form.username" maxlength="32" placeholder="3-32位字母、数字、下划线" />
+            <el-input
+              v-model.trim="form.username"
+              :maxlength="USER_PROFILE_LIMITS.usernameMaxLength"
+              placeholder="3-32位字母、数字、下划线"
+            />
           </el-form-item>
           <el-form-item :label="editingId ? '新密码（可空）' : '密码'">
-            <el-input v-model="form.password" type="password" maxlength="64" show-password placeholder="8-64位密码" />
+            <el-input
+              v-model="form.password"
+              type="password"
+              :maxlength="USER_PROFILE_LIMITS.passwordMaxLength"
+              show-password
+              placeholder="8-64位密码"
+            />
           </el-form-item>
         </div>
         <div class="dialog-grid">
           <el-form-item label="昵称">
-            <el-input v-model.trim="form.nickname" maxlength="64" placeholder="请输入昵称" />
+            <el-input
+              v-model.trim="form.nickname"
+              :maxlength="USER_PROFILE_LIMITS.nicknameMaxLength"
+              placeholder="请输入昵称"
+            />
           </el-form-item>
           <el-form-item label="邮箱">
-            <el-input v-model.trim="form.email" maxlength="128" placeholder="demo@example.com" />
+            <el-input
+              v-model.trim="form.email"
+              :maxlength="USER_PROFILE_LIMITS.emailMaxLength"
+              placeholder="demo@example.com"
+            />
           </el-form-item>
         </div>
         <el-form-item label="头像地址（可空）">
@@ -135,8 +158,23 @@ import {
   updateUserLimit,
 } from '../../api/adminUsers';
 import type { AdminUserItem, AdminUserPayload, UserLimitInfo } from '../../types/admin-user';
+import { formatMediumDateTime as formatTime } from '../../utils/dateTimeFormat';
+import { resolveErrorMessage } from '../../utils/errorMessage';
+import { resolveUserAvatarText } from '../../utils/userDisplay';
+import {
+  isValidEmail,
+  isValidNickname,
+  isValidPasswordLength,
+  isValidUsername,
+  USER_PROFILE_LIMITS,
+  USER_PROFILE_MESSAGES,
+} from '../../utils/userProfileValidation';
 
 const PAGE_SIZE = 10;
+const USER_LIMIT_MIN_USERS = 1;
+const USER_LIMIT_MAX_USERS = 1_000_000;
+const USER_LIMIT_STEP = 10;
+const USER_LIMIT_DEFAULT_MAX_USERS = 10_000;
 const loading = ref(false);
 const saving = ref(false);
 const savingLimit = ref(false);
@@ -145,8 +183,8 @@ const editingId = ref<string | null>(null);
 const users = ref<AdminUserItem[]>([]);
 const page = reactive({ pageNo: 1, pageSize: PAGE_SIZE, total: 0 });
 const filters = reactive({ keyword: '' });
-const limitInfo = reactive<UserLimitInfo>({ maxUsers: 10000, currentUsers: 0 });
-const limitForm = reactive({ maxUsers: 10000 });
+const limitInfo = reactive<UserLimitInfo>({ maxUsers: USER_LIMIT_DEFAULT_MAX_USERS, currentUsers: 0 });
+const limitForm = reactive({ maxUsers: USER_LIMIT_DEFAULT_MAX_USERS });
 const form = reactive<AdminUserPayload>(buildEmptyForm());
 
 /**
@@ -175,7 +213,7 @@ async function saveUserLimit(): Promise<void> {
     Object.assign(limitInfo, result);
     ElMessage.success('最大用户数限制已保存');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存限制失败');
+    ElMessage.error(resolveErrorMessage(error, '保存限制失败'));
   } finally {
     savingLimit.value = false;
   }
@@ -256,7 +294,7 @@ async function saveUser(): Promise<void> {
     dialogVisible.value = false;
     await Promise.all([loadUsers(), loadUserLimit()]);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存用户失败');
+    ElMessage.error(resolveErrorMessage(error, '保存用户失败'));
   } finally {
     saving.value = false;
   }
@@ -276,24 +314,24 @@ async function handleDelete(row: AdminUserItem): Promise<void> {
  * 校验用户表单。
  */
 function validateUserForm(): boolean {
-  if (!/^[A-Za-z0-9_]{3,32}$/.test(form.username)) {
-    ElMessage.warning('用户名仅支持3到32位字母、数字和下划线');
+  if (!isValidUsername(form.username)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.usernameInvalid);
     return false;
   }
-  if (!editingId.value && (!form.password || form.password.length < 8)) {
-    ElMessage.warning('新增用户密码长度需为8到64位');
+  if (!editingId.value && (!form.password || form.password.length < USER_PROFILE_LIMITS.passwordMinLength)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.createPasswordInvalid);
     return false;
   }
-  if (form.password && (form.password.length < 8 || form.password.length > 64)) {
-    ElMessage.warning('密码长度需为8到64位');
+  if (form.password && !isValidPasswordLength(form.password)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.passwordInvalid);
     return false;
   }
-  if (!form.nickname.trim()) {
-    ElMessage.warning('昵称不能为空');
+  if (!isValidNickname(form.nickname)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.nicknameInvalid);
     return false;
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
-    ElMessage.warning('请输入正确的邮箱地址');
+  if (!isValidEmail(form.email)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.emailInvalid);
     return false;
   }
   return true;
@@ -317,14 +355,7 @@ function normalizePayload(): AdminUserPayload {
  * 生成头像默认文字。
  */
 function avatarText(row: AdminUserItem): string {
-  return (row.nickname || row.username).slice(0, 1).toUpperCase();
-}
-
-/**
- * 格式化时间。
- */
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
+  return resolveUserAvatarText(row);
 }
 
 onMounted(async () => {

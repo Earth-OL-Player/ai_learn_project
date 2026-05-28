@@ -1,5 +1,7 @@
 package com.earth.online.player.ailearn.user.domain;
 
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 
@@ -21,7 +23,7 @@ public final class UserSummaryConverter {
      * @return 用户摘要
      */
     public static UserSummary toSummary(User user) {
-        int experience = user.getExperience() == null ? 0 : user.getExperience();
+        int experience = NumberUtils.toIntOrZero(user.getExperience());
         GrowthLevel level = GrowthLevel.resolveByExperience(experience);
         GrowthRank rank = GrowthRank.resolveByExperience(experience);
         boolean superAdmin = Boolean.TRUE.equals(user.getSuperAdmin());
@@ -45,7 +47,7 @@ public final class UserSummaryConverter {
                 Math.max(0, level.nextLevelExperience() - experience),
                 level.progressText(experience),
                 superAdmin,
-                user.getCreatedAt().atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime()
+                DateTimeUtils.toOffsetDateTime(user.getCreatedAt())
         );
     }
 }

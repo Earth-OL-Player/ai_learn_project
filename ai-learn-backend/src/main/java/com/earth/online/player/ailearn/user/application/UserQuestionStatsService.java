@@ -3,6 +3,7 @@ package com.earth.online.player.ailearn.user.application;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.security.AuthSupport;
 import com.earth.online.player.ailearn.common.util.PageRequestUtils;
+import com.earth.online.player.ailearn.common.util.TextUtils;
 import com.earth.online.player.ailearn.user.infrastructure.UserQuestionStatsMapper;
 import com.earth.online.player.ailearn.user.infrastructure.UserQuestionStatsOverviewRecord;
 import com.earth.online.player.ailearn.user.infrastructure.UserQuestionStatsRecord;
@@ -52,8 +53,8 @@ public class UserQuestionStatsService {
         int normalizedPageNo = PageRequestUtils.normalizePageNo(pageNo);
         int normalizedPageSize = PageRequestUtils.normalizePageSize(pageSize);
         int offset = PageRequestUtils.calculateOffset(normalizedPageNo, normalizedPageSize);
-        String normalizedKeyword = normalizeOptional(keyword);
-        String normalizedQuestionType = normalizeOptional(questionType);
+        String normalizedKeyword = TextUtils.trimToNull(keyword);
+        String normalizedQuestionType = TextUtils.trimToNull(questionType);
 
         // 列表接口只返回汇总表字段和题目表题干、题型，不读取答案与答题明细。
         List<UserQuestionStatsItemResponse> records = userQuestionStatsMapper
@@ -126,19 +127,6 @@ public class UserQuestionStatsService {
                 safeDecimal(record.getAverageLastScore()),
                 safeLong(record.getWeakCount())
         );
-    }
-
-    /**
-     * 规整可选查询参数。
-     *
-     * @param value 原始参数
-     * @return 规整后的参数
-     */
-    private static String normalizeOptional(String value) {
-        if (value == null || value.trim().isEmpty()) {
-            return null;
-        }
-        return value.trim();
     }
 
     /**

@@ -231,7 +231,14 @@
       <el-dialog v-model="profileDialogVisible" title="编辑资料" width="520px" class="profile-edit-dialog" destroy-on-close align-center>
         <el-form :model="profileForm" label-position="top" class="profile-edit-form" @submit.prevent>
           <el-form-item label="昵称">
-            <el-input v-model.trim="profileForm.nickname" maxlength="64" show-word-limit clearable placeholder="请输入昵称" size="large" />
+            <el-input
+              v-model.trim="profileForm.nickname"
+              :maxlength="USER_PROFILE_LIMITS.nicknameMaxLength"
+              show-word-limit
+              clearable
+              placeholder="请输入昵称"
+              size="large"
+            />
           </el-form-item>
           <el-form-item label="性别">
             <el-select v-model="profileForm.gender" clearable placeholder="-" size="large">
@@ -241,7 +248,7 @@
           <el-form-item label="座右铭">
             <el-input
               v-model.trim="profileForm.motto"
-              maxlength="60"
+              :maxlength="USER_PROFILE_LIMITS.mottoMaxLength"
               show-word-limit
               clearable
               placeholder="请输入座右铭"
@@ -297,7 +304,17 @@ import { useAuthStore } from '../../stores/auth';
 import type { PageResponse } from '../../types/page';
 import ModelEntitlementSummary from '../../components/model/ModelEntitlementSummary.vue';
 import GrowthOverviewPanel from './components/GrowthOverviewPanel.vue';
+import { formatFullDateTime as formatDateTime } from '../../utils/dateTimeFormat';
+import { resolveErrorMessage } from '../../utils/errorMessage';
 import { openModelAuthorization } from '../../utils/modelAuthorization';
+import { clampPercentValue as clampPercent, formatNumberDisplay as formatScore } from '../../utils/numberDisplay';
+import { resolveAvatarText, resolveUserDisplayName } from '../../utils/userDisplay';
+import {
+  isValidMotto,
+  isValidNickname,
+  USER_PROFILE_LIMITS,
+  USER_PROFILE_MESSAGES,
+} from '../../utils/userProfileValidation';
 
 const PROFILE_MOBILE_QUERY = '(max-width: 720px)';
 const DEFAULT_QUESTION_STATS_PAGE_SIZE = 10;
@@ -346,8 +363,8 @@ const questionStatsPage = ref<PageResponse<UserQuestionStatsItem>>({
 });
 
 // 展示名优先使用昵称，未设置时回退用户名。
-const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
-const avatarText = computed(() => displayName.value.slice(0, 1).toUpperCase());
+const displayName = computed(() => resolveUserDisplayName(authStore.user));
+const avatarText = computed(() => resolveAvatarText(displayName.value));
 const genderText = computed(() => resolveGenderText(authStore.user?.gender || null));
 const profileDescriptionColumn = computed(() => (isProfileMobile.value ? 1 : 2));
 
@@ -370,13 +387,8 @@ const weakTypeStats = computed(() => {
 });
 const typeStatsForChart = computed(() => (questionStatsOverview.value?.typeStats ?? []).slice(0, CHART_TOP_LIMIT));
 
-// 注册时间统一展示为本地可读格式。
-const formattedCreatedAt = computed(() => {
-  if (!authStore.user?.createdAt) {
-    return '暂未获取';
-  }
-  return new Date(authStore.user.createdAt).toLocaleString('zh-CN', { hour12: false });
-});
+// 注册时间复用统一日期格式化逻辑，避免页面内重复解析接口时间。
+const formattedCreatedAt = computed(() => formatDateTime(authStore.user?.createdAt, '暂未获取'));
 
 /**
  * 切换个人中心左侧导航。
@@ -412,12 +424,12 @@ function resetProfileForm(): void {
  */
 async function saveProfile(): Promise<void> {
   const nickname = profileForm.nickname.trim();
-  if (!nickname || nickname.length > 64) {
-    ElMessage.warning('昵称不能为空，且不能超过64位');
+  if (!isValidNickname(nickname)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.nicknameInvalid);
     return;
   }
-  if (profileForm.motto.trim().length > 60) {
-    ElMessage.warning('座右铭不能超过60位');
+  if (!isValidMotto(profileForm.motto)) {
+    ElMessage.warning(USER_PROFILE_MESSAGES.mottoInvalid);
     return;
   }
 
@@ -433,7 +445,7 @@ async function saveProfile(): Promise<void> {
     profileDialogVisible.value = false;
     resetProfileForm();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '资料保存失败');
+    ElMessage.error(resolveErrorMessage(error, '资料保存失败'));
   } finally {
     savingProfile.value = false;
   }
@@ -469,7 +481,7 @@ async function redeemCode(): Promise<void> {
     redeemForm.code = '';
     ElMessage.success(result.message);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '授权失败');
+    ElMessage.error(resolveErrorMessage(error, '授权失败'));
   } finally {
     redeeming.value = false;
   }
@@ -505,7 +517,7 @@ async function refreshQuestionStats(): Promise<void> {
     questionStatsOverview.value = overview;
     questionStatsPage.value = page;
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '智能刷题记录加载失败');
+    ElMessage.error(resolveErrorMessage(error, '智能刷题记录加载失败'));
   } finally {
     questionStatsLoading.value = false;
   }
@@ -533,7 +545,7 @@ async function loadQuestionStatsPage(): Promise<void> {
       questionType: questionStatsQuery.questionType,
     });
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '智能刷题记录查询失败');
+    ElMessage.error(resolveErrorMessage(error, '智能刷题记录查询失败'));
   } finally {
     questionStatsLoading.value = false;
   }
@@ -558,30 +570,6 @@ function resolveGenderText(gender: GenderCode | null): string {
     return '女';
   }
   return '-';
-}
-
-/**
- * 格式化得分。
- *
- * @param value 原始得分
- * @return 展示得分
- */
-function formatScore(value: number | string | null | undefined): string {
-  const score = Number(value ?? 0);
-  return Number.isInteger(score) ? String(score) : score.toFixed(1).replace(/\.0$/, '');
-}
-
-/**
- * 格式化日期时间。
- *
- * @param value 原始时间
- * @return 展示时间
- */
-function formatDateTime(value: string | null | undefined): string {
-  if (!value) {
-    return '-';
-  }
-  return new Date(value).toLocaleString('zh-CN', { hour12: false });
 }
 
 /**
@@ -614,17 +602,6 @@ function resolveWeakPercent(item: UserQuestionTypeStats): number {
 }
 
 /**
- * 限制图表百分比范围。
- *
- * @param value 原始百分值
- * @return 安全百分值
- */
-function clampPercent(value: number | string | null | undefined): number {
-  const percent = Number(value ?? 0);
-  return Math.max(0, Math.min(100, Math.round(percent)));
-}
-
-/**
  * 同步个人资料表格列数断点。
  *
  * @param event 媒体查询变化事件
@@ -645,7 +622,7 @@ onMounted(() => {
   syncProfileViewport();
   profileMediaQuery.addEventListener('change', syncProfileViewport);
   loadModelEntitlementStatus().catch((error: unknown) => {
-    ElMessage.error(error instanceof Error ? error.message : '模型权益加载失败');
+    ElMessage.error(resolveErrorMessage(error, '模型权益加载失败'));
   });
 });
 

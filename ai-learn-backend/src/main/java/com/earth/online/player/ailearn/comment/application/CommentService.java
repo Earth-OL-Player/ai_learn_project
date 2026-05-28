@@ -10,13 +10,16 @@ import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.AuthSupport;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.common.util.PageRequestUtils;
-import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
-import com.earth.online.player.ailearn.growth.domain.GrowthRank;
+import com.earth.online.player.ailearn.interaction.application.InteractionContentValidator;
+import com.earth.online.player.ailearn.interaction.application.InteractionLikeToggler;
+import com.earth.online.player.ailearn.interaction.application.InteractionTargetValidator;
 import com.earth.online.player.ailearn.interaction.domain.AuthorSummary;
+import com.earth.online.player.ailearn.interaction.domain.AuthorSummaryConverter;
 import com.earth.online.player.ailearn.interaction.domain.InteractionSort;
 import com.earth.online.player.ailearn.interaction.domain.InteractionTextPolicy;
-import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -29,6 +32,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class CommentService {
 
+    private static final String CONTENT_NAME = "评论";
     private static final int DEFAULT_LIKE_COUNT = 0;
 
     private final CommentMapper commentMapper;
@@ -78,7 +82,7 @@ public class CommentService {
     public CommentResponse create(CreateCommentRequest request) {
         AuthenticatedUser currentUser = AuthSupport.requireCurrentUser();
         String content = InteractionTextPolicy.normalize(request.content());
-        validateContent(content);
+        InteractionContentValidator.validatePlainTextContent(content, CONTENT_NAME);
         validateParentComment(request.parentId());
 
         // 评论区仅支持纯文字和一级父子评论。
@@ -104,12 +108,14 @@ public class CommentService {
         ensureCommentExists(commentId);
 
         // INSERT IGNORE 成功代表点赞，失败代表之前已点赞，需要取消。
-        int insertedRows = commentMapper.insertLike(commentId, currentUser.userId());
-        if (insertedRows > 0) {
-            commentMapper.increaseLikeCount(commentId);
-        } else if (commentMapper.deleteLike(commentId, currentUser.userId()) > 0) {
-            commentMapper.decreaseLikeCount(commentId);
-        }
+        InteractionLikeToggler.toggle(
+                commentId,
+                currentUser.userId(),
+                commentMapper::insertLike,
+                commentMapper::deleteLike,
+                commentMapper::increaseLikeCount,
+                commentMapper::decreaseLikeCount
+        );
         return findOne(commentId, currentUser.userId());
     }
 
@@ -152,28 +158,12 @@ public class CommentService {
     }
 
     /**
-     * 校验评论内容。
-     *
-     * @param content 已规整内容
-     */
-    private void validateContent(String content) {
-        if (InteractionTextPolicy.hasInvalidLength(content)) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "评论内容长度需在2到1000位之间");
-        }
-        if (InteractionTextPolicy.containsUnsupportedContent(content)) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "仅支持纯文字，不能使用表情和艾特");
-        }
-    }
-
-    /**
      * 确认评论存在。
      *
      * @param commentId 评论ID
      */
     private void ensureCommentExists(Long commentId) {
-        if (commentId == null || commentMapper.countActiveById(commentId) == 0) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "评论不存在");
-        }
+        InteractionTargetValidator.ensureExists(commentId, CONTENT_NAME, commentMapper::countActiveById);
     }
 
     /**
@@ -184,10 +174,10 @@ public class CommentService {
      * @return 评论响应
      */
     private CommentResponse findOne(Long commentId, long viewerUserId) {
-        CommentRecord record = commentMapper.findById(commentId, viewerUserId);
-        if (record == null) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "评论不存在");
-        }
+        CommentRecord record = InteractionTargetValidator.requireFound(
+                commentMapper.findById(commentId, viewerUserId),
+                CONTENT_NAME
+        );
         return toResponse(record, List.of());
     }
 
@@ -208,10 +198,10 @@ public class CommentService {
                 record.getParentId() == null ? null : String.valueOf(record.getParentId()),
                 record.getLikeCount(),
                 Boolean.TRUE.equals(record.getLiked()),
-                record.getReplyCount() == null ? 0 : record.getReplyCount(),
+                NumberUtils.toIntOrZero(record.getReplyCount()),
                 author,
                 children,
-                record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                DateTimeUtils.toOffsetDateTime(record.getCreatedAt())
         );
     }
 
@@ -222,19 +212,12 @@ public class CommentService {
      * @return 作者摘要
      */
     private AuthorSummary toAuthorSummary(CommentRecord record) {
-        int experience = record.getAuthorExperience() == null ? 0 : record.getAuthorExperience();
-        GrowthLevel level = GrowthLevel.resolveByExperience(experience);
-        GrowthRank rank = GrowthRank.resolveByExperience(experience);
-
-        // 等级和段位遵循个人中心同一套成长规则。
-        return new AuthorSummary(
-                String.valueOf(record.getAuthorId()),
+        return AuthorSummaryConverter.toSummary(
+                record.getAuthorId(),
                 record.getAuthorUsername(),
                 record.getAuthorNickname(),
                 record.getAuthorAvatar(),
-                level.displayCode(),
-                level.levelValue(),
-                rank.displayName()
+                record.getAuthorExperience()
         );
     }
 }

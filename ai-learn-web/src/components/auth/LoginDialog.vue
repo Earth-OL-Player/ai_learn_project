@@ -29,10 +29,12 @@
     </el-form>
 
     <template #footer>
-      <div class="auth-dialog-footer modern-auth-footer">
-        <el-button round size="large" @click="visible = false">取消</el-button>
-        <el-button type="primary" round size="large" :loading="submitting" @click="submitLogin">立即登录</el-button>
-      </div>
+      <AuthDialogFooter
+        confirm-text="立即登录"
+        :loading="submitting"
+        @cancel="visible = false"
+        @confirm="submitLogin"
+      />
     </template>
   </el-dialog>
 </template>
@@ -41,6 +43,8 @@
 import { ElMessage } from 'element-plus/es/components/message/index.mjs';
 import { reactive, ref } from 'vue';
 import { useAuthStore } from '../../stores/auth';
+import { resolveErrorMessage } from '../../utils/errorMessage';
+import AuthDialogFooter from './AuthDialogFooter.vue';
 
 const visible = defineModel<boolean>({ required: true });
 const authStore = useAuthStore();
@@ -70,7 +74,7 @@ async function submitLogin(): Promise<void> {
     visible.value = false;
     form.password = '';
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '登录失败，请稍后重试';
+    formError.value = resolveErrorMessage(error, '登录失败，请稍后重试');
     ElMessage.error(formError.value);
   } finally {
     submitting.value = false;

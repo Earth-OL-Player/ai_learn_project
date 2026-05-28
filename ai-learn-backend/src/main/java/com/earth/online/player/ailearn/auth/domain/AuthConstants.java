@@ -5,15 +5,6 @@ package com.earth.online.player.ailearn.auth.domain;
  */
 public final class AuthConstants {
 
-    /** 新用户默认经验值。 */
-    public static final int DEFAULT_EXPERIENCE = 0;
-
-    /** 新用户默认等级编码。 */
-    public static final String DEFAULT_LEVEL_CODE = "LV1";
-
-    /** 新用户默认段位编码。 */
-    public static final String DEFAULT_RANK_CODE = "QI_REFINING";
-
     /** 新用户默认非超级管理员。 */
     public static final boolean DEFAULT_SUPER_ADMIN = false;
 

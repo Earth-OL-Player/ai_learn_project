@@ -71,6 +71,7 @@ import {
   type AdminLogLevelItem,
   type AdminLogLevelValue,
 } from '../../api/adminLogLevels';
+import { resolveErrorMessage } from '../../utils/errorMessage';
 
 const logLevelOptions: AdminLogLevelValue[] = ['TRACE', 'DEBUG', 'INFO', 'WARN', 'ERROR'];
 const services = ref<AdminLogLevelItem[]>([]);
@@ -86,7 +87,7 @@ async function loadLogLevels(): Promise<void> {
   try {
     applyLogLevels(await fetchAdminLogLevels());
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '日志级别加载失败');
+    ElMessage.error(resolveErrorMessage(error, '日志级别加载失败'));
   } finally {
     loading.value = false;
   }
@@ -108,7 +109,7 @@ async function saveLogLevel(item: AdminLogLevelItem): Promise<void> {
     replaceLogLevel(saved);
     ElMessage.success('日志级别已保存');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '日志级别保存失败');
+    ElMessage.error(resolveErrorMessage(error, '日志级别保存失败'));
   } finally {
     savingService.value = '';
   }

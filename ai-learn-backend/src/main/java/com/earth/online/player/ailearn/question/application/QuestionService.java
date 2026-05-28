@@ -3,25 +3,23 @@ package com.earth.online.player.ailearn.question.application;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
+import com.earth.online.player.ailearn.common.util.IdRequestUtils;
+import com.earth.online.player.ailearn.common.util.PageRequestUtils;
+import com.earth.online.player.ailearn.common.util.TextUtils;
 import com.earth.online.player.ailearn.question.infrastructure.QuestionDetailRecord;
 import com.earth.online.player.ailearn.question.infrastructure.QuestionListRecord;
 import com.earth.online.player.ailearn.question.infrastructure.QuestionMapper;
 import com.earth.online.player.ailearn.question.interfaces.QuestionDetailResponse;
 import com.earth.online.player.ailearn.question.interfaces.QuestionListResponse;
-import java.time.ZoneId;
 import java.util.List;
 import org.springframework.stereotype.Service;
-import org.springframework.util.StringUtils;
 
 /**
  * 题库查询应用服务。
  */
 @Service
 public class QuestionService {
-
-    private static final int MAX_PAGE_SIZE = 100;
-    private static final int DEFAULT_PAGE_NO = 1;
-    private static final int DEFAULT_PAGE_SIZE = 10;
 
     private final QuestionMapper questionMapper;
     private final QuestionTypeCache questionTypeCache;
@@ -51,11 +49,11 @@ public class QuestionService {
             Integer pageSize,
             String keyword,
             String questionType) {
-        int safePageNo = normalizePageNo(pageNo);
-        int safePageSize = normalizePageSize(pageSize);
-        String safeKeyword = normalizeKeyword(keyword);
-        String safeQuestionType = normalizeQuestionType(questionType);
-        int offset = calculateOffset(safePageNo, safePageSize);
+        int safePageNo = PageRequestUtils.normalizePageNo(pageNo);
+        int safePageSize = PageRequestUtils.normalizePageSize(pageSize);
+        String safeKeyword = TextUtils.trimToNull(keyword);
+        String safeQuestionType = TextUtils.trimToNull(questionType);
+        int offset = PageRequestUtils.calculateOffset(safePageNo, safePageSize);
 
         // 系统题库列表只展示未删除题目，避免引入额外来源维度。
         List<QuestionListResponse> records = questionMapper.findPage(
@@ -83,7 +81,7 @@ public class QuestionService {
      * @return 热门面经题目详情列表
      */
     public List<QuestionDetailResponse> findInterviewDocument(String questionType) {
-        String safeQuestionType = normalizeQuestionType(questionType);
+        String safeQuestionType = TextUtils.trimToNull(questionType);
 
         // 阅读文档按当前分类查询，避免一次性加载全量题目造成页面卡顿。
         return questionMapper.findInterviewDocument(safeQuestionType)
@@ -99,78 +97,12 @@ public class QuestionService {
      * @return 题目详情
      */
     public QuestionDetailResponse findDetail(Long id) {
-        if (id == null || id < 1) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "题目ID不合法");
-        }
-        QuestionDetailRecord record = questionMapper.findDetailById(id);
+        Long safeId = IdRequestUtils.requirePositive(id, "题目ID不合法");
+        QuestionDetailRecord record = questionMapper.findDetailById(safeId);
         if (record == null) {
             throw new BusinessException(ResponseCode.RESOURCE_NOT_FOUND.code(), "题目不存在或已下架");
         }
         return toDetailResponse(record);
-    }
-
-    /**
-     * 规整页码。
-     *
-     * @param pageNo 原始页码
-     * @return 安全页码
-     */
-    private int normalizePageNo(Integer pageNo) {
-        if (pageNo == null || pageNo < DEFAULT_PAGE_NO) {
-            return DEFAULT_PAGE_NO;
-        }
-        return pageNo;
-    }
-
-    /**
-     * 规整每页数量。
-     *
-     * @param pageSize 原始每页数量
-     * @return 安全每页数量
-     */
-    private int normalizePageSize(Integer pageSize) {
-        if (pageSize == null || pageSize < 1) {
-            return DEFAULT_PAGE_SIZE;
-        }
-        return Math.min(pageSize, MAX_PAGE_SIZE);
-    }
-
-    /**
-     * 规整关键词。
-     *
-     * @param keyword 原始关键词
-     * @return 安全关键词
-     */
-    private String normalizeKeyword(String keyword) {
-        if (!StringUtils.hasText(keyword)) {
-            return null;
-        }
-        return keyword.trim();
-    }
-
-    /**
-     * 规整题目分类。
-     *
-     * @param questionType 原始分类
-     * @return 安全分类
-     */
-    private String normalizeQuestionType(String questionType) {
-        if (!StringUtils.hasText(questionType)) {
-            return null;
-        }
-        return questionType.trim();
-    }
-
-    /**
-     * 计算分页偏移量。
-     *
-     * @param pageNo 页码
-     * @param pageSize 每页数量
-     * @return 偏移量
-     */
-    private int calculateOffset(int pageNo, int pageSize) {
-        long offset = (long) (pageNo - 1) * pageSize;
-        return offset > Integer.MAX_VALUE ? Integer.MAX_VALUE : (int) offset;
     }
 
     /**
@@ -188,7 +120,7 @@ public class QuestionService {
                 record.getQuestionType(),
                 record.getImportanceScore(),
                 record.getOccurrenceCount(),
-                record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                DateTimeUtils.toOffsetDateTime(record.getCreatedAt())
         );
     }
 
@@ -208,7 +140,7 @@ public class QuestionService {
                 record.getStandardAnswer(),
                 record.getImportanceScore(),
                 record.getOccurrenceCount(),
-                record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                DateTimeUtils.toOffsetDateTime(record.getCreatedAt())
         );
     }
 

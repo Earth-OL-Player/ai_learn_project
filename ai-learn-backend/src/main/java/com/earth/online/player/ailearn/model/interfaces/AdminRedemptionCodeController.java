@@ -2,12 +2,9 @@ package com.earth.online.player.ailearn.model.interfaces;
 
 import com.earth.online.player.ailearn.common.response.ApiResponse;
 import com.earth.online.player.ailearn.common.response.PageResponse;
+import com.earth.online.player.ailearn.common.util.CsvDownloadUtils;
 import com.earth.online.player.ailearn.model.application.ModelEntitlementService;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
-import org.springframework.http.ContentDisposition;
-import org.springframework.http.HttpHeaders;
-import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -107,14 +104,6 @@ public class AdminRedemptionCodeController {
             @RequestParam(required = false) String codeType,
             @RequestParam(required = false) String status) {
         byte[] content = modelEntitlementService.exportRedemptionCodes(keyword, codeType, status);
-        ContentDisposition disposition = ContentDisposition.attachment()
-                .filename("模型权益兑换码.csv", StandardCharsets.UTF_8)
-                .build();
-
-        // 导出接口直接返回文件流，不包装统一 JSON。
-        return ResponseEntity.ok()
-                .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
-                .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
-                .body(content);
+        return CsvDownloadUtils.buildUtf8CsvResponse("模型权益兑换码.csv", content);
     }
 }

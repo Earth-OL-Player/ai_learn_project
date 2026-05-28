@@ -2,8 +2,6 @@ package com.earth.online.player.ailearn.user.application;
 
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthContext;
-import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
 import com.earth.online.player.ailearn.user.domain.User;
 import com.earth.online.player.ailearn.user.domain.UserGender;
 import com.earth.online.player.ailearn.user.domain.UserSummary;
@@ -22,14 +20,17 @@ import org.springframework.util.StringUtils;
 public class UserService {
 
     private final UserMapper userMapper;
+    private final CurrentUserService currentUserService;
 
     /**
      * 创建用户应用服务。
      *
      * @param userMapper 用户仓储
+     * @param currentUserService 当前用户读取服务
      */
-    public UserService(UserMapper userMapper) {
+    public UserService(UserMapper userMapper, CurrentUserService currentUserService) {
         this.userMapper = userMapper;
+        this.currentUserService = currentUserService;
     }
 
     /**
@@ -38,7 +39,7 @@ public class UserService {
      * @return 当前用户摘要
      */
     public UserSummary getCurrentUser() {
-        User user = findCurrentUser();
+        User user = currentUserService.requireCurrentUser();
         return UserSummaryConverter.toSummary(user);
     }
 
@@ -54,8 +55,8 @@ public class UserService {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "用户资料不能为空");
         }
 
-        User user = findCurrentUser();
-        String nickname = normalizeNickname(request.nickname());
+        User user = currentUserService.requireCurrentUser();
+        String nickname = UserProfileValidator.normalizeNickname(request.nickname());
         String gender = normalizeGender(request.gender());
         String motto = normalizeMotto(request.motto());
         validateNicknameUnique(nickname, user.getId());
@@ -72,25 +73,6 @@ public class UserService {
     }
 
     /**
-     * 查询当前登录用户。
-     *
-     * @return 当前用户
-     */
-    private User findCurrentUser() {
-        AuthenticatedUser authenticatedUser = AuthContext.getUser();
-        if (authenticatedUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-
-        // 每次读取数据库，保证前端拿到最新用户展示信息。
-        User user = userMapper.findById(authenticatedUser.userId());
-        if (user == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录状态已失效，请重新登录");
-        }
-        return user;
-    }
-
-    /**
      * 校验昵称唯一性。
      *
      * @param nickname 昵称
@@ -101,19 +83,6 @@ public class UserService {
         if (sameNicknameUser != null && !sameNicknameUser.getId().equals(currentUserId)) {
             throw new BusinessException(ResponseCode.RESOURCE_CONFLICT.code(), "昵称已被使用，请更换后重试");
         }
-    }
-
-    /**
-     * 规整昵称。
-     *
-     * @param nickname 原始昵称
-     * @return 安全昵称
-     */
-    private String normalizeNickname(String nickname) {
-        if (!StringUtils.hasText(nickname) || nickname.trim().length() > 64) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "昵称不能为空，且不能超过64位");
-        }
-        return nickname.trim();
     }
 
     /**
@@ -148,7 +117,7 @@ public class UserService {
 
         // 座右铭允许留空，填写时限制长度，避免挤压 AI 刷题页侧栏展示。
         String normalizedMotto = motto.trim();
-        if (normalizedMotto.length() > 60) {
+        if (normalizedMotto.length() > UserProfileValidator.MAX_MOTTO_LENGTH) {
             throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "座右铭不能超过60位");
         }
         return normalizedMotto;

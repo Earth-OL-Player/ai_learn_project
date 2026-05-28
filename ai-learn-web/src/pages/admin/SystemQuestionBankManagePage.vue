@@ -69,7 +69,12 @@
       <el-form :model="form" label-position="top">
         <div class="dialog-grid">
           <el-form-item label="题目编码（可空，空则自动生成）">
-            <el-input v-model="form.code" aria-label="题目编码" maxlength="64" placeholder="例如 SYSTEM-RAG-001" />
+            <el-input
+              v-model="form.code"
+              aria-label="题目编码"
+              :maxlength="QUESTION_CODE_MAX_LENGTH"
+              placeholder="例如 SYSTEM-RAG-001"
+            />
           </el-form-item>
           <el-form-item label="题目分类">
             <el-select v-model="form.questionType" filterable allow-create default-first-option aria-label="题目分类" placeholder="例如 RAG">
@@ -78,10 +83,24 @@
           </el-form-item>
         </div>
         <el-form-item label="题目">
-          <el-input v-model="form.question" aria-label="题目内容" type="textarea" :rows="5" maxlength="10000" show-word-limit />
+          <el-input
+            v-model="form.question"
+            aria-label="题目内容"
+            type="textarea"
+            :rows="5"
+            :maxlength="QUESTION_LONG_TEXT_MAX_LENGTH"
+            show-word-limit
+          />
         </el-form-item>
         <el-form-item label="参考答案">
-          <el-input v-model="form.standardAnswer" aria-label="参考答案" type="textarea" :rows="5" maxlength="10000" show-word-limit />
+          <el-input
+            v-model="form.standardAnswer"
+            aria-label="参考答案"
+            type="textarea"
+            :rows="5"
+            :maxlength="QUESTION_LONG_TEXT_MAX_LENGTH"
+            show-word-limit
+          />
         </el-form-item>
         <div class="dialog-grid">
           <el-form-item label="重要性评分（0-100）">
@@ -213,6 +232,9 @@ import {
   precheckImportSystemQuestions,
   updateSystemQuestion,
 } from '../../api/adminQuestions';
+import { formatMediumDateTime as formatTime } from '../../utils/dateTimeFormat';
+import { downloadBlobFile } from '../../utils/downloadFile';
+import { resolveErrorMessage } from '../../utils/errorMessage';
 import type {
   ImportSystemQuestionAction,
   ImportSystemQuestionsPrecheckResult,
@@ -221,6 +243,8 @@ import type {
 } from '../../types/system-question';
 
 const PAGE_SIZE = 10;
+const QUESTION_CODE_MAX_LENGTH = 64;
+const QUESTION_LONG_TEXT_MAX_LENGTH = 10000;
 const loading = ref(false);
 const saving = ref(false);
 const importing = ref(false);
@@ -334,7 +358,7 @@ async function saveQuestion(): Promise<void> {
     dialogVisible.value = false;
     await Promise.all([loadQuestionTypes(), loadQuestions()]);
   } catch (error) {
-    formError.value = error instanceof Error ? error.message : '保存失败';
+    formError.value = resolveErrorMessage(error, '保存失败');
     ElMessage.error(formError.value);
   } finally {
     saving.value = false;
@@ -367,7 +391,7 @@ async function handleClearAll(): Promise<void> {
     ElMessage.success('当前题库已清空');
     await Promise.all([loadQuestionTypes(), searchQuestions()]);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '清空题库失败');
+    ElMessage.error(resolveErrorMessage(error, '清空题库失败'));
   } finally {
     clearing.value = false;
   }
@@ -378,12 +402,7 @@ async function handleClearAll(): Promise<void> {
  */
 async function downloadTemplate(): Promise<void> {
   const blob = await downloadSystemQuestionTemplate();
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement('a');
-  anchor.href = url;
-  anchor.download = '系统题库导入模板.csv';
-  anchor.click();
-  URL.revokeObjectURL(url);
+  downloadBlobFile(blob, '系统题库导入模板.csv');
 }
 
 /**
@@ -397,7 +416,7 @@ async function handleImportFile(file: UploadRawFile): Promise<boolean> {
     importPreviewVisible.value = true;
     ElMessage.success('CSV预检完成，请确认导入内容');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '预检失败');
+    ElMessage.error(resolveErrorMessage(error, '预检失败'));
   } finally {
     prechecking.value = false;
   }
@@ -437,7 +456,7 @@ async function confirmImportCsv(): Promise<void> {
     closeImportPreview();
     await Promise.all([loadQuestionTypes(), searchQuestions()]);
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '导入失败');
+    ElMessage.error(resolveErrorMessage(error, '导入失败'));
   } finally {
     importing.value = false;
   }
@@ -457,13 +476,6 @@ function resolveActionTagType(action: ImportSystemQuestionAction): 'success' | '
     return 'warning';
   }
   return 'danger';
-}
-
-/**
- * 格式化时间。
- */
-function formatTime(value: string): string {
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
 onMounted(async () => {

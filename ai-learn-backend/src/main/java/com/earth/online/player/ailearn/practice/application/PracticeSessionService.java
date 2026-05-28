@@ -2,6 +2,7 @@ package com.earth.online.player.ailearn.practice.application;
 
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.practice.domain.PracticeConstants;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeMapper;
 import com.earth.online.player.ailearn.practice.infrastructure.PracticeQuestionRecord;
@@ -109,16 +110,6 @@ public class PracticeSessionService {
     public int incrementDiscussionFollowUpCount(Long userId) {
         practiceMapper.incrementDiscussionFollowUpCount(userId);
         PracticeSessionRecord session = practiceMapper.findSession(userId);
-        return session == null ? 0 : safeInt(session.getDiscussionFollowUpCount());
-    }
-
-    /**
-     * 获取安全整数。
-     *
-     * @param value 原始值
-     * @return 安全值
-     */
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
+        return session == null ? 0 : NumberUtils.toIntOrZero(session.getDiscussionFollowUpCount());
     }
 }

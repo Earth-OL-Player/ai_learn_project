@@ -17,7 +17,9 @@ import {
 import { fetchModelEntitlementStatus, type ModelEntitlementStatus } from '../../api/modelEntitlements';
 import { useAuthStore } from '../../stores/auth';
 import type { BadgeInfo, GrowthInfo } from '../../types/growth';
+import { resolveErrorMessage } from '../../utils/errorMessage';
 import { openModelAuthorization } from '../../utils/modelAuthorization';
+import { resolveUserDisplayName } from '../../utils/userDisplay';
 import type { ChatMessage } from './types';
 import { usePracticeSnapshot } from './usePracticeSnapshot';
 import { useStreamTypewriter } from './useStreamTypewriter';
@@ -62,8 +64,8 @@ export function usePracticeChat() {
     onScheduleScrollToBottom: snapshot.scheduleScrollToBottom,
   });
 
-  // 左侧角色卡昵称优先使用用户昵称，未设置时回退用户名。
-  const displayName = computed(() => authStore.user?.nickname || authStore.user?.username || 'AI 学习者');
+  // 左侧角色卡昵称保持与个人中心、顶部用户菜单一致。
+  const displayName = computed(() => resolveUserDisplayName(authStore.user));
 
   // 按阶段展示主按钮文案，首次进入是开始，后续是下一题。
   const nextButtonText = computed(() => (phase.value === 'QUESTIONING' ? '开始' : '下一题'));
@@ -121,7 +123,7 @@ export function usePracticeChat() {
         snapshot.clearPracticeSnapshot();
       }
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '刷题状态加载失败');
+      ElMessage.error(resolveErrorMessage(error, '刷题状态加载失败'));
     } finally {
       loading.value = false;
     }
@@ -156,7 +158,7 @@ export function usePracticeChat() {
       const result = await fetchNextPracticeQuestion({ questionTypes: selectedCategories.value });
       applyResult(result, true);
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '出题失败');
+      ElMessage.error(resolveErrorMessage(error, '出题失败'));
     } finally {
       loading.value = false;
     }
@@ -178,7 +180,7 @@ export function usePracticeChat() {
       const result = await retryPracticeQuestion();
       applyResult(result, true);
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '重新回答失败');
+      ElMessage.error(resolveErrorMessage(error, '重新回答失败'));
     } finally {
       loading.value = false;
     }
@@ -215,7 +217,7 @@ export function usePracticeChat() {
       );
       await stream.waitForStreamIdle();
     } catch (error) {
-      ElMessage.error(error instanceof Error ? error.message : '发送失败');
+      ElMessage.error(resolveErrorMessage(error, '发送失败'));
       stream.preserveInterruptedStreamingMessage(assistantMessage);
     } finally {
       loading.value = false;
@@ -504,7 +506,7 @@ export function usePracticeChat() {
       }
       stream.clearStreamTypewriter();
       initializeGuestPage().catch((error: unknown) => {
-        ElMessage.error(error instanceof Error ? error.message : '刷题状态加载失败');
+        ElMessage.error(resolveErrorMessage(error, '刷题状态加载失败'));
       });
     },
   );

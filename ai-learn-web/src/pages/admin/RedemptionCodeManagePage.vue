@@ -125,6 +125,9 @@ import {
   type RedemptionCodeStatus,
   type RedemptionCodeType,
 } from '../../api/adminRedemptionCodes';
+import { formatMediumDateTime as formatTime } from '../../utils/dateTimeFormat';
+import { downloadBlobFile } from '../../utils/downloadFile';
+import { resolveErrorMessage } from '../../utils/errorMessage';
 
 const PAGE_SIZE = 10;
 const loading = ref(false);
@@ -167,7 +170,7 @@ async function loadCodes(): Promise<void> {
     codes.value = result.records;
     page.total = result.total;
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '兑换码加载失败');
+    ElMessage.error(resolveErrorMessage(error, '兑换码加载失败'));
   } finally {
     loading.value = false;
   }
@@ -201,7 +204,7 @@ async function generateCodes(): Promise<void> {
     ElMessage.success(`已生成 ${generatedCodes.length} 个兑换码`);
     await searchCodes();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '生成失败');
+    ElMessage.error(resolveErrorMessage(error, '生成失败'));
   } finally {
     generating.value = false;
   }
@@ -230,7 +233,7 @@ async function saveEdit(): Promise<void> {
     ElMessage.success('兑换码已更新');
     await loadCodes();
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '保存失败');
+    ElMessage.error(resolveErrorMessage(error, '保存失败'));
   } finally {
     saving.value = false;
   }
@@ -253,34 +256,12 @@ async function exportCodes(): Promise<void> {
   exporting.value = true;
   try {
     const blob = await exportAdminRedemptionCodes({ pageNo: page.pageNo, pageSize: page.pageSize, ...filters });
-    downloadBlob(blob, '模型权益兑换码.csv');
+    downloadBlobFile(blob, '模型权益兑换码.csv');
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '导出失败');
+    ElMessage.error(resolveErrorMessage(error, '导出失败'));
   } finally {
     exporting.value = false;
   }
-}
-
-/**
- * 下载浏览器文件。
- */
-function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = filename;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
-/**
- * 格式化时间。
- */
-function formatTime(value: string | null): string {
-  if (!value) {
-    return '-';
-  }
-  return new Intl.DateTimeFormat('zh-CN', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value));
 }
 
 onMounted(loadCodes);

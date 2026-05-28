@@ -38,31 +38,23 @@ public interface SuggestionMapper {
      * @param viewerUserId 当前查看用户ID，未登录时传0
      * @return 建议列表
      */
-    @Select("""
-            <script>
-            SELECT s.id, s.content, s.type, s.like_count, s.created_at,
-                   CASE WHEN EXISTS(
-                       SELECT 1 FROM suggestion_likes sl
-                       WHERE sl.suggestion_id = s.id AND sl.user_id = #{viewerUserId}
-                   ) THEN 1 ELSE 0 END AS liked,
-                   u.id AS author_id, u.username AS author_username,
-                   u.nickname AS author_nickname, u.avatar AS author_avatar,
-                   u.experience AS author_experience
-            FROM suggestions s
-            INNER JOIN users u ON u.id = s.user_id AND u.deleted = 0
-            WHERE s.deleted = 0
-            ORDER BY
-            <choose>
-                <when test="sort == 'LATEST'">
-                    s.created_at DESC, s.id DESC
-                </when>
-                <otherwise>
-                    s.like_count DESC, s.created_at DESC, s.id DESC
-                </otherwise>
-            </choose>
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+    @Select({
+            "<script>",
+            SuggestionSql.SUGGESTION_CARD_SELECT_SQL,
+            SuggestionSql.SUGGESTION_CARD_FROM_SQL,
+            "WHERE s.deleted = 0",
+            "ORDER BY",
+            "<choose>",
+            "    <when test=\"sort == 'LATEST'\">",
+            "        s.created_at DESC, s.id DESC",
+            "    </when>",
+            "    <otherwise>",
+            "        s.like_count DESC, s.created_at DESC, s.id DESC",
+            "    </otherwise>",
+            "</choose>",
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<SuggestionRecord> findPage(
             @Param("offset") int offset,
             @Param("pageSize") int pageSize,
@@ -77,19 +69,11 @@ public interface SuggestionMapper {
      * @param viewerUserId 当前查看用户ID，未登录时传0
      * @return 建议记录
      */
-    @Select("""
-            SELECT s.id, s.content, s.type, s.like_count, s.created_at,
-                   CASE WHEN EXISTS(
-                       SELECT 1 FROM suggestion_likes sl
-                       WHERE sl.suggestion_id = s.id AND sl.user_id = #{viewerUserId}
-                   ) THEN 1 ELSE 0 END AS liked,
-                   u.id AS author_id, u.username AS author_username,
-                   u.nickname AS author_nickname, u.avatar AS author_avatar,
-                   u.experience AS author_experience
-            FROM suggestions s
-            INNER JOIN users u ON u.id = s.user_id AND u.deleted = 0
-            WHERE s.id = #{id} AND s.deleted = 0
-            """)
+    @Select({
+            SuggestionSql.SUGGESTION_CARD_SELECT_SQL,
+            SuggestionSql.SUGGESTION_CARD_FROM_SQL,
+            "WHERE s.id = #{id} AND s.deleted = 0"
+    })
     SuggestionRecord findById(@Param("id") Long id, @Param("viewerUserId") long viewerUserId);
 
     /**
@@ -149,4 +133,34 @@ public interface SuggestionMapper {
      */
     @Update("UPDATE suggestions SET like_count = GREATEST(like_count - 1, 0) WHERE id = #{id} AND deleted = 0")
     int decreaseLikeCount(@Param("id") Long id);
+}
+
+/**
+ * 建议 Mapper 复用 SQL 片段。
+ */
+final class SuggestionSql {
+
+    /** 建议卡片通用查询字段，列表和详情保持一致。 */
+    static final String SUGGESTION_CARD_SELECT_SQL = """
+            SELECT s.id, s.content, s.type, s.like_count, s.created_at,
+                   CASE WHEN EXISTS(
+                       SELECT 1 FROM suggestion_likes sl
+                       WHERE sl.suggestion_id = s.id AND sl.user_id = #{viewerUserId}
+                   ) THEN 1 ELSE 0 END AS liked,
+                   u.id AS author_id, u.username AS author_username,
+                   u.nickname AS author_nickname, u.avatar AS author_avatar,
+                   u.experience AS author_experience
+            """;
+
+    /** 建议卡片通用作者关联。 */
+    static final String SUGGESTION_CARD_FROM_SQL = """
+            FROM suggestions s
+            INNER JOIN users u ON u.id = s.user_id AND u.deleted = 0
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private SuggestionSql() {
+    }
 }

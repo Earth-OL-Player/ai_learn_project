@@ -31,21 +31,14 @@ public interface UserMapper {
      * @param pageSize 每页数量
      * @return 用户列表
      */
-    @Select("""
-            <script>
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (username LIKE CONCAT('%', #{keyword}, '%')
-                   OR nickname LIKE CONCAT('%', #{keyword}, '%')
-                   OR email LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            ORDER BY id ASC
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+    @Select({
+            "<script>",
+            UserSql.USER_SELECT_COLUMNS,
+            UserSql.ADMIN_USER_FILTER_SQL,
+            "ORDER BY id ASC",
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<User> findAdminPage(@Param("keyword") String keyword, @Param("offset") int offset, @Param("pageSize") int pageSize);
 
     /**
@@ -54,18 +47,12 @@ public interface UserMapper {
      * @param keyword 关键词
      * @return 用户数量
      */
-    @Select("""
-            <script>
-            SELECT COUNT(1)
-            FROM users
-            WHERE deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (username LIKE CONCAT('%', #{keyword}, '%')
-                   OR nickname LIKE CONCAT('%', #{keyword}, '%')
-                   OR email LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            </script>
-            """)
+    @Select({
+            "<script>",
+            "SELECT COUNT(1)",
+            UserSql.ADMIN_USER_FILTER_SQL,
+            "</script>"
+    })
     long countAdminPage(@Param("keyword") String keyword);
 
     /**
@@ -74,12 +61,11 @@ public interface UserMapper {
      * @param id 用户ID
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE id = #{id} AND deleted = 0
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE id = #{id} AND deleted = 0"
+    })
     User findById(@Param("id") Long id);
 
     /**
@@ -88,13 +74,12 @@ public interface UserMapper {
      * @param id 用户ID
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE id = #{id} AND deleted = 0
-            FOR UPDATE
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE id = #{id} AND deleted = 0",
+            "FOR UPDATE"
+    })
     User findByIdForUpdate(@Param("id") Long id);
 
     /**
@@ -103,12 +88,11 @@ public interface UserMapper {
      * @param username 用户名
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE username = #{username} AND deleted = 0
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE username = #{username} AND deleted = 0"
+    })
     User findByUsername(@Param("username") String username);
 
     /**
@@ -117,13 +101,12 @@ public interface UserMapper {
      * @param usernameOrEmail 用户名或邮箱
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE (username = #{usernameOrEmail} OR email = #{usernameOrEmail}) AND deleted = 0
-            LIMIT 1
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE (username = #{usernameOrEmail} OR email = #{usernameOrEmail}) AND deleted = 0",
+            "LIMIT 1"
+    })
     User findByUsernameOrEmail(@Param("usernameOrEmail") String usernameOrEmail);
 
     /**
@@ -132,12 +115,11 @@ public interface UserMapper {
      * @param nickname 昵称
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE nickname = #{nickname} AND deleted = 0
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE nickname = #{nickname} AND deleted = 0"
+    })
     User findByNickname(@Param("nickname") String nickname);
 
     /**
@@ -146,12 +128,11 @@ public interface UserMapper {
      * @param email 邮箱
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE email = #{email} AND deleted = 0
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE email = #{email} AND deleted = 0"
+    })
     User findByEmail(@Param("email") String email);
 
     /**
@@ -160,13 +141,12 @@ public interface UserMapper {
      * @param username 用户名
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE username = #{username}
-            LIMIT 1
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE username = #{username}",
+            "LIMIT 1"
+    })
     User findByUsernameAny(@Param("username") String username);
 
     /**
@@ -175,13 +155,12 @@ public interface UserMapper {
      * @param nickname 昵称
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE nickname = #{nickname}
-            LIMIT 1
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE nickname = #{nickname}",
+            "LIMIT 1"
+    })
     User findByNicknameAny(@Param("nickname") String nickname);
 
     /**
@@ -190,13 +169,12 @@ public interface UserMapper {
      * @param email 邮箱
      * @return 用户信息
      */
-    @Select("""
-            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin,
-                   created_at, updated_at, deleted
-            FROM users
-            WHERE email = #{email}
-            LIMIT 1
-            """)
+    @Select({
+            UserSql.USER_SELECT_COLUMNS,
+            "FROM users",
+            "WHERE email = #{email}",
+            "LIMIT 1"
+    })
     User findByEmailAny(@Param("email") String email);
 
     /**
@@ -207,7 +185,8 @@ public interface UserMapper {
      */
     @Insert("""
             INSERT INTO users(username, nickname, avatar, gender, motto, email, password_hash, experience, level_code, rank_code, super_admin)
-            VALUES(#{username}, #{nickname}, #{avatar}, #{gender}, #{motto}, #{email}, #{passwordHash}, #{experience}, #{levelCode}, #{rankCode}, #{superAdmin})
+            VALUES(#{username}, #{nickname}, #{avatar}, #{gender}, #{motto}, #{email},
+                   #{passwordHash}, #{experience}, #{levelCode}, #{rankCode}, #{superAdmin})
             """)
     @Options(useGeneratedKeys = true, keyProperty = "id", keyColumn = "id")
     int insert(User user);
@@ -283,4 +262,33 @@ public interface UserMapper {
     @Update("UPDATE users SET deleted = 1 WHERE id = #{id} AND deleted = 0")
     int softDeleteById(@Param("id") Long id);
 
+}
+
+/**
+ * 用户 Mapper 复用 SQL 片段。
+ */
+final class UserSql {
+
+    /** 用户通用查询字段。 */
+    static final String USER_SELECT_COLUMNS = """
+            SELECT id, username, nickname, avatar, gender, motto, email, password_hash, experience,
+                   level_code, rank_code, super_admin, created_at, updated_at, deleted
+            """;
+
+    /** 管理端用户列表与计数共用筛选条件。 */
+    static final String ADMIN_USER_FILTER_SQL = """
+            FROM users
+            WHERE deleted = 0
+            <if test='keyword != null and keyword != ""'>
+              AND (username LIKE CONCAT('%', #{keyword}, '%')
+                   OR nickname LIKE CONCAT('%', #{keyword}, '%')
+                   OR email LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private UserSql() {
+    }
 }

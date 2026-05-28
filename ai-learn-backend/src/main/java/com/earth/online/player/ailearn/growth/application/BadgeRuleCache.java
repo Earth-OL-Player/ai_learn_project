@@ -37,7 +37,7 @@ public class BadgeRuleCache {
         return badgeRulesCache
                 .get(BADGE_RULES_KEY, this::loadAllBadges)
                 .stream()
-                .map(BadgeRuleCache::copyRecord)
+                .map(BadgeRecordCopies::copyStaticDefinition)
                 .toList();
     }
 
@@ -49,25 +49,7 @@ public class BadgeRuleCache {
     private List<BadgeRecord> loadAllBadges() {
         return growthMapper.findAllBadges()
                 .stream()
-                .map(BadgeRuleCache::copyRecord)
+                .map(BadgeRecordCopies::copyStaticDefinition)
                 .toList();
-    }
-
-    /**
-     * 复制徽章记录，避免调用方修改缓存内对象。
-     *
-     * @param source 原始记录
-     * @return 复制记录
-     */
-    private static BadgeRecord copyRecord(BadgeRecord source) {
-        BadgeRecord target = new BadgeRecord();
-        target.setId(source.getId());
-        target.setName(source.getName());
-        target.setDescription(source.getDescription());
-        target.setIcon(source.getIcon());
-        target.setRuleCode(source.getRuleCode());
-        target.setAcquired(Boolean.FALSE);
-        target.setAcquiredAt(null);
-        return target;
     }
 }

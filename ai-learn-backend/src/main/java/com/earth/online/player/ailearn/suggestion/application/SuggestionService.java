@@ -1,14 +1,15 @@
 package com.earth.online.player.ailearn.suggestion.application;
 
-import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.PageResponse;
-import com.earth.online.player.ailearn.common.response.ResponseCode;
 import com.earth.online.player.ailearn.common.security.AuthSupport;
 import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.DateTimeUtils;
 import com.earth.online.player.ailearn.common.util.PageRequestUtils;
-import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
-import com.earth.online.player.ailearn.growth.domain.GrowthRank;
+import com.earth.online.player.ailearn.interaction.application.InteractionContentValidator;
+import com.earth.online.player.ailearn.interaction.application.InteractionLikeToggler;
+import com.earth.online.player.ailearn.interaction.application.InteractionTargetValidator;
 import com.earth.online.player.ailearn.interaction.domain.AuthorSummary;
+import com.earth.online.player.ailearn.interaction.domain.AuthorSummaryConverter;
 import com.earth.online.player.ailearn.interaction.domain.InteractionSort;
 import com.earth.online.player.ailearn.interaction.domain.InteractionTextPolicy;
 import com.earth.online.player.ailearn.suggestion.domain.Suggestion;
@@ -17,7 +18,6 @@ import com.earth.online.player.ailearn.suggestion.infrastructure.SuggestionMappe
 import com.earth.online.player.ailearn.suggestion.infrastructure.SuggestionRecord;
 import com.earth.online.player.ailearn.suggestion.interfaces.CreateSuggestionRequest;
 import com.earth.online.player.ailearn.suggestion.interfaces.SuggestionResponse;
-import java.time.ZoneId;
 import java.util.List;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -28,6 +28,7 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class SuggestionService {
 
+    private static final String CONTENT_NAME = "建议";
     private static final int DEFAULT_LIKE_COUNT = 0;
 
     private final SuggestionMapper suggestionMapper;
@@ -74,7 +75,7 @@ public class SuggestionService {
     public SuggestionResponse create(CreateSuggestionRequest request) {
         AuthenticatedUser currentUser = AuthSupport.requireCurrentUser();
         String content = InteractionTextPolicy.normalize(request.content());
-        validateContent(content);
+        InteractionContentValidator.validatePlainTextContent(content, CONTENT_NAME);
 
         // 建议类型仅保留本期明确要求的四类。
         Suggestion suggestion = new Suggestion();
@@ -99,27 +100,15 @@ public class SuggestionService {
         ensureSuggestionExists(suggestionId);
 
         // INSERT IGNORE 成功代表点赞，失败代表之前已点赞，需要取消。
-        int insertedRows = suggestionMapper.insertLike(suggestionId, currentUser.userId());
-        if (insertedRows > 0) {
-            suggestionMapper.increaseLikeCount(suggestionId);
-        } else if (suggestionMapper.deleteLike(suggestionId, currentUser.userId()) > 0) {
-            suggestionMapper.decreaseLikeCount(suggestionId);
-        }
+        InteractionLikeToggler.toggle(
+                suggestionId,
+                currentUser.userId(),
+                suggestionMapper::insertLike,
+                suggestionMapper::deleteLike,
+                suggestionMapper::increaseLikeCount,
+                suggestionMapper::decreaseLikeCount
+        );
         return findOne(suggestionId, currentUser.userId());
-    }
-
-    /**
-     * 校验建议内容。
-     *
-     * @param content 已规整内容
-     */
-    private void validateContent(String content) {
-        if (InteractionTextPolicy.hasInvalidLength(content)) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "建议内容长度需在2到1000位之间");
-        }
-        if (InteractionTextPolicy.containsUnsupportedContent(content)) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "仅支持纯文字，不能使用表情和艾特");
-        }
     }
 
     /**
@@ -128,9 +117,7 @@ public class SuggestionService {
      * @param suggestionId 建议ID
      */
     private void ensureSuggestionExists(Long suggestionId) {
-        if (suggestionId == null || suggestionMapper.countActiveById(suggestionId) == 0) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "建议不存在");
-        }
+        InteractionTargetValidator.ensureExists(suggestionId, CONTENT_NAME, suggestionMapper::countActiveById);
     }
 
     /**
@@ -141,10 +128,10 @@ public class SuggestionService {
      * @return 建议响应
      */
     private SuggestionResponse findOne(Long suggestionId, long viewerUserId) {
-        SuggestionRecord record = suggestionMapper.findById(suggestionId, viewerUserId);
-        if (record == null) {
-            throw new BusinessException(ResponseCode.PARAM_INVALID.code(), "建议不存在");
-        }
+        SuggestionRecord record = InteractionTargetValidator.requireFound(
+                suggestionMapper.findById(suggestionId, viewerUserId),
+                CONTENT_NAME
+        );
         return toResponse(record);
     }
 
@@ -167,7 +154,7 @@ public class SuggestionService {
                 record.getLikeCount(),
                 Boolean.TRUE.equals(record.getLiked()),
                 author,
-                record.getCreatedAt().atZone(ZoneId.systemDefault()).toOffsetDateTime()
+                DateTimeUtils.toOffsetDateTime(record.getCreatedAt())
         );
     }
 
@@ -178,19 +165,12 @@ public class SuggestionService {
      * @return 作者摘要
      */
     private AuthorSummary toAuthorSummary(SuggestionRecord record) {
-        int experience = record.getAuthorExperience() == null ? 0 : record.getAuthorExperience();
-        GrowthLevel level = GrowthLevel.resolveByExperience(experience);
-        GrowthRank rank = GrowthRank.resolveByExperience(experience);
-
-        // 等级和段位遵循个人中心同一套成长规则。
-        return new AuthorSummary(
-                String.valueOf(record.getAuthorId()),
+        return AuthorSummaryConverter.toSummary(
+                record.getAuthorId(),
                 record.getAuthorUsername(),
                 record.getAuthorNickname(),
                 record.getAuthorAvatar(),
-                level.displayCode(),
-                level.levelValue(),
-                rank.displayName()
+                record.getAuthorExperience()
         );
     }
 }

@@ -1,5 +1,6 @@
 package com.earth.online.player.ailearn.answer.domain;
 
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -20,7 +21,6 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
 
     private static final int MAX_KEYWORD_COUNT = 8;
     private static final int SHORT_ANSWER_LENGTH = 20;
-    private static final int MAX_SCORE = 100;
     private static final int CONTENT_BASE_SCORE = 20;
     private static final int KEYWORD_SCORE_WEIGHT = 80;
     private static final String SPLIT_REGEX = "[\\s，。、；：,.!?！？（）()\"'“”‘’]+";
@@ -278,11 +278,11 @@ public class AnswerGradingDomainService implements AnswerGradingPort {
      */
     private int calculateScore(int hitCount, int totalCount, int answerLength) {
         if (totalCount == 0) {
-            return Math.min(MAX_SCORE, CONTENT_BASE_SCORE + Math.min(answerLength, KEYWORD_SCORE_WEIGHT));
+            return NumberUtils.clampPercentScore(CONTENT_BASE_SCORE + Math.min(answerLength, KEYWORD_SCORE_WEIGHT));
         }
         int keywordScore = Math.round((hitCount * KEYWORD_SCORE_WEIGHT) / (float) totalCount);
         int contentScore = answerLength >= SHORT_ANSWER_LENGTH ? CONTENT_BASE_SCORE : answerLength;
-        return Math.max(0, Math.min(MAX_SCORE, keywordScore + contentScore));
+        return NumberUtils.clampPercentScore(keywordScore + contentScore);
     }
 
     /**

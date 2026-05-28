@@ -1,16 +1,13 @@
 package com.earth.online.player.ailearn.growth.application;
 
-import com.earth.online.player.ailearn.common.exception.BusinessException;
-import com.earth.online.player.ailearn.common.response.ResponseCode;
-import com.earth.online.player.ailearn.common.security.AuthContext;
-import com.earth.online.player.ailearn.common.security.AuthenticatedUser;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
 import com.earth.online.player.ailearn.growth.infrastructure.GrowthMapper;
 import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
 import com.earth.online.player.ailearn.growth.interfaces.GrowthResponse;
+import com.earth.online.player.ailearn.user.application.CurrentUserService;
 import com.earth.online.player.ailearn.user.domain.User;
-import com.earth.online.player.ailearn.user.infrastructure.UserMapper;
 import java.util.Collections;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -21,28 +18,28 @@ import org.springframework.stereotype.Service;
 @Service
 public class GrowthService {
 
-    private final UserMapper userMapper;
     private final GrowthMapper growthMapper;
     private final GrowthRuleService growthRuleService;
     private final GrowthAwardService growthAwardService;
+    private final CurrentUserService currentUserService;
 
     /**
      * 创建成长信息服务。
      *
-     * @param userMapper 用户仓储
      * @param growthMapper 成长仓储
      * @param growthRuleService 成长规则服务
      * @param growthAwardService 成长徽章服务
+     * @param currentUserService 当前用户读取服务
      */
     public GrowthService(
-            UserMapper userMapper,
             GrowthMapper growthMapper,
             GrowthRuleService growthRuleService,
-            GrowthAwardService growthAwardService) {
-        this.userMapper = userMapper;
+            GrowthAwardService growthAwardService,
+            CurrentUserService currentUserService) {
         this.growthMapper = growthMapper;
         this.growthRuleService = growthRuleService;
         this.growthAwardService = growthAwardService;
+        this.currentUserService = currentUserService;
     }
 
     /**
@@ -61,15 +58,7 @@ public class GrowthService {
      * @return 成长信息
      */
     public GrowthResponse getCurrentGrowth(List<BadgeResponse> newBadges) {
-        AuthenticatedUser authenticatedUser = AuthContext.getUser();
-        if (authenticatedUser == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录后即可使用该功能");
-        }
-        User user = userMapper.findById(authenticatedUser.userId());
-        if (user == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录状态已失效，请重新登录");
-        }
-
+        User user = currentUserService.requireCurrentUser();
         return buildGrowthResponse(user, newBadges == null ? Collections.emptyList() : newBadges);
     }
 
@@ -82,7 +71,7 @@ public class GrowthService {
      */
     private GrowthResponse buildGrowthResponse(User user, List<BadgeResponse> newBadges) {
         // 总经验直接读取用户表快照，避免成长查询扫描用户题目汇总表。
-        int experience = user.getExperience() == null ? 0 : Math.max(0, user.getExperience());
+        int experience = NumberUtils.toNonNegativeInt(user.getExperience());
         GrowthLevel level = growthRuleService.resolveLevel(experience);
         GrowthRank rank = growthRuleService.resolveRank(experience);
         int nextLevelExperience = level.nextLevelExperience();

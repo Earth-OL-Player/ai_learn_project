@@ -38,35 +38,25 @@ public interface CommentMapper {
      * @param viewerUserId 当前查看用户ID，未登录时传0
      * @return 父评论列表
      */
-    @Select("""
-            <script>
-            SELECT c.id, c.content, c.parent_id, c.like_count, c.created_at,
-                   CASE WHEN EXISTS(
-                       SELECT 1 FROM comment_likes cl
-                       WHERE cl.comment_id = c.id AND cl.user_id = #{viewerUserId}
-                   ) THEN 1 ELSE 0 END AS liked,
-                   (
-                       SELECT COUNT(1) FROM comments child
-                       WHERE child.parent_id = c.id AND child.deleted = 0
-                   ) AS reply_count,
-                   u.id AS author_id, u.username AS author_username,
-                   u.nickname AS author_nickname, u.avatar AS author_avatar,
-                   u.experience AS author_experience
-            FROM comments c
-            INNER JOIN users u ON u.id = c.user_id AND u.deleted = 0
-            WHERE c.deleted = 0 AND c.parent_id IS NULL
-            ORDER BY
-            <choose>
-                <when test="sort == 'LATEST'">
-                    c.created_at DESC, c.id DESC
-                </when>
-                <otherwise>
-                    c.like_count DESC, c.created_at DESC, c.id DESC
-                </otherwise>
-            </choose>
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+    @Select({
+            "<script>",
+            CommentSql.COMMENT_CARD_SELECT_SQL,
+            CommentSql.COMMENT_REPLY_COUNT_SQL,
+            CommentSql.COMMENT_AUTHOR_COLUMNS_SQL,
+            CommentSql.COMMENT_CARD_FROM_SQL,
+            "WHERE c.deleted = 0 AND c.parent_id IS NULL",
+            "ORDER BY",
+            "<choose>",
+            "    <when test=\"sort == 'LATEST'\">",
+            "        c.created_at DESC, c.id DESC",
+            "    </when>",
+            "    <otherwise>",
+            "        c.like_count DESC, c.created_at DESC, c.id DESC",
+            "    </otherwise>",
+            "</choose>",
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<CommentRecord> findParentPage(
             @Param("offset") int offset,
             @Param("pageSize") int pageSize,
@@ -81,26 +71,19 @@ public interface CommentMapper {
      * @param viewerUserId 当前查看用户ID，未登录时传0
      * @return 子评论列表
      */
-    @Select("""
-            <script>
-            SELECT c.id, c.content, c.parent_id, c.like_count, c.created_at,
-                   CASE WHEN EXISTS(
-                       SELECT 1 FROM comment_likes cl
-                       WHERE cl.comment_id = c.id AND cl.user_id = #{viewerUserId}
-                   ) THEN 1 ELSE 0 END AS liked,
-                   0 AS reply_count,
-                   u.id AS author_id, u.username AS author_username,
-                   u.nickname AS author_nickname, u.avatar AS author_avatar,
-                   u.experience AS author_experience
-            FROM comments c
-            INNER JOIN users u ON u.id = c.user_id AND u.deleted = 0
-            WHERE c.deleted = 0 AND c.parent_id IN
-            <foreach collection="parentIds" item="parentId" open="(" separator="," close=")">
-                #{parentId}
-            </foreach>
-            ORDER BY c.parent_id ASC, c.created_at ASC, c.id ASC
-            </script>
-            """)
+    @Select({
+            "<script>",
+            CommentSql.COMMENT_CARD_SELECT_SQL,
+            "       0 AS reply_count,",
+            CommentSql.COMMENT_AUTHOR_COLUMNS_SQL,
+            CommentSql.COMMENT_CARD_FROM_SQL,
+            "WHERE c.deleted = 0 AND c.parent_id IN",
+            "<foreach collection=\"parentIds\" item=\"parentId\" open=\"(\" separator=\",\" close=\")\">",
+            "    #{parentId}",
+            "</foreach>",
+            "ORDER BY c.parent_id ASC, c.created_at ASC, c.id ASC",
+            "</script>"
+    })
     List<CommentRecord> findChildrenByParentIds(
             @Param("parentIds") List<Long> parentIds,
             @Param("viewerUserId") long viewerUserId
@@ -113,23 +96,13 @@ public interface CommentMapper {
      * @param viewerUserId 当前查看用户ID，未登录时传0
      * @return 评论记录
      */
-    @Select("""
-            SELECT c.id, c.content, c.parent_id, c.like_count, c.created_at,
-                   CASE WHEN EXISTS(
-                       SELECT 1 FROM comment_likes cl
-                       WHERE cl.comment_id = c.id AND cl.user_id = #{viewerUserId}
-                   ) THEN 1 ELSE 0 END AS liked,
-                   (
-                       SELECT COUNT(1) FROM comments child
-                       WHERE child.parent_id = c.id AND child.deleted = 0
-                   ) AS reply_count,
-                   u.id AS author_id, u.username AS author_username,
-                   u.nickname AS author_nickname, u.avatar AS author_avatar,
-                   u.experience AS author_experience
-            FROM comments c
-            INNER JOIN users u ON u.id = c.user_id AND u.deleted = 0
-            WHERE c.id = #{id} AND c.deleted = 0
-            """)
+    @Select({
+            CommentSql.COMMENT_CARD_SELECT_SQL,
+            CommentSql.COMMENT_REPLY_COUNT_SQL,
+            CommentSql.COMMENT_AUTHOR_COLUMNS_SQL,
+            CommentSql.COMMENT_CARD_FROM_SQL,
+            "WHERE c.id = #{id} AND c.deleted = 0"
+    })
     CommentRecord findById(@Param("id") Long id, @Param("viewerUserId") long viewerUserId);
 
     /**
@@ -198,4 +171,46 @@ public interface CommentMapper {
      */
     @Update("UPDATE comments SET like_count = GREATEST(like_count - 1, 0) WHERE id = #{id} AND deleted = 0")
     int decreaseLikeCount(@Param("id") Long id);
+}
+
+/**
+ * 评论 Mapper 复用 SQL 片段。
+ */
+final class CommentSql {
+
+    /** 评论卡片通用查询字段，保留点赞状态计算。 */
+    static final String COMMENT_CARD_SELECT_SQL = """
+            SELECT c.id, c.content, c.parent_id, c.like_count, c.created_at,
+                   CASE WHEN EXISTS(
+                       SELECT 1 FROM comment_likes cl
+                       WHERE cl.comment_id = c.id AND cl.user_id = #{viewerUserId}
+                   ) THEN 1 ELSE 0 END AS liked,
+            """;
+
+    /** 父评论回复数统计字段。 */
+    static final String COMMENT_REPLY_COUNT_SQL = """
+                   (
+                       SELECT COUNT(1) FROM comments child
+                       WHERE child.parent_id = c.id AND child.deleted = 0
+                   ) AS reply_count,
+            """;
+
+    /** 评论卡片通用作者关联。 */
+    static final String COMMENT_CARD_FROM_SQL = """
+            FROM comments c
+            INNER JOIN users u ON u.id = c.user_id AND u.deleted = 0
+            """;
+
+    /** 评论卡片通用作者展示字段。 */
+    static final String COMMENT_AUTHOR_COLUMNS_SQL = """
+                   u.id AS author_id, u.username AS author_username,
+                   u.nickname AS author_nickname, u.avatar AS author_avatar,
+                   u.experience AS author_experience
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private CommentSql() {
+    }
 }

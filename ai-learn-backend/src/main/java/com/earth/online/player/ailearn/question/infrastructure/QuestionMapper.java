@@ -20,24 +20,17 @@ public interface QuestionMapper {
      * @param pageSize 每页数量
      * @return 题目列表
      */
-    @Select("""
-            <script>
+    @Select({
+            "<script>",
+            """
             SELECT q.id, q.code, q.question, q.question_type, q.created_at,
                    q.importance_score, q.occurrence_count
-            FROM questions q
-            WHERE q.deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (q.code LIKE CONCAT('%', #{keyword}, '%')
-                   OR q.question LIKE CONCAT('%', #{keyword}, '%')
-                   OR q.standard_answer LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='questionType != null and questionType != ""'>
-              AND q.question_type = #{questionType}
-            </if>
-            ORDER BY q.created_at DESC, q.id DESC
-            LIMIT #{pageSize} OFFSET #{offset}
-            </script>
-            """)
+            """,
+            QuestionSql.QUESTION_PAGE_FILTER_SQL,
+            "ORDER BY q.created_at DESC, q.id DESC",
+            "LIMIT #{pageSize} OFFSET #{offset}",
+            "</script>"
+    })
     List<QuestionListRecord> findPage(
             @Param("keyword") String keyword,
             @Param("questionType") String questionType,
@@ -52,21 +45,12 @@ public interface QuestionMapper {
      * @param questionType 题目分类
      * @return 题目数量
      */
-    @Select("""
-            <script>
-            SELECT COUNT(1)
-            FROM questions q
-            WHERE q.deleted = 0
-            <if test='keyword != null and keyword != ""'>
-              AND (q.code LIKE CONCAT('%', #{keyword}, '%')
-                   OR q.question LIKE CONCAT('%', #{keyword}, '%')
-                   OR q.standard_answer LIKE CONCAT('%', #{keyword}, '%'))
-            </if>
-            <if test='questionType != null and questionType != ""'>
-              AND q.question_type = #{questionType}
-            </if>
-            </script>
-            """)
+    @Select({
+            "<script>",
+            "SELECT COUNT(1)",
+            QuestionSql.QUESTION_PAGE_FILTER_SQL,
+            "</script>"
+    })
     long countPage(
             @Param("keyword") String keyword,
             @Param("questionType") String questionType
@@ -122,4 +106,30 @@ public interface QuestionMapper {
             ORDER BY question_type ASC
             """)
     List<String> findQuestionTypes();
+}
+
+/**
+ * 题库 Mapper 复用 SQL 片段。
+ */
+final class QuestionSql {
+
+    /** 题库分页与计数共用筛选条件。 */
+    static final String QUESTION_PAGE_FILTER_SQL = """
+            FROM questions q
+            WHERE q.deleted = 0
+            <if test='keyword != null and keyword != ""'>
+              AND (q.code LIKE CONCAT('%', #{keyword}, '%')
+                   OR q.question LIKE CONCAT('%', #{keyword}, '%')
+                   OR q.standard_answer LIKE CONCAT('%', #{keyword}, '%'))
+            </if>
+            <if test='questionType != null and questionType != ""'>
+              AND q.question_type = #{questionType}
+            </if>
+            """;
+
+    /**
+     * 工具类不允许实例化。
+     */
+    private QuestionSql() {
+    }
 }

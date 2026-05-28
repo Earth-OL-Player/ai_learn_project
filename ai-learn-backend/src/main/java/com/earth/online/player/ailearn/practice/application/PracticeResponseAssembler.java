@@ -1,5 +1,7 @@
 package com.earth.online.player.ailearn.practice.application;
 
+import com.earth.online.player.ailearn.common.util.NumberUtils;
+import com.earth.online.player.ailearn.common.util.TextUtils;
 import com.earth.online.player.ailearn.growth.application.GrowthService;
 import com.earth.online.player.ailearn.growth.interfaces.BadgeResponse;
 import com.earth.online.player.ailearn.practice.domain.PracticeConstants;
@@ -153,7 +155,7 @@ public class PracticeResponseAssembler {
         appendSummaryList(builder, "问题点", grading.problems());
         builder.append("优化建议：").append(grading.improvementAdvice()).append("。");
         builder.append("评分来源：").append(Boolean.TRUE.equals(grading.fallbackUsed()) ? "本地兜底评分" : "AI评分").append("。");
-        return limitText(builder.toString(), PracticeConstants.MAX_GRADING_SUMMARY_LENGTH);
+        return TextUtils.limitText(builder.toString(), PracticeConstants.MAX_GRADING_SUMMARY_LENGTH);
     }
 
     /**
@@ -169,8 +171,8 @@ public class PracticeResponseAssembler {
                 question.getQuestionType(),
                 question.getImportanceScore(),
                 question.getOccurrenceCount(),
-                safeInt(question.getAnsweredCount()),
-                safeInt(question.getBestScore())
+                NumberUtils.toIntOrZero(question.getAnsweredCount()),
+                NumberUtils.toIntOrZero(question.getBestScore())
         );
     }
 
@@ -194,7 +196,7 @@ public class PracticeResponseAssembler {
      * @return 等级文案
      */
     private String scoreLevelText(Integer score) {
-        int safeScore = score == null ? 0 : score;
+        int safeScore = NumberUtils.toIntOrZero(score);
         if (safeScore < PracticeConstants.PASS_SCORE) {
             return "继续加油";
         }
@@ -234,31 +236,5 @@ public class PracticeResponseAssembler {
             return "本题讨论中";
         }
         return "等待出题";
-    }
-
-    /**
-     * 限制文本长度。
-     *
-     * @param text 原始文本
-     * @param maxLength 最大长度
-     * @return 截断后的文本
-     */
-    private String limitText(String text, int maxLength) {
-        if (text == null || text.length() <= maxLength) {
-            return text;
-        }
-
-        // 截断后保留明确提示，便于模型理解上下文被压缩过。
-        return text.substring(0, maxLength) + "……";
-    }
-
-    /**
-     * 获取安全整数。
-     *
-     * @param value 原始值
-     * @return 安全值
-     */
-    private int safeInt(Integer value) {
-        return value == null ? 0 : value;
     }
 }

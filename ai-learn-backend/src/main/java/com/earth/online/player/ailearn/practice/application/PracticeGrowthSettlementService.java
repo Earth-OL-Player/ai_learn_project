@@ -3,6 +3,8 @@ package com.earth.online.player.ailearn.practice.application;
 import com.earth.online.player.ailearn.answer.domain.GradingResult;
 import com.earth.online.player.ailearn.common.exception.BusinessException;
 import com.earth.online.player.ailearn.common.response.ResponseCode;
+import com.earth.online.player.ailearn.common.security.AuthMessages;
+import com.earth.online.player.ailearn.common.util.NumberUtils;
 import com.earth.online.player.ailearn.growth.application.GrowthAwardService;
 import com.earth.online.player.ailearn.growth.domain.GrowthLevel;
 import com.earth.online.player.ailearn.growth.domain.GrowthRank;
@@ -61,9 +63,9 @@ public class PracticeGrowthSettlementService {
         User user = findLockedUser(userId);
         PracticeStatRecord oldStat = findLockedStat(userId, question.getCode());
         boolean firstAnswer = oldStat.getAnswerCount() == null || oldStat.getAnswerCount() == 0;
-        int previousBest = oldStat.getBestScore() == null ? 0 : oldStat.getBestScore();
-        int previousLast = oldStat.getLastScore() == null ? 0 : oldStat.getLastScore();
-        int score = Math.max(0, Math.min(100, gradingResult.score()));
+        int previousBest = NumberUtils.toIntOrZero(oldStat.getBestScore());
+        int previousLast = NumberUtils.toIntOrZero(oldStat.getLastScore());
+        int score = NumberUtils.clampPercentScore(gradingResult.score());
         int earnedExperience = Math.max(0, score - previousBest);
         practiceMapper.updateLockedStatAfterAnswer(oldStat.getId(), score);
 
@@ -97,7 +99,7 @@ public class PracticeGrowthSettlementService {
     private User findLockedUser(Long userId) {
         User user = userMapper.findByIdForUpdate(userId);
         if (user == null) {
-            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), "登录状态已失效，请重新登录");
+            throw new BusinessException(ResponseCode.AUTH_UNAUTHORIZED.code(), AuthMessages.SESSION_INVALID_MESSAGE);
         }
         return user;
     }
@@ -126,7 +128,7 @@ public class PracticeGrowthSettlementService {
      * @return 答题后的总经验
      */
     private int calculateTotalExperience(User user, int earnedExperience) {
-        int currentExperience = user.getExperience() == null ? 0 : Math.max(0, user.getExperience());
+        int currentExperience = NumberUtils.toNonNegativeInt(user.getExperience());
         return currentExperience + earnedExperience;
     }
 
