@@ -1,4 +1,4 @@
-import { post } from './http';
+import { post, postPublic } from './http';
 import type { CurrentUser } from './user';
 
 export interface RegisterPayload {
@@ -24,14 +24,14 @@ export interface AuthResult {
  * 调用注册接口。
  */
 export function register(payload: RegisterPayload): Promise<AuthResult> {
-  return post<AuthResult, RegisterPayload>('/auth/register', payload);
+  return postPublic<AuthResult, RegisterPayload>('/auth/register', payload);
 }
 
 /**
  * 调用登录接口。
  */
 export function login(payload: LoginPayload): Promise<AuthResult> {
-  return post<AuthResult, LoginPayload>('/auth/login', payload);
+  return postPublic<AuthResult, LoginPayload>('/auth/login', payload);
 }
 
 /**

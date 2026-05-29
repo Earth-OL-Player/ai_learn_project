@@ -233,6 +233,17 @@ export async function post<T, B = unknown>(path: string, body?: B): Promise<T> {
 }
 
 /**
+ * 发起公开 POST 请求，不携带本地登录令牌。
+ */
+export async function postPublic<T, B = unknown>(path: string, body?: B): Promise<T> {
+  return request<T>(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  }, false);
+}
+
+/**
  * 发起 POST 流式请求。
  */
 export async function postStream<B = unknown>(
