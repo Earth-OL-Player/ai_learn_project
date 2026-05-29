@@ -2,7 +2,7 @@ import { defineConfig, type ServerOptions } from 'vite';
 import vue from '@vitejs/plugin-vue';
 
 // 后端服务只在本机访问，由 Vite 代理转发本地开发请求。
-const LOCAL_BACKEND_TARGET = 'http://localhost:8080';
+const LOCAL_BACKEND_TARGET = 'http://127.0.0.1:8080';
 
 /**
  * 将第三方依赖拆成稳定缓存包。
