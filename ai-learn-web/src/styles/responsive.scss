@@ -110,6 +110,12 @@ canvas {
     padding: 0 18px;
   }
 
+  .header-quick-actions {
+    // 平板宽度优先保证顶部导航和账号入口不被垂直图标挤压。
+    flex-direction: row;
+    gap: 6px;
+  }
+
   .brand-title-row h1 {
     font-size: 21px;
   }
@@ -182,6 +188,12 @@ canvas {
     min-width: 0;
   }
 
+  .header-quick-actions {
+    // 手机端改为横向排列，避免两个图标把顶部栏撑高。
+    flex-direction: row;
+    gap: 6px;
+  }
+
   .header-auth-actions {
     gap: 6px;
   }
@@ -231,6 +243,12 @@ canvas {
     min-width: 44px;
     min-height: 44px;
     padding: 0;
+  }
+
+  .github-link-button {
+    width: 44px;
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .layout-content {

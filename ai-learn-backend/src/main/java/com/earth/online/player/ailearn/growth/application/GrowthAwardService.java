@@ -145,6 +145,12 @@ public class GrowthAwardService {
     private List<BadgeResponse> awardBadges(Long userId, List<String> ruleCodes) {
         List<BadgeResponse> newBadges = new ArrayList<>();
         for (String ruleCode : ruleCodes) {
+            BadgeRecord existingBadge = growthMapper.findBadgeByRuleCode(userId, ruleCode);
+            if (existingBadge == null || Boolean.TRUE.equals(existingBadge.getAcquired())) {
+                continue;
+            }
+
+            // 仅数据库本次实际插入成功时，才认定为新获得勋章并返回给前端提示。
             int affected = growthMapper.insertUserBadge(userId, ruleCode);
             if (affected > 0) {
                 BadgeRecord badge = growthMapper.findBadgeByRuleCode(userId, ruleCode);

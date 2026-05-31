@@ -4,6 +4,8 @@ from dataclasses import dataclass
 import time
 from typing import Any
 
+from langchain_core.messages import SystemMessage
+
 from app.practice.llm_logger import PracticeLlmLogger, logger
 from app.practice.model_factory import PracticeModelFactory
 from app.practice.prompts import GRADE_SYSTEM_PROMPT, PracticePromptBuilder
@@ -37,11 +39,11 @@ class PracticeGradingAgent:
         self._provider_adapter = provider_adapter
 
     def grade_answer(self, request: PracticeGradeRequest, trace_id: str) -> PracticeGradeAgentResult:
-        """使用 LangChain Agent 非流式完成答案评分。"""
+        """使用结构化模型非流式完成答案评分。"""
         messages = self._prompt_builder.build_grade_messages(request)
         start_time = time.perf_counter()
         logger.info(
-            "【AI智能刷题流程-评分】准备调用 Agent 结构化评分：traceId=%s model=%s",
+            "【AI智能刷题流程-评分】准备调用结构化模型评分：traceId=%s model=%s",
             trace_id,
             self._provider_adapter.model_name(request.modelConfig),
         )
@@ -54,17 +56,20 @@ class PracticeGradingAgent:
             model_config=request.modelConfig,
         )
         try:
-            result = self._model_factory.grading_agent(request.modelConfig).invoke({"messages": messages})
+            # 系统提示词直接进入模型消息，避免 Agent response_format 触发工具调用补偿循环。
+            result = self._model_factory.grading_model(request.modelConfig).invoke(
+                [SystemMessage(content=GRADE_SYSTEM_PROMPT), *messages]
+            )
             grading = self._structured_grading_result(result, request.standardAnswer)
             if grading is None:
-                raise ValueError("Agent 未返回结构化评分结果")
+                raise ValueError("结构化模型未返回评分结果")
 
-            # LangChain Agent 结构化输出成功后记录完整评分结果，便于按 traceId 复盘返回。
+            # LangChain 结构化输出成功后记录完整评分结果，便于按 traceId 复盘返回。
             elapsed_ms = elapsed_milliseconds(start_time)
             self._llm_logger.log_response(trace_id, "答案评分-Agent非流式", {"grading": grading, "rawResult": result}, elapsed_ms)
             metrics = self._build_metrics(trace_id, elapsed_ms, True, "", result, request)
             logger.info(
-                "【AI智能刷题流程-评分】Agent 结构化评分完成：traceId=%s model=%s durationMs=%s score=%s inputTokens=%s outputTokens=%s totalTokens=%s estimatedCost=%s",
+                "【AI智能刷题流程-评分】结构化模型评分完成：traceId=%s model=%s durationMs=%s score=%s inputTokens=%s outputTokens=%s totalTokens=%s estimatedCost=%s",
                 trace_id,
                 self._provider_adapter.model_name(request.modelConfig),
                 elapsed_ms,
@@ -79,7 +84,7 @@ class PracticeGradingAgent:
             elapsed_ms = elapsed_milliseconds(start_time)
             metrics = self._build_metrics(trace_id, elapsed_ms, False, self._error_category(exc), None, request)
             logger.warning(
-                "【AI智能刷题流程-评分】Agent 结构化评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s errorCategory=%s error=%s",
+                "【AI智能刷题流程-评分】结构化模型评分失败，交由 Java 后端本地兜底：traceId=%s durationMs=%s errorCategory=%s error=%s",
                 trace_id,
                 elapsed_ms,
                 metrics.errorCategory,
@@ -94,6 +99,12 @@ class PracticeGradingAgent:
             return self._build_grade_response(result, reference_answer)
         if not isinstance(result, dict):
             return None
+
+        # include_raw 或不同供应商包装结果时，结构化对象可能落在 parsed 字段。
+        parsed_response = result.get("parsed")
+        if parsed_response is not None:
+            evaluation = PracticeGradeEvaluation.model_validate(parsed_response)
+            return self._build_grade_response(evaluation, reference_answer)
 
         # LangChain Agent response_format 成功时会返回 structured_response。
         structured_response = result.get("structured_response")

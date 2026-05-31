@@ -29,17 +29,33 @@
 
       <!-- 顶部右侧继续承载登录注册和用户操作入口。 -->
       <div class="header-action-area">
-        <button
-          :class="['theme-toggle-button', { 'is-dark': isDarkMode }]"
-          type="button"
-          :aria-label="themeToggleLabel"
-          :aria-pressed="isDarkMode"
-          @click="toggleThemeMode"
-        >
-          <span class="theme-toggle-icon-wrap" aria-hidden="true">
-            <span :class="['theme-toggle-icon', isDarkMode ? 'theme-toggle-moon' : 'theme-toggle-sun']"></span>
-          </span>
-        </button>
+        <div class="header-quick-actions">
+          <button
+            :class="['theme-toggle-button', { 'is-dark': isDarkMode }]"
+            type="button"
+            :aria-label="themeToggleLabel"
+            :aria-pressed="isDarkMode"
+            @click="toggleThemeMode"
+          >
+            <span class="theme-toggle-icon-wrap" aria-hidden="true">
+              <span :class="['theme-toggle-icon', isDarkMode ? 'theme-toggle-moon' : 'theme-toggle-sun']"></span>
+            </span>
+          </button>
+          <a
+            class="github-link-button"
+            :href="GITHUB_REPOSITORY_URL"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="打开项目 GitHub 仓库"
+          >
+            <svg class="github-link-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+              <path
+                fill="currentColor"
+                d="M12 2C6.48 2 2 6.59 2 12.25c0 4.52 2.87 8.35 6.84 9.71.5.09.68-.22.68-.49 0-.24-.01-1.05-.01-1.91-2.51.47-3.16-.63-3.36-1.2-.11-.29-.6-1.2-1.03-1.44-.35-.19-.85-.66-.01-.67.79-.01 1.35.74 1.54 1.04.9 1.55 2.34 1.11 2.91.85.09-.67.35-1.11.64-1.37-2.22-.26-4.55-1.14-4.55-5.07 0-1.12.39-2.04 1.03-2.76-.1-.26-.45-1.31.1-2.72 0 0 .84-.28 2.75 1.05A9.28 9.28 0 0 1 12 6.93c.85 0 1.71.12 2.51.35 1.91-1.33 2.75-1.05 2.75-1.05.55 1.41.2 2.46.1 2.72.64.72 1.03 1.64 1.03 2.76 0 3.94-2.34 4.81-4.57 5.07.36.32.68.94.68 1.9 0 1.37-.01 2.47-.01 2.81 0 .27.18.59.69.49A10.06 10.06 0 0 0 22 12.25C22 6.59 17.52 2 12 2Z"
+              />
+            </svg>
+          </a>
+        </div>
         <div v-if="authStore.isLoggedIn" class="header-user">
           <el-avatar :size="32" :src="authStore.user?.avatar || undefined">{{ avatarText }}</el-avatar>
           <el-dropdown trigger="click" @command="handleUserCommand">
@@ -120,6 +136,7 @@ interface MobileNavItem {
 }
 
 const THEME_STORAGE_KEY = 'ai-learn-theme-mode';
+const GITHUB_REPOSITORY_URL = 'https://github.com/Earth-OL-Player/ai_learn_project';
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();

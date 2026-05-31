@@ -10,7 +10,7 @@ from typing import Any
 from langchain.agents import create_agent
 from langchain.chat_models import init_chat_model
 
-from app.practice.prompts import DISCUSSION_SYSTEM_PROMPT, GRADE_SYSTEM_PROMPT
+from app.practice.prompts import DISCUSSION_SYSTEM_PROMPT
 from app.practice.provider_adapter import PracticeProviderAdapter
 from app.schemas.practice import PracticeGradeEvaluation, PracticeModelConfig
 
@@ -40,19 +40,8 @@ class PracticeModelFactory:
         self._provider_adapter = provider_adapter
         self._cache_lock = RLock()
         self._chat_models: OrderedDict[ModelCacheKey, Any] = OrderedDict()
-        self._grading_agents: OrderedDict[ModelCacheKey, Any] = OrderedDict()
+        self._grading_models: OrderedDict[ModelCacheKey, Any] = OrderedDict()
         self._discussion_agents: OrderedDict[ModelCacheKey, Any] = OrderedDict()
-
-    def grading_agent(self, model_config: PracticeModelConfig | None = None) -> Any:
-        """获取答案评分 Agent。"""
-        key = self._cache_key(model_config)
-
-        # 评分 Agent 绑定结构化输出格式，必须和讨论 Agent 分开缓存。
-        return self._get_or_create(
-            self._grading_agents,
-            key,
-            lambda: self._create_agent(model_config, GRADE_SYSTEM_PROMPT, PracticeGradeEvaluation),
-        )
 
     def discussion_agent(self, model_config: PracticeModelConfig | None = None) -> Any:
         """获取本题讨论 Agent。"""
@@ -79,12 +68,27 @@ class PracticeModelFactory:
             ),
         )
 
+    def grading_model(self, model_config: PracticeModelConfig | None = None) -> Any:
+        """获取答案评分结构化模型。"""
+        key = self._cache_key(model_config)
+
+        # 评分链路没有真实工具，直接结构化模型可避免 Agent 工具调用协议兼容问题。
+        return self._get_or_create(
+            self._grading_models,
+            key,
+            lambda: self._create_grading_model(model_config),
+        )
+
     def clear_cached_objects(self) -> int:
         """清理模型和 Agent 构造缓存。"""
         with self._cache_lock:
-            cleared_count = len(self._chat_models) + len(self._grading_agents) + len(self._discussion_agents)
+            cleared_count = (
+                len(self._chat_models)
+                + len(self._grading_models)
+                + len(self._discussion_agents)
+            )
             self._chat_models.clear()
-            self._grading_agents.clear()
+            self._grading_models.clear()
             self._discussion_agents.clear()
             return cleared_count
 
@@ -120,6 +124,16 @@ class PracticeModelFactory:
         if response_format is not None:
             agent_kwargs["response_format"] = response_format
         return create_agent(**agent_kwargs)
+
+    def _create_grading_model(self, model_config: PracticeModelConfig | None) -> Any:
+        """创建答案评分结构化模型。"""
+        method = "json_mode" if self._provider_adapter.is_deepseek_provider(model_config) else "json_schema"
+
+        # DeepSeek 的 json_mode 不走工具调用，更适合当前纯评分结构化输出场景。
+        return self.chat_model(model_config).with_structured_output(
+            PracticeGradeEvaluation,
+            method=method,
+        )
 
     def _get_or_create(
         self,

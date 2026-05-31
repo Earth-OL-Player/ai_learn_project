@@ -45,6 +45,7 @@ export function usePracticeChat() {
   const authStore = useAuthStore();
   const route = useRoute();
   const router = useRouter();
+  const displayedBadgeKeys = new Set<string>();
   let messageId = 1;
 
   const snapshot = usePracticeSnapshot({
@@ -454,7 +455,14 @@ export function usePracticeChat() {
    * 展示新勋章弹框。
    */
   function showNewBadgeDialog(result: PracticeMessageResult): void {
-    const newBadges = extractNewBadges(result);
+    const newBadges = extractNewBadges(result).filter((badge) => {
+      const badgeKey = resolveBadgeKey(badge);
+      if (displayedBadgeKeys.has(badgeKey)) {
+        return false;
+      }
+      displayedBadgeKeys.add(badgeKey);
+      return true;
+    });
     if (newBadges.length === 0) {
       return;
     }
@@ -481,7 +489,7 @@ export function usePracticeChat() {
 
     // 同一个勋章可能同时出现在评分结果和成长概览中，前端只提示一次。
     return [...baseBadges, ...nextBadges].filter((badge) => {
-      const badgeKey = badge.ruleCode || badge.id;
+      const badgeKey = resolveBadgeKey(badge);
       if (badgeKeys.has(badgeKey)) {
         return false;
       }
@@ -495,6 +503,13 @@ export function usePracticeChat() {
    */
   function handleBadgeDialogClosed(): void {
     badgeDialogBadges.value = [];
+  }
+
+  /**
+   * 解析勋章去重键。
+   */
+  function resolveBadgeKey(badge: BadgeInfo): string {
+    return badge.ruleCode || badge.id;
   }
 
   watch(

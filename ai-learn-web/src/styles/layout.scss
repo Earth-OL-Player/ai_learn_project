@@ -600,6 +600,49 @@ a {
   min-width: 190px;
 }
 
+// 顶部快捷操作横向排列，主题和 GitHub 入口保持同一视觉层级。
+.header-quick-actions {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  flex-direction: row;
+  gap: 6px;
+}
+
+.github-link-button {
+  display: grid;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  color: var(--color-heading);
+  background: var(--color-control-bg);
+  border: 1px solid var(--color-theme-toggle-border);
+  border-radius: 50%;
+  box-shadow: var(--shadow-subtle);
+  place-items: center;
+  transition: color 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease, background 0.22s ease, transform 0.18s ease;
+}
+
+.github-link-button:hover {
+  color: var(--color-primary-strong);
+  border-color: var(--color-primary-bright);
+  box-shadow: var(--shadow-control);
+}
+
+.github-link-button:active {
+  transform: scale(0.96);
+}
+
+.github-link-button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--color-primary) 36%, transparent);
+  outline-offset: 3px;
+}
+
+.github-link-icon {
+  width: 20px;
+  height: 20px;
+}
+
 .layout-content:focus {
   outline: none;
 }
