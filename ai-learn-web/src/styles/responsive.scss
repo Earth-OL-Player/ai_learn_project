@@ -14,12 +14,14 @@ canvas {
   max-width: 100%;
 }
 
-@media (max-width: 1280px) {
+@media (min-width: 901px) and (max-width: 1280px) {
   .markdown-layout {
+    // 中等屏幕仍保留左右目录，手机端交给 markdown.scss 的单列规则处理。
     grid-template-columns: 230px minmax(0, 1fr);
   }
 
   .markdown-toc-card {
+    // 只压缩桌面目录内边距，避免覆盖手机端上下展开样式。
     padding: 18px 14px;
   }
 }
