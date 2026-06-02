@@ -41,7 +41,6 @@ class PracticeProviderAdapter:
             "temperature": 0.2,
             "timeout": settings.ai_grading_timeout_seconds,
             "stream_usage": True,
-            "max_completion_tokens": settings.ai_grading_max_output_tokens,
         }
 
         # 只在配置真实值时传递供应商连接参数。
@@ -53,7 +52,12 @@ class PracticeProviderAdapter:
         if self.model_provider().strip():
             kwargs["model_provider"] = self.model_provider().strip()
         if self.is_deepseek_provider(model_config):
+            # ChatDeepSeek 显式参数名是 max_tokens，避免 LangChain 转入 model_kwargs 并打印告警。
+            kwargs["max_tokens"] = settings.ai_grading_max_output_tokens
             kwargs["extra_body"] = DEEPSEEK_THINKING_DISABLED_BODY
+        else:
+            # OpenAI 新模型保留 max_completion_tokens，兼容原有输出 Token 限制语义。
+            kwargs["max_completion_tokens"] = settings.ai_grading_max_output_tokens
         return kwargs
 
     def normalized_base_url(self, model_config: PracticeModelConfig | None = None) -> str:

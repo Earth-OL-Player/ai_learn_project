@@ -105,7 +105,7 @@ class PracticeModelFactory:
             api_key_hash=sha256(api_key.encode("utf-8")).hexdigest(),
             temperature=float(kwargs.get("temperature") or 0.0),
             timeout_seconds=int(kwargs.get("timeout") or 0),
-            max_output_tokens=int(kwargs.get("max_completion_tokens") or 0),
+            max_output_tokens=int(kwargs.get("max_completion_tokens") or kwargs.get("max_tokens") or 0),
             config_fingerprint=(model_config.configFingerprint if model_config else "").strip(),
         )
 
