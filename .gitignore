@@ -11,6 +11,7 @@
 
 .idea
 release
+xuanchuan
 tmp
 .codegraph
 
@@ -48,3 +49,4 @@ env/
 .ruff_cache/
 .coverage
 htmlcov/
+
