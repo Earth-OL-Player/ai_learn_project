@@ -1,179 +1,141 @@
-# AI 学习项目
+# Agent学习平台
 
-本项目当前已形成“前端学习平台 + Java 业务后端 + Python AI 服务”的可运行闭环，核心能力包括学习路线展示、用户认证、建议评论区、热门面经、系统题库管理、AI 智能刷题、AI 评分/讨论、成长等级/段位/勋章。当前已移除未接入主业务的 RAG/Qdrant 预留代码，学习路线页面继续使用前端项目内 Markdown 文件静态渲染。
+> 面向 AI 应用开发者的一站式学习平台：把学习路线、面试题库、AI 智能刷题、成长体系和建议社区放在同一个可运行的全栈项目里。
+
+[![Vue](https://img.shields.io/badge/Vue-3.5-42b883?style=flat-square&logo=vue.js)](https://vuejs.org/)
+[![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.x-6db33f?style=flat-square&logo=springboot)](https://spring.io/projects/spring-boot)
+[![FastAPI](https://img.shields.io/badge/FastAPI-AI%20Service-009688?style=flat-square&logo=fastapi)](https://fastapi.tiangolo.com/)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-3178c6?style=flat-square&logo=typescript)](https://www.typescriptlang.org/)
+[![MySQL](https://img.shields.io/badge/MySQL-8.4%20LTS-4479a1?style=flat-square&logo=mysql)](https://www.mysql.com/)
+[![License](https://img.shields.io/badge/License-PolyForm%20Noncommercial-blue?style=flat-square)](LICENSE.md)
+
+## 在线体验
+
+- 在线站点：[https://ai-studyhub.cn](https://ai-studyhub.cn)
+- 快速启动：[QUICK_START.md](QUICK_START.md)
+- 作者：地球OL初级玩家
+
+如果你正在学习 AI Agent、AI 应用开发、RAG、工具调用、结构化输出或大模型工程化，这个项目可以作为一套可运行、可拆解、可二次开发的学习。
+
+## 项目亮点
+
+| 亮点 | 说明 |
+| --- | --- |
+| 学习路线沉淀 | 将 AI 应用开发资料、学习顺序、技术背景和路线图整理成可浏览的知识页面。 |
+| AI 智能刷题 | 支持题目分类、下一题、重答、AI 评分、AI 追问讨论和历史最高分展示。 |
+| 热门面试题库 | 覆盖 AI 通识、Agent 基础、RAG 全链路、向量检索、多智能体、安全评测等方向。 |
+| 成长体系 | 通过经验、等级、段位、勋章和刷题记录，让学习过程更有反馈感。 |
+| 建议评论社区 | 内置建议区和评论区，方便收集功能建议、体验反馈和内容补充。 |
+| 全栈闭环 | Vue 3 前端、Spring Boot 后端、FastAPI AI 服务、MySQL 数据库组合成完整业务链路。 |
+
+## 页面预览
+
+项目采用清新、简约、留白充足的学习产品风格，核心页面包括：
+
+### AI 智能刷题
+
+题目卡片、模型权益、AI 回答、评分结果和追问讨论在同一工作台中完成。
+
+![AI 智能刷题](doc/展示截图/01-ai智能刷题.png)
+
+### 首页和项目介绍
+
+用产品化页面承载项目背景、功能介绍和学习方向，适合作为学习平台入口。
+
+![首页和项目介绍](doc/展示截图/02-首页和项目介绍.png)
+
+### 路线和资料
+
+支持 Markdown 学习路线渲染、目录导航、路线图和资料版本说明。
+
+![路线和资料](doc/展示截图/03-路线和资料.png)
+
+### 热门面试题
+
+按方向聚合高频面试题，展示重要性分数和真实面试次数。
+
+![热门面试题](doc/展示截图/04-热门面试题.png)
+
+### 建议评论区
+
+支持建议发布、分类筛选、热门/最新排序和空状态展示。
+
+![建议评论区](doc/展示截图/05-建议评论区.png)
+
+### 成长体系
+
+展示经验值、练习进度、学习天数、段位和徽章墙，让刷题过程更有反馈。
+
+![成长体系](doc/展示截图/06-成长体系.png)
+
+### 智能刷题记录
+
+沉淀练习记录、题型统计、最高分、最近分和薄弱题分析。
+
+![智能刷题记录](doc/展示截图/07-智能刷题记录.png)
+
+## 功能模块
+
+| 模块 | 当前状态 | 说明 |
+| --- | --- | --- |
+| 首页 | 已完成 | 展示平台入口、学习内容和核心功能导航。 |
+| 学习路线 | 已完成 | 使用前端项目内 Markdown 文件静态渲染学习路线和资料集。 |
+| AI 智能刷题 | 已完成 | 支持抽题、回答、AI 评分、流式讨论、历史记录和弱项分析。 |
+| 热门面试题 | 已完成 | 支持面试题分类、参考答案、重要性和真实面试次数展示。 |
+| 建议评论区 | 已完成 | 支持建议、评论、点赞、排序和登录引导。 |
+| 成长体系 | 已完成 | 支持等级、段位、经验、勋章、刷题统计和个人中心。 |
+| 管理后台 | 已完成 | 支持用户、题库、兑换码、模型配置和日志级别管理。 |
+| AI 服务 | 已完成 | FastAPI 提供答案评分和本题讨论能力，支持本地规则兜底和外部模型配置。 |
+
+## 技术架构
+
+```mermaid
+flowchart LR
+    A["用户浏览器"] --> B["Vue 3 + Vite 前端"]
+    B --> C["Spring Boot 业务后端"]
+    C --> D["MySQL 业务数据库"]
+    C --> E["FastAPI AI 服务"]
+    E --> F["本地规则兜底或外部模型服务"]
+```
+
+## 技术栈
+
+| 层级 | 技术 |
+| --- | --- |
+| 前端 | Vue 3、Vite、TypeScript、Pinia、Vue Router、Element Plus、Markdown-It、DOMPurify |
+| 后端 | Java 17、Spring Boot、Maven、Spring Security、JWT、Flyway |
+| AI 服务 | Python 3.11+、FastAPI、Uvicorn、流式响应、模型服务配置 |
+| 数据库 | MySQL 8.4 LTS |
+| 文档 | Markdown、迭代文档、中间件说明、验收文档模板 |
 
 ## 项目结构
 
-| 目录 | 说明 |
-| --- | --- |
-| `ai-learn-backend` | Spring Boot 后端服务，提供认证、用户、互动、系统题库、AI刷题、成长体系和管理后台接口。 |
-| `ai-learn-web` | Vue 3 + Vite 前端项目，提供清新简约的学习平台、刷题、个人中心和管理者中心页面。 |
-| `ai-service` | FastAPI AI 服务，提供 AI 评分/讨论能力。 |
-
-
-## 项目启动步骤
-
-### 1. 本地环境准备
-
-建议本地准备以下运行环境：
-
-| 环境 | 推荐版本 | 用途 |
-| --- | --- | --- |
-| JDK | 17 | 运行 `ai-learn-backend`。 |
-| Maven | 3.9.x 或兼容版本 | 构建和启动 Spring Boot 后端。 |
-| Node.js | 20 LTS 或 22 LTS | 运行 `ai-learn-web`。 |
-| Python | 3.11+ | 运行 `ai-service`。 |
-| MySQL | 8.4 LTS | 保存用户、系统题库、刷题汇总和成长数据。 |
-
-中间件安装、启动和部署注意事项请优先查看：
-
-- [MySQL 本地与部署说明](doc/中间件/MySQL.md)
-- [AI模型服务配置说明](doc/中间件/AI模型服务.md)
-- [Redis 本地与部署说明](doc/中间件/Redis.md)
-
-说明：基础登录、题库、互动、刷题和成长功能依赖 MySQL；启用 AI 评分/讨论需启动 `ai-service`。Qdrant 预留代码和配置已移除，当前本地开发与生产部署都不需要部署 Qdrant。Redis 当前未接入运行代码，文档仅作为后续缓存/限流能力预留参考。所有真实密码、Token、密钥和生产连接地址都只能保存在本地私有配置中，禁止提交到仓库。
-
-### 2. 准备后端配置
-
-后端读取系统环境变量，建议本地维护 `ai-learn-backend/.env` 作为占位配置来源；使用 IDE 启动时可将这些键值导入运行配置，使用 PowerShell 启动时可先将 `.env` 加载到当前进程环境变量。
-
-`ai-learn-backend/.env` 示例：
-
-```env
-DATABASE_URL="jdbc:mysql://127.0.0.1:3306/ai_learn?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false"
-DATABASE_USERNAME="本地MySQL用户名占位符"
-DATABASE_PASSWORD="本地MySQL密码占位符"
-SPRING_FLYWAY_ENABLED="true"
-JWT_SECRET="至少32字节本地JWT随机密钥占位符"
-JWT_EXPIRES_IN_SECONDS="7200"
-
-# 启用 AI 服务时，请保持 token 与 ai-service/.env 一致。
-AI_SERVICE_ENABLED="true"
-AI_SERVICE_BASE_URL="http://127.0.0.1:8000"
-AI_SERVICE_TOKEN="AI_SERVICE_TOKEN本地占位符"
-AI_SERVICE_TIMEOUT_SECONDS="15"
-
-# 内存级限流，生产默认开启；后续如迁移 Redis，需要同步更新中间件文档。
-RATE_LIMIT_ENABLED="true"
-RATE_LIMIT_LOGIN_LIMIT="10"
-RATE_LIMIT_LOGIN_WINDOW_SECONDS="60"
-RATE_LIMIT_REGISTER_LIMIT="3"
-RATE_LIMIT_REGISTER_WINDOW_SECONDS="3600"
-RATE_LIMIT_LIKE_LIMIT="30"
-RATE_LIMIT_LIKE_WINDOW_SECONDS="60"
-RATE_LIMIT_COMMENT_LIMIT="10"
-RATE_LIMIT_COMMENT_WINDOW_SECONDS="60"
-RATE_LIMIT_CSV_IMPORT_LIMIT="3"
-RATE_LIMIT_CSV_IMPORT_WINDOW_SECONDS="600"
-RATE_LIMIT_AI_REQUEST_LIMIT="8"
-RATE_LIMIT_AI_REQUEST_WINDOW_SECONDS="60"
-RATE_LIMIT_AI_CONCURRENT_LIMIT="1"
-```
-
-PowerShell 临时加载 `.env` 示例：
-
-```powershell
-cd ai-learn-backend
-Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Object {
-    $name, $value = $_ -split '=', 2
-    [Environment]::SetEnvironmentVariable($name.Trim(), $value.Trim().Trim('"'), 'Process')
-}
-```
-
-说明：Flyway 默认启用，后端启动后会自动执行 `src/main/resources/db/migration` 下全部数据库迁移，初始化用户、互动、题库、刷题会话、成长徽章、系统设置、JWT 失效记录和超级管理员标识相关表结构。`JWT_SECRET` 必须配置为至少 32 字节的高强度随机值，不能直接使用占位符，否则后端会拒绝启动。当前限流为单机内存级过渡方案，登录和注册按 IP 限流，评论、点赞、CSV 导入和 AI 流式请求同时按 IP 与用户限流，AI 流式请求额外限制单用户并发。
-
-### 3. 准备前端配置
-
-`ai-learn-web/.env` 示例：
-
-```env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
-```
-
-### 4. 准备 AI 服务配置
-
-启动 AI 服务前建议配置 `ai-service/.env`：
-
-```env
-AI_SERVICE_TOKEN=AI_SERVICE_TOKEN本地占位符
-AI_GRADING_BASE_URL=https://模型服务地址占位符/v1/chat/completions
-AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
-AI_GRADING_MODEL=LOCAL_RULE
-AI_GRADING_MODEL_PROVIDER=
-AI_GRADING_TIMEOUT_SECONDS=20
-AI_GRADING_MAX_OUTPUT_TOKENS=800
-```
-
-说明：`AI_GRADING_MODEL=LOCAL_RULE` 表示使用本地规则兜底能力；如果后续接入真实模型，`AI_GRADING_API_KEY` 必须替换为本地私有值，禁止提交真实密钥。
-
-### 5. 启动顺序
-
-#### 5.1 启动 MySQL
-
-按 [MySQL 本地与部署说明](doc/中间件/MySQL.md) 创建本地数据库和业务账号，确保 `DATABASE_URL`、`DATABASE_USERNAME`、`DATABASE_PASSWORD` 与本地配置一致。
-
-#### 5.2 启动 AI 服务
-
-```powershell
-cd ai-service
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-uvicorn app.main:app --host 0.0.0.0 --port 8000
-```
-
-健康检查地址：
-
 ```text
-http://localhost:8000/health
+ai_learn_project
+├── ai-learn-web       # Vue 3 前端，负责学习平台、刷题、个人中心和管理端页面
+├── ai-learn-backend   # Spring Boot 后端，负责认证、题库、互动、成长和管理接口
+├── ai-service         # FastAPI AI 服务，负责评分、讨论和模型能力接入
+├── doc                # 需求、设计、验收、中间件和功能梳理文档
+├── release            # 发布相关产物
+└── QUICK_START.md     # 本地启动、环境变量和验收检查说明
 ```
 
-预期结果：返回 `status=UP`。
+## 为什么做这个项目
 
-#### 5.3 启动后端
+AI 技术迭代很快，很多开发者面对的问题不是“有没有资料”，而是资料太散、路线太乱、练习反馈太少。
 
-如果使用 PowerShell 启动，请先按“准备后端配置”章节加载环境变量，然后执行：
+这个项目希望把 AI 应用开发的学习路径、面试题、刷题反馈和成长记录集中起来，让普通开发者可以更系统地学习 AI Agent、RAG、工具调用、结构化输出和大模型工程化。
 
-```powershell
-cd ai-learn-backend
-mvn spring-boot:run
-```
+## 后续计划
 
-后端访问地址：
+- 补充更多 AI Agent 实战题和场景题。
+- 增强弱项分析和复习提醒能力。
+- 为 README 增加真实页面截图和演示动图。
+- 优化后台题库导入、题目质量评估和内容维护流程。
+- 根据实际使用反馈持续改进学习路线和面试题覆盖范围。
 
-```text
-http://localhost:8080
-```
 
-健康检查：
 
-```powershell
-Invoke-RestMethod -Uri "http://localhost:8080/api/v1/health" -Method Get
-```
+## 支持项目
 
-预期结果：后端启动成功，健康检查正常返回；首次连接 MySQL 时 Flyway 自动完成数据库表结构初始化。
-
-#### 5.4 启动前端
-
-```powershell
-cd ai-learn-web
-npm install
-npm run dev
-```
-
-前端访问地址：
-
-```text
-http://localhost:5173
-```
-
-### 6. 常用验收检查
-
-1. 访问 `http://localhost:5173`，确认前端页面可以正常打开。
-2. 调用 `http://localhost:8080/api/v1/health`，确认后端健康检查正常。
-3. 访问 `http://localhost:8000/health`，确认 AI 服务健康检查正常。
-4. Qdrant 预留代码和配置已移除，当前无需部署 Qdrant。
-5. 在 MySQL 中执行 `SHOW TABLES;`，确认 Flyway 已初始化当前迭代所需业务表。
-
-说明：本项目当前要求禁止新增单元测试代码，验收过程只记录构建、接口联调和人工验收步骤。
-
+如果这个项目对你学习 AI 应用开发、准备面试或搭建全栈学习平台有帮助，欢迎点一个 Star。你的 Star 会直接影响这个项目继续完善学习路线、刷题内容和工程化能力的优先级。
