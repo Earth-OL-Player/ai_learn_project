@@ -139,3 +139,7 @@ AI 技术迭代很快，很多开发者面对的问题不是“有没有资料�
 ## 支持项目
 
 如果这个项目对你学习 AI 应用开发、准备面试或搭建全栈学习平台有帮助，欢迎点一个 Star。你的 Star 会直接影响这个项目继续完善学习路线、刷题内容和工程化能力的优先级。
+
+## Star 历史
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Earth-OL-Player/ai_learn_project&type=Date)](https://www.star-history.com/#Earth-OL-Player/ai_learn_project&Date)
