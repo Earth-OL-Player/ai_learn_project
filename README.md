@@ -142,4 +142,4 @@ AI 技术迭代很快，很多开发者面对的问题不是“有没有资料�
 
 ## Star 历史
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Earth-OL-Player/ai_learn_project&type=Date)](https://www.star-history.com/#Earth-OL-Player/ai_learn_project&Date)
+[![Star History Chart](https://gitdata.xuanhun520.com/api/starimg?repos=Earth-OL-Player/ai_learn_project&type=Date&theme=light)](https://gitdata.xuanhun520.com/#/repo/Earth-OL-Player/ai_learn_project)
