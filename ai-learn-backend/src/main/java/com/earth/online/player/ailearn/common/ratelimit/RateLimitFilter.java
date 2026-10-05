@@ -116,7 +116,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
      * @param requestUri 请求路径
      */
     private void applyProtectedWriteRule(HttpServletRequest request, String requestUri) {
-        if (COMMENT_PATH.equals(requestUri)) {
+        if (COMMENT_PATH.equals(requestUri) || (requestUri.startsWith("/api/v1/assistant/runs/") && requestUri.contains("/operations/") && requestUri.endsWith("/submit"))) {
             applyIpAndUserRule(COMMENT_RULE, request, properties.getCommentLimit(), properties.getCommentWindowSeconds());
             return;
         }
@@ -128,7 +128,7 @@ public class RateLimitFilter extends OncePerRequestFilter {
             applyIpAndUserRule(CSV_IMPORT_RULE, request, properties.getCsvImportLimit(), properties.getCsvImportWindowSeconds());
             return;
         }
-        if (AI_STREAM_PATH.equals(requestUri)) {
+        if (AI_STREAM_PATH.equals(requestUri) || (requestUri.startsWith("/api/v1/assistant/sessions/") && requestUri.endsWith("/messages/stream"))) {
             applyIpAndUserRule(AI_REQUEST_RULE, request, properties.getAiRequestLimit(), properties.getAiRequestWindowSeconds());
         }
     }

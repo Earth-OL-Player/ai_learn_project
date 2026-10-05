@@ -1,6 +1,7 @@
 package com.earth.online.player.ailearn.common.config;
 
 import com.earth.online.player.ailearn.ai.AiServiceProperties;
+import com.earth.online.player.ailearn.assistant.AssistantProperties;
 import com.earth.online.player.ailearn.common.ratelimit.RateLimitProperties;
 import com.earth.online.player.ailearn.common.security.JwtProperties;
 import com.earth.online.player.ailearn.model.domain.ModelAuthorizationProperties;
@@ -14,7 +15,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
  * Web 基础配置。
  */
 @Configuration
-@EnableConfigurationProperties({JwtProperties.class, AiServiceProperties.class, RateLimitProperties.class, ModelAuthorizationProperties.class})
+@EnableConfigurationProperties({JwtProperties.class, AiServiceProperties.class, RateLimitProperties.class, ModelAuthorizationProperties.class, AssistantProperties.class})
 public class WebConfig {
 
     /**

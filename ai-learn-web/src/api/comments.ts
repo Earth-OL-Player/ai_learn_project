@@ -17,6 +17,11 @@ export function createComment(payload: CreateCommentPayload): Promise<CommentIte
   return post<CommentItem, CreateCommentPayload>('/comments', payload);
 }
 
+/** 按 ID 定位有效父评论及其回复。 */
+export function fetchCommentThread(id: string): Promise<CommentItem> {
+  return get<CommentItem>(`/comments/${id}`);
+}
+
 /**
  * 点赞或取消点赞评论。
  */

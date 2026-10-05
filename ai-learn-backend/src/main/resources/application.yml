@@ -24,6 +24,12 @@ mybatis:
     map-underscore-to-camel-case: true
 
 app:
+  assistant:
+    session-retention-days: ${ASSISTANT_SESSION_RETENTION_DAYS:7}
+    operation-retention-days: ${ASSISTANT_OPERATION_RETENTION_DAYS:30}
+    confirmation-ttl-minutes: ${ASSISTANT_CONFIRMATION_TTL_MINUTES:10}
+    max-tool-calls: ${ASSISTANT_MAX_TOOL_CALLS:8}
+    run-timeout-seconds: ${ASSISTANT_RUN_TIMEOUT_SECONDS:120}
   jwt:
     secret: ${JWT_SECRET:请在本地环境变量中配置至少32字节JWT密钥占位符}
     expires-in-seconds: ${JWT_EXPIRES_IN_SECONDS:7200}

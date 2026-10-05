@@ -109,6 +109,7 @@
     </nav>
 
     <LoginDialog v-model="showLoginDialog" />
+    <SiteAssistant />
     <RegisterDialog v-model="showRegisterDialog" />
     <LoginGuideDialog
       v-model="showLoginGuideDialog"
@@ -122,6 +123,7 @@
 import { computed, ref, watch } from 'vue';
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router';
 import LoginDialog from '../components/auth/LoginDialog.vue';
+import SiteAssistant from '../components/assistant/SiteAssistant.vue';
 import RegisterDialog from '../components/auth/RegisterDialog.vue';
 import LoginGuideDialog from '../components/common/LoginGuideDialog.vue';
 import { useAuthStore } from '../stores/auth';

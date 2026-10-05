@@ -81,9 +81,9 @@ function buildHeaders(extraHeaders?: HeadersInit, includeAuthToken = true, trace
 /**
  * 保存后端自动续期返回的新令牌。
  */
-function saveRefreshedToken(response: Response): void {
+function saveRefreshedToken(response: Response, requestToken: string | null): void {
   const refreshedToken = response.headers.get(REFRESH_TOKEN_HEADER);
-  if (refreshedToken) {
+  if (refreshedToken && requestToken && getStoredAccessToken() === requestToken) {
     setStoredAccessToken(refreshedToken);
   }
 }
@@ -131,8 +131,8 @@ function isUnauthorizedError(status: number, code: string): boolean {
 /**
  * 认证失效时同步清理前端登录态。
  */
-function clearAuthWhenUnauthorized(status: number, code: string): void {
-  if (isUnauthorizedError(status, code)) {
+function clearAuthWhenUnauthorized(status: number, code: string, requestToken: string | null): void {
+  if (isUnauthorizedError(status, code) && requestToken && getStoredAccessToken() === requestToken) {
     clearStoredAccessToken();
   }
 }
@@ -140,29 +140,29 @@ function clearAuthWhenUnauthorized(status: number, code: string): void {
 /**
  * 抛出携带 HTTP 状态和业务码的接口错误。
  */
-async function throwApiError(response: Response): Promise<never> {
+async function throwApiError(response: Response, requestToken: string | null): Promise<never> {
   const result = await parseErrorBody(response);
   const code = result?.code || `${HTTP_ERROR_CODE_PREFIX}${response.status}`;
   const message = result?.message || resolveStatusMessage(response.status);
 
   // 新后端使用 HTTP 状态识别错误，旧响应仍通过业务码兼容登录态清理。
-  clearAuthWhenUnauthorized(response.status, code);
+  clearAuthWhenUnauthorized(response.status, code, requestToken);
   throw new ApiError(message, response.status, code, result?.traceId);
 }
 
 /**
  * 解析后端统一响应。
  */
-async function parseResponse<T>(response: Response): Promise<T> {
+async function parseResponse<T>(response: Response, requestToken: string | null): Promise<T> {
   if (!response.ok) {
-    await throwApiError(response);
+    await throwApiError(response, requestToken);
   }
 
-  saveRefreshedToken(response);
+  saveRefreshedToken(response, requestToken);
 
   const result = (await response.json()) as ApiResponse<T>;
   if (result.code !== API_SUCCESS_CODE) {
-    clearAuthWhenUnauthorized(response.status, result.code);
+    clearAuthWhenUnauthorized(response.status, result.code, requestToken);
     throw new ApiError(result.message || '请求处理失败', response.status, result.code, result.traceId);
   }
   return result.data;
@@ -172,6 +172,7 @@ async function parseResponse<T>(response: Response): Promise<T> {
  * 发起 HTTP 请求并处理统一响应。
  */
 async function request<T>(path: string, init: RequestInit, includeAuthToken = true): Promise<T> {
+  const requestToken = includeAuthToken ? getStoredAccessToken() : null;
   const traceId = generateTraceId();
   const startTime = performance.now();
   try {
@@ -180,7 +181,7 @@ async function request<T>(path: string, init: RequestInit, includeAuthToken = tr
       headers: buildHeaders(init.headers, includeAuthToken, traceId),
     });
     logBrowserRequest(path, traceId, response.status, startTime);
-    return await parseResponse<T>(response);
+    return await parseResponse<T>(response, requestToken);
   } catch (error) {
     if (error instanceof Error && error.message !== 'Failed to fetch') {
       throw error;
@@ -193,6 +194,7 @@ async function request<T>(path: string, init: RequestInit, includeAuthToken = tr
  * 发起文件下载请求。
  */
 async function requestBlob(path: string): Promise<Blob> {
+  const requestToken = getStoredAccessToken();
   const traceId = generateTraceId();
   const startTime = performance.now();
   const response = await fetch(buildRequestUrl(path), {
@@ -201,17 +203,17 @@ async function requestBlob(path: string): Promise<Blob> {
   });
   logBrowserRequest(path, traceId, response.status, startTime);
   if (!response.ok) {
-    await throwApiError(response);
+    await throwApiError(response, requestToken);
   }
-  saveRefreshedToken(response);
+  saveRefreshedToken(response, requestToken);
   return response.blob();
 }
 
 /**
  * 发起 GET 请求。
  */
-export async function get<T>(path: string): Promise<T> {
-  return request<T>(path, { method: 'GET' });
+export async function get<T>(path: string, signal?: AbortSignal): Promise<T> {
+  return request<T>(path, { method: 'GET', signal });
 }
 
 /**
@@ -224,11 +226,12 @@ export async function getPublic<T>(path: string): Promise<T> {
 /**
  * 发起 POST 请求。
  */
-export async function post<T, B = unknown>(path: string, body?: B): Promise<T> {
+export async function post<T, B = unknown>(path: string, body?: B, signal?: AbortSignal): Promise<T> {
   return request<T>(path, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body === undefined ? undefined : JSON.stringify(body),
+    signal,
   });
 }
 
@@ -250,7 +253,9 @@ export async function postStream<B = unknown>(
   path: string,
   body: B,
   onEvent: (event: StreamEvent) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
+  const requestToken = getStoredAccessToken();
   const traceId = generateTraceId();
   const startTime = performance.now();
   const response = await fetch(buildRequestUrl(path), {
@@ -260,13 +265,14 @@ export async function postStream<B = unknown>(
       'Content-Type': 'application/json',
     }, true, traceId),
     body: JSON.stringify(body),
+    signal,
   });
   logBrowserRequest(path, traceId, response.status, startTime);
   const responseBody = response.body;
 
   // 流式接口仍复用后端自动续期 token。
   if (!response.ok) {
-    await throwApiError(response);
+    await throwApiError(response, requestToken);
   }
   if (!responseBody) {
     throw new ApiError(
@@ -275,8 +281,8 @@ export async function postStream<B = unknown>(
       `${HTTP_ERROR_CODE_PREFIX}${response.status}`,
     );
   }
-  saveRefreshedToken(response);
-  await readEventStream(responseBody, onEvent, traceId);
+  saveRefreshedToken(response, requestToken);
+  await readEventStream(responseBody, onEvent, traceId, signal);
 }
 
 /**
@@ -286,6 +292,7 @@ async function readEventStream(
   stream: ReadableStream<Uint8Array>,
   onEvent: (event: StreamEvent) => void,
   traceId: string,
+  signal?: AbortSignal,
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder('utf-8');
@@ -293,21 +300,30 @@ async function readEventStream(
   let readCount = 0;
   const startTime = performance.now();
 
-  // 持续解析服务端推送的事件块，直到流结束。
-  while (true) {
-    const { value, done } = await reader.read();
-    if (done) {
-      break;
+  const cancelReader = () => { void reader.cancel().catch(() => undefined); };
+  signal?.addEventListener('abort', cancelReader, { once: true });
+  try {
+    // 持续解析服务端推送的事件块，直到流结束。
+    while (true) {
+      if (signal?.aborted) throw new DOMException('请求已停止', 'AbortError');
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
+      }
+      readCount += 1;
+      logStreamReadChunk(readCount, value.byteLength, startTime, traceId);
+      buffer += decoder.decode(value, { stream: true });
+      buffer = dispatchBufferedEvents(buffer, onEvent);
     }
-    readCount += 1;
-    logStreamReadChunk(readCount, value.byteLength, startTime, traceId);
-    buffer += decoder.decode(value, { stream: true });
-    buffer = dispatchBufferedEvents(buffer, onEvent);
-  }
 
-  // 处理流结束后残留的最后一个事件块。
-  buffer += decoder.decode();
-  dispatchFinalEvent(buffer, onEvent);
+    // 处理流结束后残留的最后一个事件块。
+    if (signal?.aborted) throw new DOMException('请求已停止', 'AbortError');
+    buffer += decoder.decode();
+    dispatchFinalEvent(buffer, onEvent);
+  } finally {
+    signal?.removeEventListener('abort', cancelReader);
+    reader.releaseLock();
+  }
 }
 
 /**

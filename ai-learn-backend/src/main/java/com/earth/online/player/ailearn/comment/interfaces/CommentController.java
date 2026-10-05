@@ -57,6 +57,12 @@ public class CommentController {
         return ApiResponse.success(commentService.create(request));
     }
 
+    /** 查看单个父评论及其回复，保持评论公开可读的现有规则。 */
+    @GetMapping("/{id}")
+    public ApiResponse<CommentResponse> findThread(@PathVariable Long id) {
+        return ApiResponse.success(commentService.findThread(id));
+    }
+
     /**
      * 点赞或取消点赞评论。
      *

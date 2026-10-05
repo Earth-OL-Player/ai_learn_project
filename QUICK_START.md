@@ -13,6 +13,43 @@
 
 ## 项目启动步骤
 
+### 当前 Windows 本机：极简启动
+
+本机配置已经填入 `ai-learn-backend/.env`、`ai-service/.env`、`ai-learn-web/.env.local` 和 `.local/dev.config.json`。模型使用 `gpt-6-luna`，通过用户指定的 OpenAI 兼容服务调用，`AI_GRADING_MODEL_PROVIDER=openai`；内部 Token、JWT 和本地数据库账号密码已配置一致。脚本使用已有的 MySQL 8.4、Python 虚拟环境、前端依赖以及 IDE 自带 JDK/Maven，不需要重新安装。
+
+在项目根目录打开 PowerShell：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local-dev.ps1
+```
+
+打开 **http://127.0.0.1:5173**，注册账号并登录即可验证。
+
+停止、重新启动及查看状态：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local-dev.ps1 -Action Stop
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local-dev.ps1 -Action Restart
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local-dev.ps1 -Action Status
+```
+
+启动顺序为 MySQL → Python → Java → 前端。首次启动自动创建本地 `ai_learn` 数据库和业务账号，Java Flyway 自动迁移到当前版本；重复启动保留本地数据。Java 默认先构建最新代码，前端开发服务器支持页面热更新；修改 Java/Python 或 `.env` 后使用 Restart。停止只处理该脚本记录的进程，数据库正常关闭、数据保留。
+
+| 服务 | 本机地址 | 配置/日志 |
+| --- | --- | --- |
+| MySQL 8.4 | `127.0.0.1:3307`，库 `ai_learn` | 账号密码在后端 `.env`；数据 `.local/mysql-data` |
+| Python AI | `http://127.0.0.1:8000/health` | `ai-service/.env`；`.local/logs/ai.*.log` |
+| Java 后端 | `http://127.0.0.1:8080/api/v1/health` | `ai-learn-backend/.env`；`.local/logs/backend.*.log` |
+| 前端 | `http://127.0.0.1:5173` | `ai-learn-web/.env.local`；`.local/logs/web.*.log` |
+
+本机仅需要 MySQL；Redis、Qdrant 无需启动。3307 是独立本地实例，数据放在 `.local/mysql-data`，腾讯云数据库不会参与本机启动。MySQL 程序沿用此前下载的 `tmp/assistant-verification/mysql-8.4.11-winx64`，请保留该程序目录；如移动，修改 `.local/dev.config.json` 的 `mysqlHome`。
+
+当前本机数据库的 BASIC 档位已更新为 `gpt-6-luna`，模型地址与 Python `.env` 一致，Key 从 Python `.env` 读取；本次配置已完成，不需要额外手工执行模型配置 SQL。以后更换模型时，需要同步修改 Python `.env` 和本地数据库的 BASIC 配置，并重启服务。PRO/SUPER 仍按管理端配置和用户权益生效。本地数据库独立于线上账号，需要本地注册。
+
+真实模型若返回 `402 Insufficient Balance`，说明 Key 对应账户余额不足；补足余额后可继续调用，不需要重建数据库或重新填写本地配置。
+
+下面保留通用安装和分服务启动方式，其他机器可参考这些步骤搭建。
+
 ### 1. 本地环境准备
 
 建议本地准备以下运行环境：
@@ -87,7 +124,7 @@ Get-Content .\.env | Where-Object { $_ -and $_ -notmatch '^\s*#' } | ForEach-Obj
 `ai-learn-web/.env` 示例：
 
 ```env
-VITE_API_BASE_URL=http://localhost:8080/api/v1
+VITE_API_BASE_URL=/api/v1
 ```
 
 ### 4. 准备 AI 服务配置
@@ -96,7 +133,7 @@ VITE_API_BASE_URL=http://localhost:8080/api/v1
 
 ```env
 AI_SERVICE_TOKEN=AI_SERVICE_TOKEN本地占位符
-AI_GRADING_BASE_URL=https://模型服务地址占位符/v1/chat/completions
+AI_GRADING_BASE_URL=https://模型服务地址占位符/v1
 AI_GRADING_API_KEY=AI_GRADING_API_KEY占位符
 AI_GRADING_MODEL=LOCAL_RULE
 AI_GRADING_MODEL_PROVIDER=

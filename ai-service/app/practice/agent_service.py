@@ -1,6 +1,8 @@
 from collections.abc import Iterator
 from dataclasses import dataclass
 
+from app.models import model_factory
+
 from app.practice.discussion_agent import PracticeDiscussionAgent
 from app.practice.grading_agent import PracticeGradingAgent
 from app.practice.llm_logger import PracticeLlmLogger, PracticeLogSanitizer, logger
@@ -39,7 +41,7 @@ class PracticeAgentService:
         """初始化刷题 Agent 服务门面。"""
         self._provider_adapter = provider_adapter or PracticeProviderAdapter()
         prompt_builder = PracticePromptBuilder()
-        self._model_factory = PracticeModelFactory(self._provider_adapter)
+        self._model_factory = model_factory if provider_adapter is None else PracticeModelFactory(self._provider_adapter)
         sanitizer = PracticeLogSanitizer(self._provider_adapter)
         llm_logger = PracticeLlmLogger(self._provider_adapter, sanitizer)
 

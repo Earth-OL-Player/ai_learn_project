@@ -1,13 +1,13 @@
 # MySQL 中间件说明
 
-版本：v1.24
-日期：2026-05-28
+版本：v1.26
+日期：2026-10-04
 适用工程：`ai-learn-backend`  
 适用迭代：`sprint202602` 用户注册登录与权限基础、`sprint202603` 建议评论区最小闭环、`sprint202604` 热门面经与默认题库基础、`sprint202611` 超级管理员管理者中心入口、`sprint202623` 用户性别资料编辑、`sprint202627` 模型权益兑换与模型配置、`sprint202630` 性能组合索引优化、当前主干：用户认证、建议评论、系统题库、AI智能刷题、成长体系、RAG任务、管理者中心、容量限制和模型权益
 
 ## 1. 用途
 
-MySQL 是项目的业务主库，用于保存用户注册登录数据、用户性别编码、建议评论区互动数据、真实 AI 面试题库数据、超级管理员标识、模型配置、兑换码和用户模型权益，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照、系统设置、模型权益和审计字段。
+MySQL 是项目的业务主库，用于保存用户注册登录数据、用户性别编码、建议评论区互动数据、真实 AI 面试题库数据、超级管理员标识、模型配置、兑换码和用户模型权益，包括用户、建议、评论、评论点赞、建议点赞、题目、刷题汇总、成长等级快照、系统设置、模型权益和审计字段。sprint202631 增加站内助手会话、执行状态及幂等发布结果，详见第 21 节。
 
 当前边界说明：
 
@@ -40,9 +40,11 @@ MySQL 8.4 LTS
 - LTS 版本适合长期维护。
 - 本地和服务器保持同一主版本，减少 SQL 行为差异。
 - Spring Boot 使用 MySQL Connector/J 连接 MySQL 8.x。
-- 后端显式使用 Flyway `12.6.1`，避免 MySQL 8.4 LTS 启动时出现旧版 Flyway 兼容性告警。
+- 当前 `pom.xml` 的 Flyway 版本由 Spring Boot 3.3.6 管理，实际构建为 `10.10.0`，未显式指定 `12.6.1`。独立 MySQL 8.4.11 联调已执行迁移成功，但启动时仍会提示数据库版本高于该 Flyway 已测试范围；本期没有升级依赖，不能将该告警描述为已消除。后续版本升级应单独验证，不修改历史迁移来绕过校验。
 
 ## 3. 本地安装方式
+
+当前 Windows 本机已配置独立 MySQL 8.4.11，使用已下载程序、`127.0.0.1:3307` 和项目 `.local/mysql-data`，不注册 Windows 服务。极简入口为根目录执行 `powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\local-dev.ps1`，会初始化本地 `ai_learn` 库、业务账号并启动项目；完整启动/停止说明见 [QUICK_START.md](../../QUICK_START.md#当前-windows-本机极简启动)。下面的 Docker/本机安装方式适用于其他尚未搭建的环境。
 
 ### 3.1 Docker 方式（推荐）
 
@@ -833,3 +835,43 @@ GET /api/v1/admin/redemption-codes?pageNo=1&pageSize=10
 - 本次只新增普通 BTree 组合索引，不新增外键、FULLTEXT 或新中间件。
 - `%keyword%` 模糊搜索不能充分利用普通 BTree 索引，默认列表和弱筛选路径才是主要收益点。
 - 生产发布建议选择低峰期执行，发布后通过 TDSQL 慢 SQL 和 `EXPLAIN` 观察索引命中情况。
+
+## 21. sprint202631 站内助手状态与幂等发布
+
+新增 `V11__add_site_assistant.sql`，没有修改历史 migration，没有外键。本地仍按本文安装和启动 MySQL 8.4 LTS，生产仍使用既有腾讯云 TDSQL MySQL 8.0 兼容实例，不需要在 CVM 上安装额外 MySQL。
+
+| 表 | 用途 |
+| --- | --- |
+| `assistant_session` | 当前用户会话、有效期和恢复入口 |
+| `assistant_message` | 用户、助手与工具结果协议历史，按会话/递增 ID 读取 |
+| `assistant_run` | 指令、请求幂等键、状态、模型指纹、客户端及执行代数、预算与租约 |
+| `assistant_operation` | 固定表单动作计划、步骤位置、正文版本/哈希、发布授权及实际业务结果 |
+
+Java 使用原数据库连接配置读写这四张表。Python 和浏览器均不直连 MySQL。助手不保存模型 Key 或 JWT；个人查询继续使用当前登录身份。
+
+`assistant_run` 的 `(user_id, client_request_id)` 唯一约束阻止重复创建任务；`assistant_operation` 的 `(run_id, tool_call_id)` 保证工具标识唯一。专用提交接口锁定任务及操作，执行既有评论/建议服务，并在同一事务保存操作结果；重复或并发提交返回同一条业务记录。
+
+新增 Java 环境变量已写入 `ai-learn-backend/.example.env`：
+
+| 变量 | 默认值 | 用途 |
+| --- | --- | --- |
+| `ASSISTANT_SESSION_RETENTION_DAYS` | `7` | 会话/消息有效天数 |
+| `ASSISTANT_OPERATION_RETENTION_DAYS` | `30` | 终态任务/操作幂等记录保留天数 |
+| `ASSISTANT_CONFIRMATION_TTL_MINUTES` | `10` | 整轮任务及确认有效期，从创建起计算 |
+| `ASSISTANT_MAX_TOOL_CALLS` | `8` | 单轮外部工具预算 |
+| `ASSISTANT_RUN_TIMEOUT_SECONDS` | `120` | 每段活动执行预算及租约秒数 |
+
+以上均为非敏感默认值，可直接使用；原 `DATABASE_*`、JWT 配置仍按第 5～6 节通过私有配置注入。后端每分钟处理过期和租约，每小时清理过期助手数据，不删除已发布业务记录。已结束任务幂等保护在记录保留期内有效。
+
+本地验证：
+
+```sql
+SELECT version, description, success FROM flyway_schema_history WHERE version = '11';
+SHOW TABLES LIKE 'assistant_%';
+SHOW INDEX FROM assistant_run;
+SHOW INDEX FROM assistant_operation;
+```
+
+登录后创建助手会话、发送填写指令，再确认发布；检查真实评论/建议及操作结果。测试重复提交应只新增一次，停止或旧正文版本不能发起新写入。验收步骤见 [sprint202631 验收文档](../3.迭代文档/sprint202631/3.当期验收文档.md)。
+
+部署前备份，保持 Flyway 版本链一致；若集中执行迁移，仍使用同一 V11 脚本，禁止修改历史 checksum。四张表关联由业务代码维护。会话正文及业务结果属于用户数据，排查只读取必要账号，不将完整内容导出或打印到常规日志。生产 TDSQL 的迁移需按既有发布流程验证；本次开发仅验证独立 MySQL 8.4.11。

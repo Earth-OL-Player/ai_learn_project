@@ -1,5 +1,5 @@
 <template>
-  <section class="interaction-page">
+  <section ref="pageElement" class="interaction-page" @input.capture="assistant.userChangedForm()" @click.capture="handleManualControl">
     <nav class="mode-switch" aria-label="建议评论区切换">
       <button :class="['mode-button', { active: activeTab === 'suggestions' }]" type="button" @click="switchTab('suggestions')">
         建议区
@@ -30,6 +30,7 @@
               :key="item.value"
               :class="['type-chip', { active: suggestionForm.type === item.value }]"
               type="button"
+              :data-assistant-type="item.value"
               @click="suggestionForm.type = item.value"
             >
               {{ item.label }}
@@ -39,6 +40,7 @@
           <textarea
             v-if="activeTab === 'suggestions'"
             v-model="suggestionForm.content"
+            data-assistant-target="suggestion.content"
             class="composer-input"
             :maxlength="TEXT_MAX_LENGTH"
             placeholder="请输入你的建议"
@@ -47,6 +49,7 @@
           <textarea
             v-else
             v-model="commentForm.content"
+            data-assistant-target="comment.content"
             class="composer-input"
             :maxlength="TEXT_MAX_LENGTH"
             placeholder="请输入你的评论"
@@ -54,7 +57,7 @@
           ></textarea>
 
           <div class="composer-footer">
-            <el-button type="primary" round :loading="activeSubmitting" @click="submitActiveContent">
+            <el-button type="primary" round :loading="activeSubmitting" data-assistant-target="composer.submit" @click="submitActiveContent">
               {{ activeSubmitText }}
             </el-button>
           </div>
@@ -65,7 +68,7 @@
         <el-empty v-if="isActiveEmpty" :description="activeEmptyText" />
 
         <div v-else-if="activeTab === 'suggestions'" class="feed-list">
-          <article v-for="item in suggestions" :key="item.id" class="feed-item">
+          <article v-for="item in suggestions" :key="item.id" class="feed-item" :data-assistant-record="item.id">
             <el-avatar class="item-avatar" :size="48" :src="authorAvatarSrc(item.author)">{{ authorAvatarText(item.author) }}</el-avatar>
             <div class="item-body">
               <div class="author-line">
@@ -85,7 +88,7 @@
         </div>
 
         <div v-else class="feed-list">
-          <article v-for="item in comments" :key="item.id" class="feed-item">
+          <article v-for="item in comments" :key="item.id" class="feed-item" :data-assistant-record="item.id">
             <el-avatar class="item-avatar" :size="48" :src="authorAvatarSrc(item.author)">{{ authorAvatarText(item.author) }}</el-avatar>
             <div class="item-body">
               <div class="author-line">
@@ -98,26 +101,27 @@
                 <button :class="['action-button', { active: item.liked }]" type="button" :disabled="isLikeLoading('comment', item.id)" @click="handleCommentLike(item.id)">
                   赞 <span>{{ formatLikeCount(item.likeCount) }}</span>
                 </button>
-                <button class="action-button" type="button" @click="startReply(item)">回复</button>
+                <button class="action-button" data-assistant-target="reply.open" type="button" @click="startReply(item)">回复</button>
               </div>
 
               <div v-if="replyTarget?.id === item.id" class="reply-composer">
                 <textarea
                   v-model="replyContent"
+                  data-assistant-target="reply.content"
                   :maxlength="TEXT_MAX_LENGTH"
                   :placeholder="`回复 ${resolveAuthorName(item.author)}`"
                 ></textarea>
                 <div class="reply-footer">
                   <span>回复同样只能使用纯文字。</span>
                   <div>
-                    <el-button text @click="cancelReply">取消</el-button>
-                    <el-button type="primary" round :loading="replySubmitting" @click="submitReply">发布回复</el-button>
+                    <el-button text @click="cancelReply()">取消</el-button>
+                    <el-button type="primary" round :loading="replySubmitting" data-assistant-target="reply.submit" @click="submitReply()">发布回复</el-button>
                   </div>
                 </div>
               </div>
 
               <div v-if="item.children.length > 0" class="child-list">
-                <article v-for="child in item.children" :key="child.id" class="child-item">
+                <article v-for="child in item.children" :key="child.id" class="child-item" :data-assistant-record="child.id">
                   <el-avatar :size="34" :src="authorAvatarSrc(child.author)">{{ authorAvatarText(child.author) }}</el-avatar>
                   <div class="child-body">
                     <div class="author-line child-author">
@@ -169,9 +173,13 @@ import { ElSkeleton } from 'element-plus/es/components/skeleton/index.mjs';
 import 'element-plus/es/components/empty/style/css';
 import 'element-plus/es/components/pagination/style/css';
 import 'element-plus/es/components/skeleton/style/css';
-import { computed, onMounted, reactive, ref } from 'vue';
+import { computed, nextTick, onMounted, onBeforeUnmount, reactive, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { createComment, fetchComments, toggleCommentLike } from '../../api/comments';
+import { createComment, fetchComments, fetchCommentThread, toggleCommentLike } from '../../api/comments';
+import { submitAssistantForm } from '../../api/assistant';
+import { registerCommunityAdapter } from '../../assistant/actionRegistry';
+import { useAssistantStore } from '../../stores/assistant';
+import type { AssistantPayload, AssistantPublishResult, AssistantSubmitContext } from '../../types/assistant';
 import { createSuggestion, fetchSuggestions, toggleSuggestionLike } from '../../api/suggestions';
 import { useAuthStore } from '../../stores/auth';
 import type { CommentItem } from '../../types/comment';
@@ -198,9 +206,12 @@ const UNSUPPORTED_TEXT_PATTERN = /[@＠\p{Extended_Pictographic}\uFE0F\u200D]/u;
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
+const assistant = useAssistantStore();
+const pageElement = ref<HTMLElement | null>(null);
+let unregisterAssistant: (() => void) | undefined;
 
 // 页面状态按建议区和评论区拆分，避免两个页签互相污染。
-const activeTab = ref<ActiveTab>('suggestions');
+const activeTab = ref<ActiveTab>(route.query.tab === 'comments' ? 'comments' : 'suggestions');
 const suggestions = ref<SuggestionItem[]>([]);
 const comments = ref<CommentItem[]>([]);
 const sortState = reactive<Record<ActiveTab, SortType>>({ suggestions: 'hot', comments: 'hot' });
@@ -246,7 +257,7 @@ const currentAvatarText = computed(() => resolveAvatarText(currentDisplayName.va
  */
 async function switchTab(tab: ActiveTab): Promise<void> {
   activeTab.value = tab;
-  cancelReply();
+  await router.replace({ path: route.path, query: { ...route.query, tab } });
 }
 
 /**
@@ -313,6 +324,7 @@ async function guardComposerFocus(): Promise<void> {
  * 提交当前页签内容。
  */
 async function submitActiveContent(): Promise<void> {
+  if (assistant.formBusy) { ElMessage.info('助手正在操作，请先选择“我来操作”再手工提交'); return; }
   if (activeTab.value === 'suggestions') {
     await submitSuggestion();
     return;
@@ -323,25 +335,30 @@ async function submitActiveContent(): Promise<void> {
 /**
  * 提交建议。
  */
-async function submitSuggestion(): Promise<void> {
+async function submitSuggestion(context?: AssistantSubmitContext): Promise<AssistantPublishResult | void> {
   if (!authStore.isLoggedIn) {
     await requireLogin();
     return;
   }
   const content = validatePlainText(suggestionForm.content, '建议内容');
   if (!content) {
+    if (context) throw new Error('建议内容未通过校验');
     return;
   }
+  if (suggestionSubmitting.value) throw new Error('建议正在提交，请等待结果');
 
   // 建议不再需要标题和处理状态，只提交类型和正文。
   suggestionSubmitting.value = true;
   try {
-    const createdSuggestion = await createSuggestion({ type: suggestionForm.type, content });
+    const result = context ? await submitAssistantForm(context) : undefined;
+    const createdSuggestion = result ? result.record as unknown as SuggestionItem : await createSuggestion({ type: suggestionForm.type, content });
     ElMessage.success('建议发布成功');
-    suggestionForm.content = '';
+    if (suggestionForm.content.trim() === content) suggestionForm.content = '';
     suggestionPage.pageNo = 1;
     prependCreatedSuggestion(createdSuggestion);
+    return result;
   } catch (error) {
+    if (context) throw error;
     ElMessage.error(resolveErrorMessage(error));
   } finally {
     suggestionSubmitting.value = false;
@@ -351,25 +368,30 @@ async function submitSuggestion(): Promise<void> {
 /**
  * 发表父评论。
  */
-async function submitComment(): Promise<void> {
+async function submitComment(context?: AssistantSubmitContext): Promise<AssistantPublishResult | void> {
   if (!authStore.isLoggedIn) {
     await requireLogin();
     return;
   }
   const content = validatePlainText(commentForm.content, '评论内容');
   if (!content) {
+    if (context) throw new Error('评论内容未通过校验');
     return;
   }
+  if (commentSubmitting.value) throw new Error('评论正在提交，请等待结果');
 
   // 父评论不携带 parentId，回复入口单独处理。
   commentSubmitting.value = true;
   try {
-    const createdComment = await createComment({ content });
+    const result = context ? await submitAssistantForm(context) : undefined;
+    const createdComment = result ? result.record as unknown as CommentItem : await createComment({ content });
     ElMessage.success('评论发布成功');
-    commentForm.content = '';
+    if (commentForm.content.trim() === content) commentForm.content = '';
     commentPage.pageNo = 1;
     prependCreatedComment(createdComment);
+    return result;
   } catch (error) {
+    if (context) throw error;
     ElMessage.error(resolveErrorMessage(error));
   } finally {
     commentSubmitting.value = false;
@@ -379,13 +401,16 @@ async function submitComment(): Promise<void> {
 /**
  * 打开父评论回复框。
  */
-async function startReply(item: CommentItem): Promise<void> {
+async function startReply(item: CommentItem, automated = false): Promise<void> {
   if (!authStore.isLoggedIn) {
     await requireLogin();
     return;
   }
 
   // 本期仅支持一级回复，因此只在父评论上展示回复入口。
+  if (!automated) assistant.userChangedForm();
+  assistant.selectedParentId = item.id;
+  if (replyTarget.value?.id === item.id) return;
   replyTarget.value = item;
   replyContent.value = '';
 }
@@ -393,7 +418,9 @@ async function startReply(item: CommentItem): Promise<void> {
 /**
  * 取消当前回复。
  */
-function cancelReply(): void {
+function cancelReply(manual = true): void {
+  if (manual && assistant.formBusy) assistant.userChangedForm();
+  assistant.selectedParentId = '';
   replyTarget.value = null;
   replyContent.value = '';
 }
@@ -401,23 +428,30 @@ function cancelReply(): void {
 /**
  * 提交一级子评论。
  */
-async function submitReply(): Promise<void> {
+async function submitReply(context?: AssistantSubmitContext): Promise<AssistantPublishResult | void> {
+  if (!context && assistant.formBusy) { ElMessage.info('请先接管助手操作再手工提交'); return; }
   if (!replyTarget.value) {
     return;
   }
   const content = validatePlainText(replyContent.value, '回复内容');
   if (!content) {
+    if (context) throw new Error('回复内容未通过校验');
     return;
   }
+  if (replySubmitting.value) throw new Error('回复正在提交，请等待结果');
 
   // 回复统一挂在父评论下，不产生孙级评论。
   replySubmitting.value = true;
   try {
-    const createdReply = await createComment({ content, parentId: replyTarget.value.id });
+    const parentId = replyTarget.value.id;
+    const result = context ? await submitAssistantForm(context) : undefined;
+    const createdReply = result ? result.record as unknown as CommentItem : await createComment({ content, parentId });
     ElMessage.success('回复发布成功');
-    appendCreatedReply(replyTarget.value.id, createdReply);
-    cancelReply();
+    appendCreatedReply(parentId, createdReply);
+    if (replyContent.value.trim() === content && replyTarget.value?.id === parentId) cancelReply(false);
+    return result;
   } catch (error) {
+    if (context) throw error;
     ElMessage.error(resolveErrorMessage(error));
   } finally {
     replySubmitting.value = false;
@@ -628,8 +662,62 @@ function formatLikeCount(value: number): string {
 }
 
 onMounted(async () => {
+  registerAssistantCapabilities();
   await Promise.all([loadSuggestions(), loadComments()]);
 });
+onBeforeUnmount(() => { unregisterAssistant?.(); assistant.selectedParentId = ''; });
+
+watch(() => route.query.tab, tab => { activeTab.value = tab === 'comments' ? 'comments' : 'suggestions'; });
+
+function handleManualControl(event: MouseEvent): void {
+  if (event.isTrusted && (event.target as HTMLElement).closest('.mode-button, .type-chip, .sort-tabs button, .feed-actions button')) assistant.userChangedForm();
+}
+
+/** 将真实表单的响应式字段与提交函数注册给助手，模型不能访问任意控件。 */
+function registerAssistantCapabilities(): void {
+  const root = pageElement.value;
+  if (!root) return;
+  const recordElement = (id: string) => Array.from(root.querySelectorAll<HTMLElement>('[data-assistant-record]')).find(element => element.dataset.assistantRecord === id) ?? null;
+  const validate = (payload: AssistantPayload) => {
+    const kind = payload.kind;
+    const value = kind === 'suggestion' ? suggestionForm.content : kind === 'reply' ? replyContent.value : commentForm.content;
+    if (value !== payload.content) throw new Error('内容已被编辑，请重新确认最新草稿');
+    if (!validatePlainText(value, '内容')) throw new Error('内容未通过表单校验');
+    if (kind === 'reply' && replyTarget.value?.id !== payload.parentId) throw new Error('回复目标已改变');
+    if (kind === 'suggestion' && suggestionForm.type !== payload.type) throw new Error('建议类型已改变');
+  };
+  unregisterAssistant = registerCommunityAdapter({
+    element: root,
+    isReady: () => !activeLoading.value,
+    readDraft: kind => kind === 'suggestion' ? { ...suggestionForm } : kind === 'reply' ? { content: replyContent.value, parentId: replyTarget.value?.id } : { content: commentForm.content },
+    resolve: (payload, key) => {
+      if (key === 'type') return Array.from(root.querySelectorAll<HTMLElement>('[data-assistant-type]')).find(element => element.dataset.assistantType === payload.type) ?? null;
+      const scope = payload.kind === 'reply' ? recordElement(payload.parentId ?? '') : root;
+      const targetKey = key === 'reply' ? 'reply.open' : key === 'submit' ? payload.kind === 'reply' ? 'reply.submit' : 'composer.submit' : `${payload.kind === 'suggestion' ? 'suggestion' : payload.kind === 'reply' ? 'reply' : 'comment'}.content`;
+      return scope?.querySelector<HTMLElement>(`[data-assistant-target="${targetKey}"]`) ?? null;
+    },
+    openReply: async parentId => {
+      if (!/^[0-9]+$/.test(parentId)) throw new Error('回复目标不正确');
+      let item = comments.value.find(comment => comment.id === parentId);
+      if (!item) { item = normalizeCommentChildren(await fetchCommentThread(parentId)); comments.value = [item, ...comments.value]; }
+      if (item.parentId) throw new Error('只能回复父评论');
+      await startReply(item, true);
+    },
+    setContent: (kind, content) => { if (kind === 'suggestion') suggestionForm.content = content; else if (kind === 'reply') replyContent.value = content; else commentForm.content = content; },
+    selectType: type => {
+      if (!suggestionTypes.some(item => item.value === type)) throw new Error('建议类型不正确');
+      suggestionForm.type = type;
+    },
+    validate,
+    submit: async (payload, context) => {
+      validate(payload);
+      const result = payload.kind === 'suggestion' ? await submitSuggestion(context) : payload.kind === 'reply' ? await submitReply(context) : await submitComment(context);
+      if (!result?.success) throw new Error('表单未完成提交');
+      return result;
+    },
+    revealResult: async (_kind, id) => { await nextTick(); return recordElement(id); },
+  });
+}
 </script>
 
 <style scoped lang="scss">

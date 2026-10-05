@@ -1,0 +1,398 @@
+[
+  {
+    "id": "public-README-1-0",
+    "title": "Agent学习平台",
+    "path": "/home",
+    "content": "# Agent学习平台\n\n> 面向 AI 应用开发者的一站式学习平台：把学习路线、面试题库、AI 智能刷题、成长体系和建议社区放在同一个可运行的全栈项目里。\n\n[](https://vuejs.org/)\n[](https://spring.io/projects/spring-boot)\n[](https://fastapi.tiangolo.com/)\n[](https://www.typescriptlang.org/)\n[](https://www.mysql.com/)\n[](LICENSE.md)"
+  },
+  {
+    "id": "public-README-2-0",
+    "title": "在线体验",
+    "path": "/home",
+    "content": "## 在线体验\n\n- 在线站点：[https://ai-studyhub.cn](https://ai-studyhub.cn)\n- 本地部署文档：[QUICK_START.md](QUICK_START.md)\n- 作者：地球OL初级玩家\n\n如果你正在学习 AI Agent、AI 应用开发、RAG、工具调用、结构化输出或大模型工程化，这个项目可以作为一套可运行、可拆解、可二次开发的学习。"
+  },
+  {
+    "id": "public-README-3-0",
+    "title": "项目亮点",
+    "path": "/home",
+    "content": "## 项目亮点\n\n| 亮点 | 说明 |\n| --- | --- |\n| 学习路线沉淀 | 将 AI 应用开发资料、学习顺序、技术背景和路线图整理成可浏览的知识页面。 |\n| AI 智能刷题 | 支持题目分类、下一题、重答、AI 评分、AI 追问讨论和历史最高分展示。 |\n| 热门面试题库 | 覆盖 AI 通识、Agent 基础、RAG 全链路、向量检索、多智能体、安全评测等方向。 |\n| 成长体系 | 通过经验、等级、段位、勋章和刷题记录，让学习过程更有反馈感。 |\n| 建议评论社区 | 内置建议区和评论区，方便收集功能建议、体验反馈和内容补充。 |\n| 全栈闭环 | Vue 3 前端、Spring Boot 后端、FastAPI AI 服务、MySQL 数据库组合成完整业务链路。 |"
+  },
+  {
+    "id": "public-README-4-0",
+    "title": "技术架构",
+    "path": "/home",
+    "content": "## 技术架构\n\n```mermaid\nflowchart LR\n    A[\"用户浏览器\"] --> B[\"Vue 3 + Vite 前端\"]\n    B --> C[\"Spring Boot 业务后端\"]\n    C --> D[\"MySQL 业务数据库\"]\n    C --> E[\"FastAPI AI 服务\"]\n    E --> F[\"本地规则兜底或外部模型服务\"]\n```"
+  },
+  {
+    "id": "public-README-5-0",
+    "title": "技术栈",
+    "path": "/home",
+    "content": "## 技术栈\n\n| 层级 | 技术 |\n| --- | --- |\n| 前端 | Vue 3、Vite、TypeScript、Pinia、Vue Router、Element Plus、Markdown-It、DOMPurify |\n| 后端 | Java 17、Spring Boot、Maven、Spring Security、JWT、Flyway |\n| AI 服务 | Python 3.11+、FastAPI、Uvicorn、流式响应、模型服务配置 |\n| 数据库 | MySQL 8.4 LTS |\n| 文档 | Markdown、迭代文档、中间件说明、验收文档模板 |"
+  },
+  {
+    "id": "public-README-6-0",
+    "title": "项目结构",
+    "path": "/home",
+    "content": "## 项目结构\n\n```text\nai_learn_project\n├── ai-learn-web       # Vue 3 前端，负责学习平台、刷题、个人中心和管理端页面\n├── ai-learn-backend   # Spring Boot 后端，负责认证、题库、互动、成长和管理接口\n├── ai-service         # FastAPI AI 服务，负责评分、讨论和模型能力接入\n├── doc                # 需求、设计、验收、中间件和功能梳理文档\n├── release            # 发布相关产物\n└── QUICK_START.md     # 本地启动、环境变量和验收检查说明\n```"
+  },
+  {
+    "id": "public-README-7-0",
+    "title": "为什么做这个项目",
+    "path": "/home",
+    "content": "## 为什么做这个项目\n\nAI 技术迭代很快，很多开发者面对的问题不是“有没有资料”，而是资料太散、路线太乱、练习反馈太少。\n\n这个项目希望把 AI 应用开发的学习路径、面试题、刷题反馈和成长记录集中起来，让普通开发者可以更系统地学习 AI Agent、RAG、工具调用、结构化输出和大模型工程化。"
+  },
+  {
+    "id": "public-README-8-0",
+    "title": "支持项目",
+    "path": "/home",
+    "content": "## 支持项目\n\n如果这个项目对你学习 AI 应用开发、准备面试或搭建全栈学习平台有帮助，欢迎点一个 Star。你的 Star 会直接影响这个项目继续完善学习路线、刷题内容和工程化能力的优先级。"
+  },
+  {
+    "id": "public-README-9-0",
+    "title": "页面预览",
+    "path": "/home",
+    "content": "## 页面预览\n\n项目采用清新、简约、留白充足的学习产品风格，核心页面包括："
+  },
+  {
+    "id": "public-README-10-0",
+    "title": "AI 智能刷题",
+    "path": "/home",
+    "content": "### AI 智能刷题\n\n题目卡片、模型权益、AI 回答、评分结果和追问讨论在同一工作台中完成。"
+  },
+  {
+    "id": "public-README-11-0",
+    "title": "首页和项目介绍",
+    "path": "/home",
+    "content": "### 首页和项目介绍\n\n用产品化页面承载项目背景、功能介绍和学习方向，适合作为学习平台入口。"
+  },
+  {
+    "id": "public-README-12-0",
+    "title": "路线和资料",
+    "path": "/home",
+    "content": "### 路线和资料\n\n支持 Markdown 学习路线渲染、目录导航、路线图和资料版本说明。"
+  },
+  {
+    "id": "public-README-13-0",
+    "title": "热门面试题",
+    "path": "/home",
+    "content": "### 热门面试题\n\n按方向聚合高频面试题，展示重要性分数和真实面试次数。"
+  },
+  {
+    "id": "public-README-14-0",
+    "title": "建议评论区",
+    "path": "/home",
+    "content": "### 建议评论区\n\n支持建议发布、分类筛选、热门/最新排序和空状态展示。"
+  },
+  {
+    "id": "public-README-15-0",
+    "title": "成长体系",
+    "path": "/home",
+    "content": "### 成长体系\n\n展示经验值、练习进度、学习天数、段位和徽章墙，让刷题过程更有反馈。"
+  },
+  {
+    "id": "public-README-16-0",
+    "title": "智能刷题记录",
+    "path": "/home",
+    "content": "### 智能刷题记录\n\n沉淀练习记录、题型统计、最高分、最近分和薄弱题分析。"
+  },
+  {
+    "id": "public-README-17-0",
+    "title": "Star 历史",
+    "path": "/home",
+    "content": "## Star 历史\n\n[](https://gitdata.xuanhun520.com/#/repo/Earth-OL-Player/ai_learn_project)"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-0-0",
+    "title": "| 版本 | 日期       | 变更人         | 变更说明                          |",
+    "path": "/learning-roadmap",
+    "content": "| 版本 | 日期       | 变更人         | 变更说明                          |\n| ---- | ---------- | -------------- | --------------------------------- |\n| V1.0 | 2026-05-10 | 地球OL初级玩家 | 初始化首版教程                    |\n| V1.1 | 2026-05-18 | 地球OL初级玩家 | 添加HelloAgent和Learn-claude-code |\n\n> 附：大家注意看题头的版本修订日期，我会选取截止修订日期时刻最新版本的教程。下文反复提及截止当前，即截止最新版本的修订日期。\n>\n> AI时代技术迭代极快，很有可能我推荐的技术教程有了新的技术替代，亦或是有了大的版本变更，导致过时，我会不定时汲取市面上的知识勤奋更新。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-1-0",
+    "title": "背景：",
+    "path": "/learning-roadmap",
+    "content": "## 背景：\n\n我在自学AI应用开发过程中，找资料和学习的过程中浪费了很多不必要的时间，为了让朋友们尽可能少走弯路，特意整理这份资料。\n\n首先，我会把我学习的过程中了解到的信息，整理出一份学习路线图。\n\n之后，对于每一项技术，我会进行简单的介绍，另外附上该项技术的学习资料和学习建议，都是本人亲自学习对比得出的结论。\n\n非常欢迎提供意见和建议！我也会根据大家的建议更新文档。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-2-0",
+    "title": "路线图",
+    "path": "/learning-roadmap",
+    "content": "## 路线图"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-3-0",
+    "title": "1.Python",
+    "path": "/learning-roadmap",
+    "content": "## 1.Python"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-4-0",
+    "title": "1.1 介绍",
+    "path": "/learning-roadmap",
+    "content": "### 1.1 介绍\n\n当前AI应用开发方面最流行的编程语言，流行的框架大多数是基于Python编写的。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-5-0",
+    "title": "1.2 学习资料",
+    "path": "/learning-roadmap",
+    "content": "### 1.2 学习资料"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-6-0",
+    "title": "(1) Python-100-Days",
+    "path": "/learning-roadmap",
+    "content": "#### (1) Python-100-Days\n\nGithub地址：https://github.com/jackfrued/Python-100-Days\n\n> 说明：GitHub上大佬整理的Python教程，很详细，排版分章也不错，经常更新，适合喜欢文档学习的伙伴。缺点是夹杂了一些非Python的知识，不过可以择机跳过，无伤大雅。\n>"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-7-0",
+    "title": "(2) 官方文档",
+    "path": "/learning-roadmap",
+    "content": "#### (2) 官方文档\n\n官网地址：https://docs.python.org/zh-cn/3.14/tutorial/index.html\n\n> 说明：官网永远最权威权威，但是中文的话类似英文机翻，文字排版审美一般，适合在有学习过程中有歧义的时候上去搜寻官方资料，不太推荐直接用此学习。\n>"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-8-0",
+    "title": "(3) 视频学习",
+    "path": "/learning-roadmap",
+    "content": "#### (3) 视频学习\n\nhttps://www.bilibili.com/video/BV1sHU9BmEne/\n\n> 说明：非常详细，非常适合喜欢视频学习的新手小白，老师吐字清晰，课程内容丰富；唯一的缺点有点过于详细了，连cmd命令行都要花几分钟指点一下，对于有基础的同学来说相对有点耗费时间。\n>\n\n> `附：以上学习方式多选一即可，只需要用自己的方式学会Python，也可以自己搜寻适合自己的学习资料！`"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-9-0",
+    "title": "2.LangChain",
+    "path": "/learning-roadmap",
+    "content": "## 2.LangChain"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-10-0",
+    "title": "2.1 介绍",
+    "path": "/learning-roadmap",
+    "content": "### 2.1 介绍\n\n基于Python的AI应用开发框架。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-11-0",
+    "title": "2.2 学习资料",
+    "path": "/learning-roadmap",
+    "content": "### 2.2 学习资料"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-12-0",
+    "title": "(1) 官方文档",
+    "path": "/learning-roadmap",
+    "content": "#### (1) 官方文档\n\n中文：https://docs.langchain.org.cn/\n\n英文：https://docs.langchain.com\n\nGithub地址：https://github.com/langchain-ai/langchain\n\n> 说明：少数结构清晰，详细，排版美观的官方文档，直接啃即可。截止当前，中文官网前端组件有问题，建议使用英文文档配合翻译插件。\n>"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-13-0",
+    "title": "(2) 学习视频",
+    "path": "/learning-roadmap",
+    "content": "#### (2) 学习视频\n\nhttps://www.bilibili.com/video/BV178w1z7EHQ/\n\n> 说明：截止当前更新到langchain入门，基于langchain1.2，讲得很好，非常合新手入门。后续还有langchain进阶，langgraph，RAG高级等系统性的课程，更新了的话我也会继续看。\n>"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-14-0",
+    "title": "3.LangGraph",
+    "path": "/learning-roadmap",
+    "content": "## 3.LangGraph"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-15-0",
+    "title": "3.1 介绍",
+    "path": "/learning-roadmap",
+    "content": "### 3.1 介绍\n\n基于Python的AI应用开发框架, Langchain生态的一环，注重多智能体流程编排技术。\n\n\n\n3.2 学习资料"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-16-0",
+    "title": "(1) 官方文档",
+    "path": "/learning-roadmap",
+    "content": "#### (1) 官方文档\n\n中文：https://docs.langchain.org.cn/\n\n英文：https://docs.langchain.com\n\nGithub地址：https://github.com/langchain-ai/langchain\n\n> 说明：少数结构清晰，详细，排版美观的官方文档，直接啃即可。截止当前，中文官网前端组件有问题，建议使用英文文档配合翻译插件。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-17-0",
+    "title": "(2) 学习视频",
+    "path": "/learning-roadmap",
+    "content": "#### (2) 学习视频\n\nhttps://www.bilibili.com/video/BV1dw9CBEEob\n\n> 截止当前，langgraph最新版视频教程还没几个人做，本视频是找到的比较新的版本，且横向对比多个视频教程讲的比较好的。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-18-0",
+    "title": "4.RAG通识",
+    "path": "/learning-roadmap",
+    "content": "## 4.RAG通识"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-19-0",
+    "title": "4.1 介绍",
+    "path": "/learning-roadmap",
+    "content": "### 4.1 介绍\n\nRAG（Retrieval-Augmented Generation，检索增强生成）是一种把“大模型生成能力”和“外部知识库检索”结合起来的技术：先从外部知识库找出和问题相关的内容，再把这些内容作为上下文交给大模型回答。\n\n本质上，这不是一个技术，而是一套技术。由“数据加载、文本分块、索引构建、检索技术、向量数据库、生成集成、RAG系统评估” 等技术共同构成。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-20-0",
+    "title": "4.2 学习资料",
+    "path": "/learning-roadmap",
+    "content": "### 4.2 学习资料"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-21-0",
+    "title": "(1) all-in-rag",
+    "path": "/learning-roadmap",
+    "content": "#### (1) all-in-rag\n\nGithub地址：https://github.com/datawhalechina/all-in-rag\n\n在线学习地址：https://datawhalechina.github.io/all-in-rag/#/\n\n据此项目可以系统掌握RAG技术的理论基础和实践技能，而里面涉及到的RAG框架、向量数据库、索引和检索则可以另外找资料补充学习。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-22-0",
+    "title": "5.LlamaIndex",
+    "path": "/learning-roadmap",
+    "content": "## 5.LlamaIndex"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-23-0",
+    "title": "5.1 介绍",
+    "path": "/learning-roadmap",
+    "content": "### 5.1 介绍\n\n类比LangChian这也是一个AI应用框架，区别是Langchain更偏向于Agent编排和执行控制；\n\n`LlamaIndex更偏向文档、知识和检索增强，即RAG；`\n\n因此将这个技术的学习顺序排序在RAG后面，在前面all-in-rag项目中，已经有一些例子可以提前熟悉，之后再来系统的学习可以更快的上手。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-24-0",
+    "title": "5.2 学习资料",
+    "path": "/learning-roadmap",
+    "content": "### 5.2 学习资料"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-25-0",
+    "title": "(1) 官方文档",
+    "path": "/learning-roadmap",
+    "content": "#### (1) 官方文档\n\nGithub地址：https://github.com/run-llama/llama_index\n\n官网地址：https://developers.llamaindex.ai/llamaparse/"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-26-0",
+    "title": "(2) 视频",
+    "path": "/learning-roadmap",
+    "content": "#### (2) 视频\n\nhttps://www.bilibili.com/video/BV1VeqnB3EjP"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-27-0",
+    "title": "6.向量数据库",
+    "path": "/learning-roadmap",
+    "content": "## 6.向量数据库"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-28-0",
+    "title": "6.1 介绍",
+    "path": "/learning-roadmap",
+    "content": "### 6.1 介绍\n\n\n\nall-in-rag里有提到这块的知识和选型，这里我们直接挑两个进行学习即可。\n\n我选择Qdrant 和Milvus，一个可以用于中小型项目，一个用于大型项目。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-29-0",
+    "title": "6.2 学习资料",
+    "path": "/learning-roadmap",
+    "content": "### 6.2 学习资料"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-30-0",
+    "title": "(1) Milvus",
+    "path": "/learning-roadmap",
+    "content": "#### (1) Milvus\n\nGithub地址：https://github.com/milvus-io/milvus"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-31-0",
+    "title": "(2) Qdrant ",
+    "path": "/learning-roadmap",
+    "content": "#### (2) Qdrant \n\nGithub地址：https://github.com/qdrant/qdrant"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-32-0",
+    "title": "7. 其他",
+    "path": "/learning-roadmap",
+    "content": "## 7. 其他\n\n其他暂未并入路线的资料将在这里补充，学完路线上的知识之后，可以从这里的资料进行学习补充。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-33-0",
+    "title": "7.1 Hello Agent",
+    "path": "/learning-roadmap",
+    "content": "### 7.1 Hello Agent\n\nGithub地址：https://github.com/datawhalechina/hello-agents\n\n这是 Datawhale 开源的 智能体 Agent 系统学习教程，项目名叫 Hello-Agents 。\n\n适合系统入门Agent，当前我在纠结要不要排进主路线里面，如果排进去，合适的位置是插入在1.Python和2.Langchain之间，基础普通且学Langchain感觉比较吃力的人可以放入路线中学习。"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-34-0",
+    "title": "7.2 RagFlow",
+    "path": "/learning-roadmap",
+    "content": "### 7.2 RagFlow\n\nRAGFlow 是一款开源的企业级 RAG 知识库与智能问答平台，核心能力是把 PDF、Word、Excel、网页、图片、扫描件等复杂文档解析成可检索的知识内容。\n\nRAGFlow 是一个“开箱即用的 RAG 平台”，适合希望少写代码、快速落地知识库问答系统的团队。\n\nGithub地址：https://github.com/infiniflow/ragflow"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-35-0",
+    "title": "7.3 learn-claude-code",
+    "path": "/learning-roadmap",
+    "content": "### 7.3 learn-claude-code\n\n当前最牛逼的写代码Agent之一claude code的学习项目。\n\nGithub地址：https://github.com/shareAI-lab/learn-claude-code"
+  },
+  {
+    "id": "public-AI应用开发学习路线和资料集-36-0",
+    "title": "8.误区：微调和推理加速",
+    "path": "/learning-roadmap",
+    "content": "## 8.误区：微调和推理加速\n\n> 很多AI应用开发学习教程，为了丰富内容，经常把微调和推理加速加入到其中，但其实这里是有误区的。\n\n微调和推理加速通常**不是 AI 应用开发工程师的核心技术范畴**，而更偏向于大模型训练工程师工作内容。\n\nAI 应用开发工程师的重点，是**基于现有大模型能力构建业务应用**，而微调和推理加速更偏底层。\n\n**微调**主要涉及：\n\n- 训练数据构造；\n- 模型参数更新；\n- 训练框架；\n- 显存管理；\n- 过拟合控制；\n- 模型评测。\n\n**推理加速**主要涉及：\n\n- KV Cache；\n- vLLM；\n- SGLang；\n- CUDA Kernel；\n- 批处理调度；\n- 量化；\n- 多卡并行。\n\nAI应用开发工程师主要是调用 OpenAI、通义千问、豆包、DeepSeek 等模型 API，那么这些底层能力通常已经由模型服务商或基础设施团队负责。\n\n应用开发者更应该关注的是：\n\n- 如何选择合适的模型；\n- 如何减少上下文 token；\n- 如何设计应用层缓存；\n- 如何提升 RAG 检索质量；\n- 如何控制输出格式；\n- 如何编排工具调用；\n- 如何把 AI 能力接入真实业务流程。\n\n> 因此，学习 AI 应用开发时，不建议把微调和推理加速作为优先学习重点。否则很容易陷入高成本、低收益的底层技术细节，反而偏离应用落地的主线。\n>\n> 但是也不排除有一些企业的招聘者将这两点写入到了招聘需求中，是否学习则智者见智了，我这边暂时不做学习资料推荐。"
+  },
+  {
+    "id": "public-首页-1-0",
+    "title": "1. 背景",
+    "path": "/learning-roadmap",
+    "content": "## 1. 背景\n\n`AI 技术`正在以非常夸张的速度发展，最先被改变的，就是`程序员的生产方式`。\n\n以前需要花很久才能完成的需求，现在有了`大模型`、`AI 编程工具`效率会被明显放大。\n\n`传统前后端岗位`不会消失，但“只会写页面、只会写接口”的`竞争力`会越来越弱；\n\n与此同时，`大模型相关工作`的方向，正在变成越来越`真实的机会`。\n\n- 但并不是说，所有人都要去`训练大模型`、研究`算法论文`；\n\n\n- 普通开发者可以学着“怎么把大模型接进`真实业务`里”，做出能解决问题的 `AI 应用`。\n\n这也是我做这个项目的原因：把我自己学习 `AI Agent 开发`过程中踩坑筛过的资料、整理过的路线尽可能`沉淀下来`，让想入局的朋友`少走一点弯路`。"
+  },
+  {
+    "id": "public-首页-2-0",
+    "title": "2. 项目简介",
+    "path": "/learning-roadmap",
+    "content": "## 2. 项目简介\n\n`AI Agent 开发`，别名：`AI 应用开发`、`大模型应用开发`。\n\n简单来说，它关注的不是“从 0 训练一个大模型”，而是如何基于`现有大模型能力`，结合`业务系统`、`知识库`、`工具调用`、`工作流`、`记忆`，让 AI 真正完成任务。\n\n这个网站想解决几个很现实的问题：\n\n- `学习路线太乱`：网上资料很多，但新手很难判断先学什么、后学什么；\n- `优质资料分散`：文档、视频、开源项目、教程文章到处都是，找资料本身就很耗时间；\n- `面试内容不系统`：AI 应用开发相关岗位越来越多，但面试题、面经和实战问题还比较分散；\n\n所以本项目会围绕“`学习路线 + 面试题库 + AI 智能刷题 + 社区共建`”。\n\n最终做成 AI Agent 开发领域里，对普通开发者最友好、最实用的`一站式学习网站`。"
+  },
+  {
+    "id": "public-首页-3-0",
+    "title": "3.项目特点",
+    "path": "/learning-roadmap",
+    "content": "## 3.项目特点\n\n1. `持续学习，持续更新。`  AI 方向变化太快，内容和系统功能都不能停在某个时间点，我会尽量保持跟进和维护。\n\n2. `认真筛选，不堆垃圾资料。`  这里不会为了显得内容很多而随便堆资料，堆砌功能，我会整理真正适合学习的内容。\n\n3. `听取建议，快速迭代。`  如果你觉得路线不合理、资料过时、题目答案有问题、功能不好用，都欢迎直接提出来，我会根据反馈持续改进。\n\n4. `保持节奏。`  我会尽量做到每天维护代码仓库，每周进行一次上线发布。"
+  },
+  {
+    "id": "public-首页-4-0",
+    "title": "4. 功能介绍",
+    "path": "/learning-roadmap",
+    "content": "## 4. 功能介绍"
+  },
+  {
+    "id": "public-首页-5-0",
+    "title": "功能一：学习路线和资料",
+    "path": "/learning-roadmap",
+    "content": "### 功能一：学习路线和资料\n\n如果你刚开始接触 `AI Agent 开发`，最容易卡住的问题通常不是学不会，而是`不知道该从哪里开始`。\n\n`学习路线`会按照顺序，尽量把每个阶段需要掌握的内容讲清楚。\n\n每个内容点都会尽量描述：\n\n- 这个技术是`干什么的`；\n- 推荐看哪些`资料`；"
+  },
+  {
+    "id": "public-首页-6-0",
+    "title": "功能二：AI 智能刷题",
+    "path": "/learning-roadmap",
+    "content": "### 功能二：AI 智能刷题\n\n传统刷题很容易变成`机械重复`：做对了就过，做错了看一眼答案，然后下次可能还是忘。\n\n`AI 智能刷题`的核心是以下几点：\n\n- 根据权重智能筛选出题：`题目重要程度`、`用户历史最高分数`、`历史刷过次数`。\n- `AI大模型智能评分`，给出命中点、不足之处、改进建议。\n- 评分之后可以和`AI持续探讨`，直到彻底弄懂题目。\n- 通过刷题得经验升级，`正反馈激励机制`把握学习进度。\n\n> 目前自费基于deepseek-v4-flash模型为大家提供免费服务，可以点击[高级模型授权](#model-auth)使用deepseek-v4-pro模型。"
+  },
+  {
+    "id": "public-首页-7-0",
+    "title": "功能三：热门面试题",
+    "path": "/learning-roadmap",
+    "content": "### 功能三：热门面试题\n\n也有很多人更习惯先通过`文档学习`，再进行`刷题`。\n\n本功能汇集了网络上所有`能找到的，AI Agent相关的面试题，并且进行了去重归并`，\n\n按知识点分类展示，并且明确了总样本数和出现次数，以此来判断重要程度，做到让人心里有数。\n\n> AI智能刷题的题目也是从此抽取。"
+  },
+  {
+    "id": "public-首页-8-0",
+    "title": "功能四：评论建议区",
+    "path": "/learning-roadmap",
+    "content": "### 功能四：评论建议区\n\n这个项目不想只做为我的私人学习网站，更希望它能慢慢变成一个大家一起`共建的学习站点`。\n\n你可以在系统里留下`评论`、`提出建议`，也可以告诉我哪些资料更好、哪些题目需要补充、哪些功能更值得优先做。\n\n后续我会优先处理`点赞较多或更中肯`的建议。\n\n对于持续提出有效建议并被采纳的朋友，也会考虑在项目中展示`贡献`和`答谢名单`。\n\n目前我最想搞好的是`AI智能刷题功能`，希望大家集思广益。"
+  },
+  {
+    "id": "public-首页-9-0",
+    "title": "5.后续想法",
+    "path": "/learning-roadmap",
+    "content": "## 5.后续想法\n\n1.接入`S3存储桶`，做头像功能。\n\n2.接入`邮箱服务`，做注册时校验验证码和密码找回功能。\n\n3.使用`Agent技术栈`，立足实际的`AI智能刷题功能`，不断优化。\n\n4.如果系统用户量达到一定程度，逐步对系统升级`安全性`、`稳定性`，`高并发等治理`，这些需要投钱和资源，项目凉了的话就算了。\n\n5.自定义`段位体系`和`人物形象功能`。"
+  },
+  {
+    "id": "public-首页-10-0",
+    "title": "6.致谢",
+    "path": "/learning-roadmap",
+    "content": "## 6.致谢\n\n相逢既是有缘，非常高兴大家能看到我的网站，希望大家都能完成自己的学习目标，找到心仪的工作，实现自己的追求！"
+  },
+  {
+    "id": "public-首页-11-0",
+    "title": "7.声明",
+    "path": "/learning-roadmap",
+    "content": "## 7.声明\n\n网站所有资料内容服务`完全免费`，包含`基于deepseek-v4-flash模型`的AI智能刷题功能。\n\n但由于开发者时间成本、服务器成本、大模型API成本、以及Vibe花费不小。\n\n为了项目的持续运行维护：\n\n于是开放[高级模型授权](#model-auth)，希望有能力的朋友可以支持一波。\n\n高级模型含`deepseek-v4-pro`。"
+  },
+  {
+    "id": "public-首页-12-0",
+    "title": "8.秉承开源精神",
+    "path": "/learning-roadmap",
+    "content": "## 8.秉承开源精神\n\nhttps://github.com/Earth-OL-Player/ai_learn_project\n\n大家可以本地化自己部署使用，这样子可以连接自己的大模型，无需获取授权，想用啥模型就用啥模型。\n\n也可以用于个人学习用途，也可以提交PR，提交issues一起把本项目共建的更美好。\n\n但是切记不能用于商业用途，有用的话给项目点个星星，这对我很重要，求你们了。"
+  }
+]

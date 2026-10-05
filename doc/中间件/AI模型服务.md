@@ -1,9 +1,9 @@
 # AI模型服务配置说明
 
-版本：v1.11
-日期：2026-05-24
+版本：v1.14
+日期：2026-10-04
 适用工程：`ai-service`、`ai-learn-backend`  
-适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆、`sprint202627` 模型权益和请求级模型配置
+适用迭代：`sprint202612` 系统题库管理与 AI 智能刷题重构、`sprint2616` 答题上下文记忆与智能拦截、`sprint2622` LangChain Agent 化与多轮记忆、`sprint202627` 模型权益和请求级模型配置、`sprint202631` 站内助手与真实表单操作
 
 ## 1. 用途
 
@@ -20,6 +20,8 @@ AI模型服务是 `ai-service` 的可选外部能力，用于把本地规则评�
 无需额外安装本地中间件。开发者只需要启动 `ai-service`；如果需要真实模型评分，请在本地环境变量中配置模型服务地址和 Key。
 
 ## 4. 本地启动方式
+
+当前 Windows 本机已配置 `ai-service/.env`，使用用户提供的 OpenAI 兼容服务和 `gpt-6-luna` 模型，`AI_GRADING_MODEL_PROVIDER=openai`；Java `.env` 中内部 Token 与 Python 一致。本地数据库的 BASIC 模型名和地址已同步更新，Key 留空以读取 Python `.env`。以后更换默认模型时，应同步修改两处配置并重启服务，避免 Java 请求级配置覆盖 Python 默认值。根目录 `scripts/local-dev.ps1` 一并启动 Python、Java 和前端，日志写入 `.local/logs`，操作见 [QUICK_START.md](../../QUICK_START.md#当前-windows-本机极简启动)。无需额外模型服务中间件。
 
 按根目录 `README.md` 启动 `ai-service`。未配置真实模型服务时，保留如下占位配置即可：
 
@@ -173,3 +175,41 @@ AI_GRADING_MAX_OUTPUT_TOKENS=800
 4. Python 日志只输出 traceId、模型名、是否启用真实模型和耗时，不输出真实 Key。
 5. 管理端模型配置保存到 MySQL `model_configs`，本地联调时可使用占位符；真实值只允许在本地私有环境或服务器管理端维护。
 6. `MODEL_AUTHORIZATION_URL` 仅控制前端授权按钮跳转地址，不参与模型调用鉴权，必须配置为完整 `http/https` 网站地址，不得配置相对路径或带密钥的 URL。
+
+## 13. sprint202631 站内助手与共享模型
+
+站内助手新增 `POST /internal/v1/assistant/steps/stream`。由 Java 经现有 `AI_SERVICE_BASE_URL` 调用，沿用 `X-Internal-Token`、`X-Trace-Id` 和 HTTP/1.1，不对浏览器开放。Java 必须设置 `AI_SERVICE_ENABLED=true`，两端内部 Token 必须一致，真实值只放本地私有环境或服务器配置。
+
+Python 使用 LangGraph 分段图及 LangChain `bind_tools`：模型回答、公开知识工具在 Python 执行，外部业务调用返回 Java 校验；浏览器完成本站真实表单步骤后，由 Java 保存 ToolMessage，再调用下一段。Python 不反向调用业务 API，也不直连 MySQL、Redis 或 Qdrant。
+
+助手与刷题共用 `app/models.py` 的模型工厂、供应商适配与缓存。Java 使用当前用户有效 BASIC/PRO/SUPER 权益传入相同 `modelConfig`。每轮固定模型配置指纹，续跑时配置或权益变更会终止旧任务，重新发送后应用新模型；凭据不写入助手状态或浏览器。
+
+真实模型需要支持流式响应及 tools。明确“不支持 tools”协议错误可降级为同一模型文本回复并提示动作不可用；认证、网络、未配置模型和 LOCAL_RULE 直接提示不可用。助手不使用规则模拟操作成功，不从普通 JSON 文本猜测工具调用。原刷题的本地评分兜底保持原行为。
+
+新增配置：
+
+| 工程 | 环境变量 | 默认值 | 用途 |
+| --- | --- | --- | --- |
+| ai-service | `AI_ASSISTANT_MODEL_TIMEOUT_SECONDS` | `60` | 单次助手模型调用超时秒数 |
+| ai-service | `AI_ASSISTANT_GRAPH_RECURSION_LIMIT` | `24` | 每段 LangGraph 递归上限 |
+| Java | `ASSISTANT_RUN_TIMEOUT_SECONDS` | `120` | 活动执行预算和内部流超时秒数 |
+| Java | `ASSISTANT_MAX_TOOL_CALLS` | `8` | 单轮外部工具次数 |
+| Java | `ASSISTANT_CONFIRMATION_TTL_MINUTES` | `10` | 任务与确认有效分钟数 |
+| Java | `ASSISTANT_SESSION_RETENTION_DAYS` | `7` | 会话保留天数 |
+| Java | `ASSISTANT_OPERATION_RETENTION_DAYS` | `30` | 终态幂等结果保留天数 |
+
+变量已同步到各工程 `.example.env`。不必手动填写新变量即可使用默认值；模型仍在现有管理端维护，不新增专用助手 Key。内部鉴权和模型字段真实值禁止提交。
+
+公开知识索引随 ai-service 部署，运行时无需访问完整仓库。更新根 README 或前端公开学习 Markdown 后，从 ai-service 目录执行 `python -m app.assistant.build_knowledge`；只构建公开资料，不读取私有配置。现有 requirements 已包含所需框架，本期没有新增或升级依赖。
+
+本地联调：
+
+1. 依照 MySQL 文档启动业务库，确认新增 V11 成功；启动 ai-service、Java 和前端。
+2. 登录后比较助手与该账号刷题模型，发送项目问题并观察真实流式文本。
+3. 发送仅填写指令，确认真实页面出现草稿而未发布；生成发布内容应先等待确认。
+4. 明确授权或确认后检查实际业务记录，重复提交只产生一次。
+5. 停止 AI 服务、使用 LOCAL_RULE 或不支持工具的模型，确认没有伪造成功或偷偷切换模型。
+
+服务器部署沿用原 CVM/TDSQL 架构。对助手 `/messages/stream`、`/continue/stream`、`/resume/stream` 关闭 Nginx 响应缓冲并设置比活动预算更长的读取超时，默认可使用 150 秒；示例见 [数据库与配置变更](../3.迭代文档/sprint202631/4.数据库与配置变更.md)。页面或确认等待会结束流并释放共享执行线程，无需保持长连接。Python 8000 端口仅内网或本机访问，代理和应用日志不得记录请求体、模型 Key 或完整私人会话。
+
+本次开发使用独立临时数据库及本地模型协议模拟服务验证应用链路，没有真实供应商模型验收结果。工具理解能力、模型权益档位、回答质量和生产代理仍按本期验收文档人工验证。

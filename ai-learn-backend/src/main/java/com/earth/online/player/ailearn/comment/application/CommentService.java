@@ -96,6 +96,14 @@ public class CommentService {
         return findOne(comment.getId(), currentUser.userId());
     }
 
+    /** 按 ID 定位有效父评论与回复，用于助手在当前分页之外打开回复目标。 */
+    public CommentResponse findThread(Long id) {
+        long viewerUserId = AuthSupport.resolveViewerUserId();
+        CommentRecord record = InteractionTargetValidator.requireFound(commentMapper.findById(id, viewerUserId), CONTENT_NAME);
+        if (record.getParentId() != null) throw new BusinessException("仅支持回复父评论");
+        return toResponse(record, findChildrenByParentId(List.of(record), viewerUserId).getOrDefault(id, List.of()));
+    }
+
     /**
      * 切换评论点赞状态。
      *

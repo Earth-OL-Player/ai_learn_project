@@ -10,6 +10,7 @@ from fastapi.responses import Response
 from app.api.log_levels import router as log_levels_router
 from app.api.model_cache import router as model_cache_router
 from app.api.practice import router as practice_router
+from app.api.assistant import router as assistant_router
 from app.config.log_config import configure_logger
 from app.time_utils import elapsed_milliseconds
 
@@ -46,7 +47,7 @@ async def log_validation_error(request: Request, exc: RequestValidationError) ->
         request.url.path,
         request.headers.get("content-type", ""),
         request.headers.get("content-length", ""),
-        exc.errors(),
+        [{"loc": error["loc"], "type": error["type"]} for error in exc.errors()],
     )
     return await request_validation_exception_handler(request, exc)
 
@@ -73,5 +74,6 @@ def favicon() -> Response:
 
 # 刷题 Agent 为后端内部接口。
 app.include_router(practice_router)
+app.include_router(assistant_router)
 app.include_router(log_levels_router)
 app.include_router(model_cache_router)
